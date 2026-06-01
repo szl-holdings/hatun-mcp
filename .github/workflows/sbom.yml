@@ -1,0 +1,50 @@
+name: sbom
+
+# SBOM generation via Syft (anchore/sbom-action, verified Marketplace).
+# Runs on PR + nightly; uploads SBOM artifact; commits SBOM to attestations branch on schedule.
+# ADDITIVE. Doctrine v11 LOCKED 749/14/163 locked_at c7c0ba17
+
+on:
+  pull_request:
+  schedule:
+    - cron: '23 2 * * *'   # nightly 02:23 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sbom:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate SBOM (SPDX JSON)
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: spdx-json
+          output-file: SBOM.spdx.json
+          artifact-name: SBOM.spdx.json
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-spdx-json
+          path: SBOM.spdx.json
+
+      - name: Commit SBOM to attestations branch (nightly only)
+        if: github.event_name == 'schedule'
+        run: |
+          set -e
+          git config user.name "Yachay"
+          git config user.email "yachay@szlholdings.dev"
+          git fetch origin attestations || true
+          git checkout attestations 2>/dev/null || git checkout --orphan attestations
+          git rm -rf . >/dev/null 2>&1 || true
+          git checkout ${{ github.sha }} -- SBOM.spdx.json 2>/dev/null || true
+          # SBOM.spdx.json is already in workspace from the generate step:
+          cp -f $GITHUB_WORKSPACE/SBOM.spdx.json . 2>/dev/null || true
+          git add SBOM.spdx.json || true
+          git commit -m "chore(sbom): nightly SBOM $(date -u +%F)\n\nDoctrine v11 LOCKED 749/14/163 locked_at c7c0ba17\n\nCo-Authored-By: Perplexity Computer Agent <agent@perplexity.ai>" || echo "no changes"
+          git push origin attestations || echo "push skipped"

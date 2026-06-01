@@ -1,0 +1,27 @@
+name: gitleaks
+
+# Secret scanning via gitleaks-action. PR + nightly.
+# Allow-list in .gitleaks.toml (cosign.pub PEM blocks). ADDITIVE. Doctrine v11 LOCKED 749/14/163 locked_at c7c0ba17
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+  schedule:
+    - cron: '7 1 * * *'   # nightly 01:07 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gitleaks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Gitleaks scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITLEAKS_CONFIG: .gitleaks.toml

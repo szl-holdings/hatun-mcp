@@ -1,0 +1,18 @@
+# Gitleaks config for SZL Holdings. Extends defaults; allow-lists known false positives.
+# Doctrine v11 LOCKED 749/14/163 locked_at c7c0ba17
+title = "SZL Gitleaks Config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "SZL known false-positives"
+# cosign / sigstore PUBLIC keys are safe to commit (public verification material).
+regexes = [
+  '''-----BEGIN PUBLIC KEY-----[\s\S]*?-----END PUBLIC KEY-----''',
+]
+paths = [
+  '''cosign\.pub''',
+  '''.*\.pub$''',
+  '''.*cosign.*\.pem$''',
+]
