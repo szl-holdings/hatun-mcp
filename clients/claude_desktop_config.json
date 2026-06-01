@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "hatun-mcp": {
+      "command": "npx",
+      "args": [
+        "-y", "mcp-remote",
+        "https://szlholdings-hatun-mcp.hf.space/mcp",
+        "--header", "Authorization: Bearer szl_YOUR_KEY"
+      ]
+    }
+  }
+}

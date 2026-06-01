@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+*.pem
+.keys_DO_NOT_COMMIT.pem
+.secret/
+.env
+*.log

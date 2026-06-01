@@ -1,0 +1,16 @@
+cff-version: 1.2.0
+title: "Hatun-MCP — doctrine-aware Model Context Protocol server"
+message: "If you use Hatun-MCP, please cite it as below."
+authors:
+  - name: "SZL Holdings"
+type: software
+license: Apache-2.0
+repository-code: "https://github.com/szl-holdings/hatun-mcp"
+url: "https://szlholdings-hatun-mcp.hf.space"
+keywords:
+  - model-context-protocol
+  - mcp
+  - agentic
+  - governance
+version: "1.0.0"
+date-released: "2026-06-01"

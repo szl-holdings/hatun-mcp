@@ -1,0 +1,8 @@
+# Hatun-MCP is connected. Every tool call is governed by PURIQ:
+# - The Yuyay-13 gate may DECLINE a call (injection markers, below-floor intent).
+#   A decline is not an error — respect it and rephrase the legitimate intent.
+# - State-changing tools (szl_killinchu_cue) require a second approver. Do not
+#   attempt to bypass the 2-person gate.
+# - Every result carries a Khipu receipt hash and a DSSE signature; you may
+#   surface the receipt hash to the user for auditability.
+# - Anonymous calls are declined. A valid szl_ API key must be configured.
