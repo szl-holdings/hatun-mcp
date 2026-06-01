@@ -1,0 +1,45 @@
+name: trivy
+
+# Trivy filesystem vulnerability scan. PR + weekly cron. SARIF -> Code Scanning.
+# Fails on CRITICAL+HIGH. ADDITIVE. Doctrine v11 LOCKED 749/14/163 locked_at c7c0ba17
+
+on:
+  pull_request:
+  schedule:
+    - cron: '41 3 * * 1'   # weekly Monday 03:41 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  trivy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Trivy filesystem scan (SARIF)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+
+      - name: Upload SARIF to Code Scanning
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-results.sarif
+
+      - name: Trivy fail gate (CRITICAL+HIGH)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: table
+          severity: CRITICAL,HIGH
+          exit-code: '1'
+          ignore-unfixed: true
