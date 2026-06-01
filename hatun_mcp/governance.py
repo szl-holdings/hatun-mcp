@@ -8,7 +8,7 @@ Implements, with REAL crypto and REAL logic (no mocks):
   * HUKLLA tripwire check (T01..T10).
   * PURIQ master operator P(x,t) with the Hatun_MCP(client_id) organ factor.
 
-Doctrine v11 LOCKED numbers preserved: 752 decl / 14 unique axioms / 160 sorries /
+Doctrine v11 LOCKED numbers preserved: 749 decl / 14 unique axioms / 163 sorries /
 13-axis yuyay_v3 (replay hash bacf5443…631fc5) / lutar-v18.0.0. SLSA L1 honest.
 DSSE signing is REAL; Sigstore Rekor transparency-log inclusion is the disclosed
 PLACEHOLDER boundary (lands with Sigstore CI, Doctrine v12 §2).
@@ -43,12 +43,13 @@ except Exception:  # pragma: no cover - cryptography always present in our image
 
 # Doctrine v11 LOCKED constants (from counter, never from memory — HR-6)
 DOCTRINE = {
-    "lean_declarations": 752,
+    "lean_declarations": 749,
     "lean_axioms_unique": 14,
     "lean_axioms_raw": 15,
-    "lean_sorries_total": 160,
-    "lean_sorries_baseline": 109,
+    "lean_sorries_total": 163,
+    "lean_sorries_baseline": 112,
     "lean_sorries_putnam": 51,
+    "lean_measured_sha": "c7c0ba17c2eaec60ad38ea9172b4a0d9ca0b582f",
     "yuyay_axes": 13,
     "yuyay_replay_hash": "bacf5443…631fc5",
     "lutar_tag": "lutar-v18.0.0",

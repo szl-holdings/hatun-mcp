@@ -45,7 +45,7 @@ single tool invocation** in the PURIQ governance pipeline:
 |------|---------|
 | `POST /mcp` | Streamable HTTP transport (MCP 2025-06-18) — **recommended** |
 | `GET /sse` | Legacy HTTP+SSE transport (message endpoint `/sse/messages/`) |
-| `GET /.well-known/mcp/server-card.json` | Registry discovery card (15 tools) |
+| `GET /.well-known/mcp/server-card.json` | Registry discovery card (16 tools) |
 | `GET /healthz` | Liveness + chain-verified + signer mode |
 | `GET /pubkey` | DSSE verification public key (PEM) |
 
@@ -64,7 +64,7 @@ Authorization: Bearer szl_...
 Keys are provisioned by the SZL customer portal. Anonymous calls are declined and
 receipted (see `authentication.required` in the server card).
 
-## The 15 tools
+## The 16 tools
 
 | Tool | What it does | State-changing? |
 |------|--------------|-----------------|
@@ -83,6 +83,7 @@ receipted (see `authentication.required` in the server card).
 | `szl_yuyay_score` | 13-axis Yuyay breakdown of content | no |
 | `szl_thesis_query` | RAG query against the thesis corpus | no |
 | `szl_drone_lookup` | Canonical drone DB entry from killinchu | no |
+| `szl_formula_evaluate` | Evaluate a doctrine formula primitive (PURIQ P(x,t), KL, sigmoid, Liu Hui π) | no |
 
 ## Connect from Claude Desktop
 

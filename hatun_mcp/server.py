@@ -88,6 +88,11 @@ mcp = FastMCP(
     streamable_http_path="/",
     sse_path="/",
     message_path="/messages/",
+    # Stateless Streamable HTTP: each POST is self-contained (no server-held session
+    # id). Required behind the HF Spaces reverse proxy, which does not guarantee
+    # worker affinity — a stateful session manager would 400 on the follow-up call.
+    stateless_http=True,
+    json_response=True,
     instructions=(
         "HATUN-MCP — the doctrine-aware MCP server for SZL Holdings. Every tool call "
         "is governed by the PURIQ formula: a Yuyay-13 gate runs on the input, a Khipu "
@@ -491,6 +496,18 @@ async def szl_drone_lookup(model_or_signature: str) -> dict:
         tool="szl_drone_lookup", operation_id="killinchu.drones",
         gate_text=str(model_or_signature), needs_scope="read",
         backend_coro=B.killinchu_drones(model_or_signature),
+    )
+
+
+@mcp.tool()
+async def szl_formula_evaluate(name: str, args: Optional[dict] = None) -> dict:
+    """Evaluate a named doctrine formula primitive (real closed-form arithmetic).
+    Known: 'puriq' (master operator P(x,t)), 'kl_divergence', 'sigmoid', 'liu_hui_pi'.
+    Unknown names are forwarded to the live lutar-lean kernel /formula-eval route."""
+    return await governed(
+        tool="szl_formula_evaluate", operation_id="formula.evaluate",
+        gate_text=f"{name} {json.dumps(args or {})}"[:5000], needs_scope="read",
+        backend_coro=B.formula_evaluate(name, args or {}),
     )
 
 

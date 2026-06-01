@@ -21,7 +21,7 @@ async def main():
             tools = await session.list_tools()
             names = [t.name for t in tools.tools]
             print(f"TOOLS ({len(names)}):", ", ".join(names))
-            assert len(names) == 15, f"expected 15 tools, got {len(names)}"
+            assert len(names) == 16, f"expected 16 tools, got {len(names)}"
 
             # 1. clean content -> success + receipt + dsse
             res = await session.call_tool("szl_yuyay_score",

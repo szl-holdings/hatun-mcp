@@ -113,6 +113,7 @@ def _server_card() -> dict:
         ("szl_yuyay_score", "13-axis Yuyay breakdown of content"),
         ("szl_thesis_query", "RAG query against thesis-corpus-v18 HF dataset"),
         ("szl_drone_lookup", "Canonical drone DB entry from killinchu"),
+        ("szl_formula_evaluate", "Evaluate a doctrine formula primitive (PURIQ P(x,t), KL, sigmoid, Liu Hui pi)"),
     ]
     for name, desc in card_tools:
         tools.append({
