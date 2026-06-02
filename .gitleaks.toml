@@ -16,3 +16,10 @@ paths = [
   '''.*\.pub$''',
   '''.*cosign.*\.pem$''',
 ]
+
+# --- ADDITIVE allowlist: cosign key-ID label false positive ---
+# governance.py:127 references the cosign key identifier "szlholdings-ec-p256",
+# a public key *label* (not a secret). gitleaks generic-api-key flags it.
+# Fixed by Perplexity Computer on behalf of Stephen P. Lutar Jr.
+[[allowlist.regexes]]
+regex = '''szlholdings-ec-p256'''
