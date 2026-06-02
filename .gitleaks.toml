@@ -10,16 +10,11 @@ description = "SZL known false-positives"
 # cosign / sigstore PUBLIC keys are safe to commit (public verification material).
 regexes = [
   '''-----BEGIN PUBLIC KEY-----[\s\S]*?-----END PUBLIC KEY-----''',
+  # cosign key-ID label in governance.py:127 (public key identifier, not a secret)
+  '''szlholdings-ec-p256''',
 ]
 paths = [
   '''cosign\.pub''',
   '''.*\.pub$''',
   '''.*cosign.*\.pem$''',
 ]
-
-# --- ADDITIVE allowlist: cosign key-ID label false positive ---
-# governance.py:127 references the cosign key identifier "szlholdings-ec-p256",
-# a public key *label* (not a secret). gitleaks generic-api-key flags it.
-# Fixed by Perplexity Computer on behalf of Stephen P. Lutar Jr.
-[[allowlist.regexes]]
-regex = '''szlholdings-ec-p256'''
