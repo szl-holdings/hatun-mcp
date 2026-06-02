@@ -84,7 +84,7 @@ receipted (see `authentication.required` in the server card).
 | `szl_yachay_dome_predict` | Yachay-Dome impact prediction for a track | no |
 | `szl_wayra_recent` | Recent WAYRA ingestions (honest stub until WAYRA ships) | no |
 | `szl_anatomy_3d_render` | Three.js scene snapshot URL for an organ | no |
-| `szl_doctrine_lookup` | Semantic lookup across Doctrine v11/v12/v13 + thesis | no |
+| `szl_doctrine_lookup` | Semantic lookup across Doctrine v11 + thesis | no |
 | `szl_yuyay_score` | 13-axis Yuyay breakdown of content | no |
 | `szl_thesis_query` | RAG query against the thesis corpus | no |
 | `szl_drone_lookup` | Canonical drone DB entry from killinchu | no |
