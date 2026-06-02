@@ -1,0 +1,7 @@
+# CODEOWNERS — SZL Holdings
+# All changes require review from the primary maintainer.
+# This file inherits the org-level CODEOWNERS from szl-holdings/.github.
+
+* @stephenlutar2-hash
+.github/ @stephenlutar2-hash
+
