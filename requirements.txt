@@ -1,5 +1,8 @@
-mcp>=1.10,<2
-httpx>=0.28.1
-starlette>=0.37
-uvicorn[standard]>=0.48.0
-cryptography>=42
+# Dependencies for hatun-mcp
+# Bumped 2026-06-03 by Auditor BETA (Beta-iter8)
+# Versions verified from PyPI API 2026-06-03
+mcp>=1.27,<2          # was >=1.10; latest 1.27.2
+httpx>=0.28.1         # already current (0.28.1)
+starlette>=1.2        # was >=0.37; latest 1.2.1 — SECURITY: major bump
+uvicorn[standard]>=0.48.0  # already current (0.48.0)
+cryptography>=48      # was >=42; latest 48.0.0
