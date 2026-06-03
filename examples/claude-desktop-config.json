@@ -1,0 +1,15 @@
+{
+  "//": "Hatun-MCP drop-in for ~/Library/Application Support/Claude/claude_desktop_config.json (macOS) or %APPDATA%\\Claude\\claude_desktop_config.json (Windows). Replace szl_YOUR_KEY with your SZL API key. Anonymous calls are declined by the server.",
+  "mcpServers": {
+    "hatun-mcp": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "https://szlholdings-hatun-mcp.hf.space/mcp",
+        "--header",
+        "Authorization: Bearer szl_YOUR_KEY"
+      ]
+    }
+  }
+}
