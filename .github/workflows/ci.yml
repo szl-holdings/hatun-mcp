@@ -1,0 +1,88 @@
+name: ci
+
+# Hatun-MCP CI — run the test suite, build the container, push to GHCR on main.
+# SLSA L1 honest + L2 attested (actions/attest-build-provenance on the pushed image).
+# Doctrine v11 LOCKED 749/14/163 · receipts.in ≡ receipts.out
+#
+# Hermetic tests: HATUN_MCP_DISABLE_DYNAMIC=true so the suite never depends on a
+# live organ Space (adapters are exercised against mocked endpoints in test_adapters).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  test:
+    name: pytest (server · quorum · adapters · governance)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Run test suite (hermetic)
+        env:
+          HATUN_MCP_DISABLE_DYNAMIC: "true"
+          HATUN_MCP_BACKEND_TIMEOUT: "1.0"
+        run: |
+          python -m pytest tests/test_server.py tests/test_quorum.py \
+            tests/test_adapters.py tests/test_governance.py -q
+
+  build-and-push:
+    name: build container + push to GHCR (main only) + SLSA L2 attest
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write          # for build-provenance attestation (SLSA L2)
+      attestations: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:${{ github.sha }}
+          provenance: true       # SLSA provenance attached by buildkit
+
+      - name: Attest build provenance (SLSA L2)
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+# Doctrine footer:
+#   Doctrine v11 LOCKED — 749 / 14 / 163 · Λ = Conjecture 1 · SLSA L1 honest + L2 attested
+#   Signed-off-by: Yachay <yachay@szlholdings.ai>
+#   Co-Authored-By: Perplexity Computer Agent <agent@perplexity.ai>

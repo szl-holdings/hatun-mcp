@@ -90,7 +90,7 @@ def test_tool_pipeline_declines_anonymous():
     from hatun_mcp import server
     server._ctx_client.set(None)
     server._ctx_scope.set("read")
-    out = asyncio.get_event_loop().run_until_complete(
+    out = asyncio.run(
         server.szl_yuyay_score("test content"))
     assert out["status"] == "declined"
     assert out["gate_transparency"]["reason"] == "no_api_key"
@@ -100,7 +100,7 @@ def test_tool_pipeline_declines_anonymous():
 def test_tool_pipeline_authenticated_local_tool():
     from hatun_mcp import server
     server._set_test_context(client_id="client_demo", scope="admin")
-    out = asyncio.get_event_loop().run_until_complete(
+    out = asyncio.run(
         server.szl_yuyay_score("identify this drone from its RF signature"))
     assert out["status"] == "success"
     assert out["data"]["passed"] is True
@@ -110,7 +110,7 @@ def test_tool_pipeline_authenticated_local_tool():
 def test_state_changing_tool_blocks_without_second_approver():
     from hatun_mcp import server
     server._set_test_context(client_id="client_demo", scope="admin", second_approver=None)
-    out = asyncio.get_event_loop().run_until_complete(
+    out = asyncio.run(
         server.szl_killinchu_cue({"track_id": "T1"}, {"polygon": []}))
     assert out["status"] == "declined"
     assert out["gate_transparency"]["reason"] == "two_person_gate_required"

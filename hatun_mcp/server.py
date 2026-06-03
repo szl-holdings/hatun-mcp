@@ -532,6 +532,105 @@ from .tools import register_governance_tools  # noqa: E402
 register_governance_tools(mcp, KHIPU, SIGNER, CLIENTS)
 
 
+# ════════════════════════════════════════════════════════════════════════════════
+#  GOVERNANCE-CRITICAL: Byzantine quorum + BLS aggregate over N organs
+# ════════════════════════════════════════════════════════════════════════════════
+from .dsse import BlsAggregator
+from .quorum import QuorumConfig, OrganVote, decide as quorum_decide
+
+BLS = BlsAggregator()
+QUORUM_CFG = QuorumConfig(n=5, f=1)
+
+
+@mcp.tool()
+async def szl_lambda_quorum(action: dict, context: Any = None,
+                            organs: Optional[list] = None) -> dict:
+    """Governance-critical Λ verdict under a Byzantine n>=3f+1 quorum (n=5, f=1).
+
+    Fans the action out to the five SZL organs' policy/verdict routes, collects each
+    organ's verdict, and decides only if >= 2f+1 (=3) reachable organs AGREE and
+    >= 3f+1 (=4) organs are reachable. Each organ's contribution mints a Khipu
+    receipt; the participating receipts are BLS-aggregated into one signature. The
+    full quorum tally + aggregate ride in `governance.quorum`. HONEST: with a11oy
+    paused only 4/5 organs are reachable; quorum still holds on the 4 live organs
+    and discloses the degradation.
+    """
+    from .adapters import build_adapters
+    client_id = _ctx_client.get()
+    sovereign = _ctx_sovereign.get()
+    targets = organs or ["a11oy", "sentra", "rosie", "amaru", "killinchu"]
+    ads = build_adapters()
+    gate_text = json.dumps(action)[:5000]
+
+    votes = []
+    organ_receipts = []
+    for organ in targets:
+        ad = ads.get(organ)
+        if ad is None:
+            continue
+        # Each organ evaluates the action via its policy/verdict route.
+        res = await ad.call("policy_evaluate", {"action": action, "context": context or {}})
+        reachable = bool(res.get("deployed")) and res.get("error") in (None, "")
+        verdict = None
+        if reachable and isinstance(res.get("data"), dict):
+            d = res["data"]
+            verdict = d.get("verdict") or d.get("decision") or d.get("allow")
+        # Mint a per-organ Khipu receipt for this contribution (success or honest miss).
+        rr = KHIPU.emit(
+            tool="szl_lambda_quorum", client_id=client_id or "anonymous",
+            operation_id=f"{organ}.lambda_verdict",
+            status="success" if reachable else "failure",
+            tripwire=None, yuyay_min_axis=None, hatun_mcp_factor=0.0,
+            puriq_score=0.0,
+            detail={"organ": organ, "reachable": reachable,
+                    "verdict": verdict, "backend": _summ(res)},
+            signer=SIGNER,
+        )
+        organ_receipts.append((organ, rr.continuum_hash))
+        votes.append(OrganVote(organ=organ, reachable=reachable, verdict=verdict,
+                               receipt_hash=rr.continuum_hash,
+                               detail={"backend": _summ(res)}))
+
+    qresult = quorum_decide(votes, QUORUM_CFG)
+    agg = BLS.aggregate(organ_receipts)
+
+    # Wrap through governed() for the uniform envelope (Yuyay gate + top-level receipt).
+    async def _payload():
+        return B.BackendResult(
+            deployed=True, http_status=200, endpoint="(hatun-mcp quorum)", error=None,
+            data={"quorum": qresult.to_dict(), "bls_aggregate": agg.to_dict()},
+        )
+    out = await governed(
+        tool="szl_lambda_quorum", operation_id="lambda.quorum", gate_text=gate_text,
+        needs_scope="read", backend_coro=_payload(),
+    )
+    out["governance"]["quorum"] = qresult.to_dict()
+    out["governance"]["bls_aggregate"] = agg.to_dict()
+    out["governance"]["sovereign_mode"] = sovereign
+    return out
+
+
+# ── Dynamic organ-tool registration (live catalogs) ─────────────────────────────
+# At import time, fetch each organ's live MCP catalog and register <organ>_<tool>
+# tools through governed(). Honest: unreachable organs register zero tools + a
+# single <organ>_status introspection tool. Disabled in unit tests via env to keep
+# the test suite hermetic (no network).
+ORGAN_CATALOG_SUMMARY: dict = {}
+
+
+def register_dynamic_organ_tools() -> dict:
+    """Fetch live organ catalogs and register their tools. Returns the summary."""
+    from .adapters import build_adapters, register_organ_tools
+    return register_organ_tools(mcp, build_adapters(), governed)
+
+
+if os.environ.get("HATUN_MCP_DISABLE_DYNAMIC", "false").lower() != "true":
+    try:
+        ORGAN_CATALOG_SUMMARY = register_dynamic_organ_tools()
+    except Exception as _e:  # never let organ probing break server import
+        ORGAN_CATALOG_SUMMARY = {"_error": f"{type(_e).__name__}: {_e}"}
+
+
 if __name__ == "__main__":
     # Local stdio mode (for Claude Desktop / Cursor local). Sets a demo authenticated
     # context so local users aren't anonymous-declined; hosted mode uses real API keys.
