@@ -524,6 +524,14 @@ def locked_numbers() -> str:
     return json.dumps(DOCTRINE, indent=2)
 
 
+# ── PURIQ governance tools (WU-5): register the five gates as first-class MCP tools.
+# Reuses the SAME live KHIPU chain / SIGNER / CLIENTS singletons (no parallel state),
+# so puriq_master shares the audit trail with the 15 backend tools above.
+from .tools import register_governance_tools  # noqa: E402
+
+register_governance_tools(mcp, KHIPU, SIGNER, CLIENTS)
+
+
 if __name__ == "__main__":
     # Local stdio mode (for Claude Desktop / Cursor local). Sets a demo authenticated
     # context so local users aren't anonymous-declined; hosted mode uses real API keys.
