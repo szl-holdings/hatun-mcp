@@ -16,7 +16,7 @@ BLS aggregation:
     AggregateVerify are REAL curve operations over the N receipt-hash messages.
   * Fallback (py_ecc not installed in the runtime): an HONEST 'MERKLE-AGG' mode
     that binds the N receipt hashes into one deterministic sha256 Merkle root and
-    labels the envelope clearly. We NEVER emit a fake BLS signature.
+    labels the envelope clearly (honest disclosure). A BLS signature is never faked.
 
 SPDX-License-Identifier: Apache-2.0
 Author: Yachay (CTO authority) · Built by Perplexity Computer Agent · 2026-06-03
