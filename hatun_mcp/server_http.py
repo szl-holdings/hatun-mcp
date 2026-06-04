@@ -7,7 +7,7 @@ Wraps the FastMCP app in a Starlette application that:
   * validates the Origin header (DNS-rebinding defense; MCP transport requirement).
   * honors X-Sovereign-Mode and X-Second-Approver headers (Frontier #4, 2-person gate).
   * serves /.well-known/mcp/server-card.json so registries (Smithery) can enumerate
-    the 15 tools even behind the auth wall.
+    the 23 static tools even behind the auth wall.
   * serves /healthz and /pubkey (DSSE verification key).
 
 Run:  uvicorn hatun_mcp.server_http:app --host 0.0.0.0 --port 7860
@@ -116,6 +116,13 @@ def _server_card() -> dict:
         ("szl_thesis_query", "RAG query against thesis-corpus-v18 HF dataset"),
         ("szl_drone_lookup", "Canonical drone DB entry from killinchu"),
         ("szl_formula_evaluate", "Evaluate a doctrine formula primitive (PURIQ P(x,t), KL, sigmoid, Liu Hui pi)"),
+        ("szl_lambda_quorum", "Governance-critical Λ verdict under Byzantine n>=3f+1 quorum (n=5,f=1) + BLS aggregate"),
+        ("yuyay_gate_check", "Run the 13-axis Yuyay gate over input (input-as-data defense) + Khipu receipt"),
+        ("khipu_append_and_verify", "Append a Khipu link and recompute-verify the append-only chain"),
+        ("dsse_sign", "Real ECDSA P-256 DSSE envelope (honesty=UNSIGNED when no key in process)"),
+        ("mesh_quorum_status", "Byzantine n>=3f+1 mesh-quorum status over named organs"),
+        ("puriq_master_tool", "THE named PURIQ entrypoint: Yuyay-13 -> quorum -> Khipu -> DSSE"),
+        ("governance_pacbayes_bound", "Published PAC-Bayes (McAllester) generalization bound (F7), real closed-form"),
     ]
     for name, desc in card_tools:
         tools.append({

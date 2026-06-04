@@ -39,16 +39,22 @@ formula:
 
 ### Tools exposed
 
-- **17 core `szl_*` tools** (hand-wired): yuyay scoring, PURIQ evaluation, Khipu
-  verification, Lean verification, formula evaluation, doctrine/thesis lookup, service
-  shortcuts, and **`szl_lambda_quorum`** (Byzantine Λ verdict).
+- **23 static tools** registered at import (verifiable: `tools/list` returns 23 with
+  `HATUN_MCP_DISABLE_DYNAMIC=true`):
+  - **17 `szl_*` tools** — `szl_a11oy_code_chat`, `szl_killinchu_detect`,
+    `szl_killinchu_cue`, `szl_sentra_scan`, `szl_rosie_reason`, `szl_khipu_verify`,
+    `szl_lean_verify`, `szl_puriq_evaluate`, `szl_yachay_dome_predict`,
+    `szl_wayra_recent`, `szl_anatomy_3d_render`, `szl_doctrine_lookup`,
+    `szl_yuyay_score`, `szl_thesis_query`, `szl_drone_lookup`,
+    `szl_formula_evaluate`, and **`szl_lambda_quorum`** (Byzantine Λ verdict).
+  - **6 governance tools** — `yuyay_gate_check`, `khipu_append_and_verify`,
+    `dsse_sign`, `mesh_quorum_status`, `puriq_master_tool`, `governance_pacbayes_bound`.
 - **Service-derived tools** registered *dynamically* at startup from each backend
-  service's live catalog at `/api/<service>/v1/mcp/tools`, named `<service>_<tool>`.
+  service's live catalog at `/api/<service>/v1/mcp/tools`, named `<service>_<tool>`. The
+  dynamic count is **probe-dependent**: it equals 23 + (whatever the reachable services
+  publish), and is 0 extra when dynamic registration is disabled or all services are
+  unreachable.
 
-> **Live count (probed 2026-06-03): 49 MCP tools total** — 17 core + 32 service-derived
-> across the a11oy capability services (memory 4, policy/gates 11, operator 12, status 1)
-> and killinchu (4).
->
 > **Naming note.** Three backend services are addressed by **immutable internal route
 > segments** that are kept verbatim because renaming them would break the live routes. The
 > exact segment strings are published in the live OpenAPI document at `/openapi.json`; this

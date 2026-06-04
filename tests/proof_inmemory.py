@@ -68,7 +68,9 @@ async def main():
         print("  decline reason:", p3.get("gate_transparency", {}).get("reason"))
         print("  receipted continuum_hash:", p3["khipu_receipt"]["continuum_hash"])
 
-        assert len(names) == 16, f"expected 16 tools, got {len(names)}"
+        # 23 static tools (17 szl_* + 6 governance). This in-memory proof runs with
+        # dynamic organ registration disabled, so the count is exactly 23.
+        assert len(names) == 23, f"expected 23 tools, got {len(names)}"
         assert payload["status"] == "success"
         assert abs(payload["data"]["value"] - 0.7) < 1e-9, payload["data"]
         assert p2["status"] == "success" and p2["khipu_receipt"]["chain_verified"]
