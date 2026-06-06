@@ -9,9 +9,10 @@
 
 **The great context protocol** — *hatun* (Quechua) = "big / great".
 
-The **one signed MCP endpoint** that aggregates the five SZL organs
-(a11oy · sentra · amaru · killinchu · rosie) under PURIQ governance and re-exposes
-their tools to any MCP client.
+The **one signed MCP endpoint** that aggregates the SZL backend services — the
+**a11oy** command platform (and its policy, memory and operator capability services)
+plus **killinchu** (drones & vessels) — under PURIQ governance and re-exposes their
+tools to any MCP client.
 
 [Hugging Face Space](https://huggingface.co/spaces/SZLHOLDINGS/hatun-mcp) ·
 [GitHub Org](https://github.com/szl-holdings)
@@ -39,31 +40,32 @@ formula:
 ### Tools exposed
 
 - **17 core `szl_*` tools** (hand-wired): yuyay scoring, PURIQ evaluation, Khipu
-  verification, Lean verification, formula evaluation, doctrine/thesis lookup, organ
+  verification, Lean verification, formula evaluation, doctrine/thesis lookup, service
   shortcuts, and **`szl_lambda_quorum`** (Byzantine Λ verdict).
-- **Organ-derived tools** registered *dynamically* at startup from each organ's live
-  catalog at `/api/<organ>/v1/mcp/tools`, named `<organ>_<tool>`.
+- **Service-derived tools** registered *dynamically* at startup from each backend
+  service's live catalog at `/api/<service>/v1/mcp/tools`, named `<service>_<tool>`.
 
-> **Live count (probed 2026-06-03): 49 MCP tools total** — 17 core + 32 organ-derived
-> (amaru 4, killinchu 4, rosie 12, sentra 11 gates+actions, a11oy 1 honest status tool).
+> **Live count (probed 2026-06-03): 49 MCP tools total** — 17 core + 32 service-derived
+> across the a11oy capability services (memory 4, policy/gates 11, operator 12, status 1)
+> and killinchu (4).
 
 ### Honest reachability (HONESTY OVER CHECKLIST)
 
-| Organ | Catalog route | Status 2026-06-03 |
-|-------|---------------|-------------------|
-| amaru | `/api/amaru/v1/mcp/tools` | **LIVE** — 4 tools |
+| Backend service | Catalog route | Status 2026-06-03 |
+|-----------------|---------------|-------------------|
+| a11oy — memory | `/api/amaru/v1/mcp/tools` | **LIVE** — 4 tools |
 | killinchu | `/api/killinchu/v1/mcp/tools` | **LIVE** — 4 tools (cue/halt_drone are 2-person) |
-| rosie | `/api/rosie/v1/mcp/tools` | **LIVE** — 12 tools |
-| sentra | `/api/sentra/v1/gates` | **LIVE (gates-derived)** — 8 gates + 3 actions; sentra does **not** expose a JSON `/v1/mcp/tools` catalog (SPA shell), so tools are derived from `/gates` |
-| a11oy | `/api/a11oy/v1/mcp/tools` | **PAUSED (503)** — "ask a maintainer to restart it". Registers **zero** tools + one honest `a11oy_status` tool. **Requires a founder-flipped restart of the Space** before its ≤49 policy gates surface. **Self-heals** to a full live catalog on the next server restart once a11oy returns 200 — no code change, no fabricated stubs. |
+| a11oy — operator | `/api/rosie/v1/mcp/tools` | **LIVE** — 12 tools |
+| a11oy — policy/gates | `/api/sentra/v1/gates` | **LIVE (gates-derived)** — 8 gates + 3 actions; this service does **not** expose a JSON `/v1/mcp/tools` catalog (SPA shell), so tools are derived from `/gates` |
+| a11oy — command | `/api/a11oy/v1/mcp/tools` | **PAUSED (503)** — "ask a maintainer to restart it". Registers **zero** tools + one honest `a11oy_status` tool. **Requires a founder-flipped restart of the Space** before its ≤49 policy gates surface. **Self-heals** to a full live catalog on the next server restart once a11oy returns 200 — no code change, no fabricated stubs. |
 
 ### Byzantine quorum + BLS aggregate
 
-`szl_lambda_quorum` fans a governance-critical Λ verdict out to the five organs and
-decides under a **Byzantine n ≥ 3f+1 quorum (n=5, f=1)**: ≥ 4 organs must be reachable
+`szl_lambda_quorum` fans a governance-critical Λ verdict out to the five backend services
+and decides under a **Byzantine n ≥ 3f+1 quorum (n=5, f=1)**: ≥ 4 services must be reachable
 and ≥ 3 must agree. Participating receipts are **BLS12-381 aggregated** (`py_ecc`;
 honest sha256 Merkle-root fallback if the BLS backend is absent). With a11oy paused,
-quorum degrades gracefully to the 4 live organs (n=4 still satisfies n ≥ 3f+1) and
+quorum degrades gracefully to the 4 live services (n=4 still satisfies n ≥ 3f+1) and
 discloses the degradation in `governance.quorum`.
 
 ---
