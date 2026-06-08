@@ -1,7 +1,7 @@
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Doctrine v11 LOCKED](https://img.shields.io/badge/Doctrine-v11_LOCKED-d4a444.svg)](https://github.com/szl-holdings/lutar-lean)
 [![CI](https://github.com/szl-holdings/hatun-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/szl-holdings/hatun-mcp/actions/workflows/ci.yml)
-[![SLSA](https://img.shields.io/badge/SLSA-L1_honest_+_L2_attested-22c55e.svg)](https://slsa.dev/spec/v1.0/levels)
+[![SLSA](https://img.shields.io/badge/SLSA-L1_honest_%C2%B7_L2_roadmap-22c55e.svg)](https://slsa.dev/spec/v1.0/levels)
 
 <div align="center">
 
@@ -48,15 +48,20 @@ formula:
 > **Live count (probed 2026-06-03): 49 MCP tools total** — 17 core + 32 service-derived
 > across the a11oy capability services (memory 4, policy/gates 11, operator 12, status 1)
 > and killinchu (4).
+>
+> **Naming note.** The live API route segments `/api/amaru/...`, `/api/rosie/...`,
+> `/api/sentra/...` are **immutable infra coordinates** kept verbatim (renaming breaks the
+> live routes). In user-facing terms these are the **YACHAY** reasoning cortex, the operator
+> console, and the **CHAPAQ** egress immune-inspector respectively.
 
 ### Honest reachability (HONESTY OVER CHECKLIST)
 
 | Backend service | Catalog route | Status 2026-06-03 |
 |-----------------|---------------|-------------------|
-| a11oy — memory | `/api/amaru/v1/mcp/tools` | **LIVE** — 4 tools |
+| a11oy — **YACHAY** read-only reasoning cortex / memory | `/api/amaru/v1/mcp/tools` | **LIVE** — 4 tools |
 | killinchu | `/api/killinchu/v1/mcp/tools` | **LIVE** — 4 tools (cue/halt_drone are 2-person) |
-| a11oy — operator | `/api/rosie/v1/mcp/tools` | **LIVE** — 12 tools |
-| a11oy — policy/gates | `/api/sentra/v1/gates` | **LIVE (gates-derived)** — 8 gates + 3 actions; this service does **not** expose a JSON `/v1/mcp/tools` catalog (SPA shell), so tools are derived from `/gates` |
+| a11oy — operator console | `/api/rosie/v1/mcp/tools` | **LIVE** — 12 tools |
+| a11oy — **CHAPAQ** egress immune-inspector (policy/gates) | `/api/sentra/v1/gates` | **LIVE (gates-derived)** — 8 gates + 3 actions; this service does **not** expose a JSON `/v1/mcp/tools` catalog (SPA shell), so tools are derived from `/gates` |
 | a11oy — command | `/api/a11oy/v1/mcp/tools` | **PAUSED (503)** — "ask a maintainer to restart it". Registers **zero** tools + one honest `a11oy_status` tool. **Requires a founder-flipped restart of the Space** before its ≤49 policy gates surface. **Self-heals** to a full live catalog on the next server restart once a11oy returns 200 — no code change, no fabricated stubs. |
 
 ### Byzantine quorum + BLS aggregate
@@ -153,7 +158,7 @@ HATUN_MCP_DISABLE_DYNAMIC=true python -m pytest tests/ -q
 
 <sub>
 
-**Doctrine v11 LOCKED — 749 / 14 / 163 · Λ = Conjecture 1 (NOT a theorem) · SLSA L1 honest + L2 attested**
+**Doctrine v11 LOCKED — 749 / 14 / 163 · Λ = Conjecture 1 (NOT a theorem) · SLSA L1 honest · L2 verified-provenance on roadmap (L3 not claimed)**
 `receipts.in ≡ receipts.out`
 
 Signed-off-by: Yachay &lt;yachay@szlholdings.ai&gt;
