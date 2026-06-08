@@ -76,7 +76,7 @@ jobs:
           provenance: true       # SLSA provenance attached by buildkit
 
       - name: Attest build provenance (SLSA L2)
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-name: ${{ env.IMAGE }}
           subject-digest: ${{ steps.build.outputs.digest }}
