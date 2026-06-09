@@ -1,8 +1,13 @@
 name: sbom
 
-# SBOM generation via Syft (anchore/sbom-action, verified Marketplace).
-# Runs on PR + nightly; uploads SBOM artifact; commits SBOM to attestations branch on schedule.
+# SBOM generation via Syft. Runs on PR + nightly; uploads SBOM artifact;
+# commits SBOM to attestations branch on schedule.
 # ADDITIVE. Doctrine v11 LOCKED 749/14/163 locked_at c7c0ba17
+#
+# CI-fix 2026-06-09: the anchore/sbom-action@v0 "install syft" step fails
+# intermittently ("failed to install syft" — upstream installer/download flake).
+# Replaced with a pinned Syft binary installed via the official install script
+# inside a retry loop, then syft invoked directly. Pin + retry removes the flake.
 
 on:
   pull_request:
@@ -19,13 +24,28 @@ jobs:
     steps:
       - uses: actions/checkout@v6.0.3
 
+      - name: Install Syft (pinned, with retry)
+        env:
+          SYFT_VERSION: v1.45.1
+        run: |
+          set -euo pipefail
+          ok=""
+          for i in 1 2 3 4 5; do
+            if curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh \
+                 | sh -s -- -b /usr/local/bin "${SYFT_VERSION}"; then
+              ok="1"; break
+            fi
+            echo "syft install attempt ${i} failed; retrying in $((i*5))s"
+            sleep $((i*5))
+          done
+          if [ -z "${ok}" ]; then
+            echo "::error::failed to install syft ${SYFT_VERSION} after 5 attempts"
+            exit 1
+          fi
+          syft version
+
       - name: Generate SBOM (SPDX JSON)
-        uses: anchore/sbom-action@v0
-        with:
-          path: .
-          format: spdx-json
-          output-file: SBOM.spdx.json
-          artifact-name: SBOM.spdx.json
+        run: syft dir:. -o spdx-json=SBOM.spdx.json
 
       - name: Upload SBOM artifact
         uses: actions/upload-artifact@v7
@@ -43,8 +63,7 @@ jobs:
           git checkout attestations 2>/dev/null || git checkout --orphan attestations
           git rm -rf . >/dev/null 2>&1 || true
           git checkout ${{ github.sha }} -- SBOM.spdx.json 2>/dev/null || true
-          # SBOM.spdx.json is already in workspace from the generate step:
           cp -f $GITHUB_WORKSPACE/SBOM.spdx.json . 2>/dev/null || true
           git add SBOM.spdx.json || true
-          git commit -m "chore(sbom): nightly SBOM $(date -u +%F)\n\nDoctrine v11 LOCKED 749/14/163 locked_at c7c0ba17\n\nCo-Authored-By: Perplexity Computer Agent <agent@perplexity.ai>" || echo "no changes"
+          git commit -m "chore(sbom): nightly SBOM $(date -u +%F)" || echo "no changes"
           git push origin attestations || echo "push skipped"
