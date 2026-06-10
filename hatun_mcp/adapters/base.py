@@ -40,6 +40,27 @@ GOVERNANCE_CRITICAL = {
     "killinchu": {"evaluate"},
 }
 
+# Codename → a11oy vertical. The three internal organ codenames are being retired
+# INTO a11oy as verticals (owner-confirmed):
+#   amaru  → a11oy Memory   (provenance / receipt anchoring)
+#   sentra → a11oy Sentinel (security-posture / observability)
+#   rosie  → a11oy Operator (admission control / Khipu receipt DAG)
+# Hatun-MCP registers a11oy-named tool aliases ALONGSIDE the codename tools so
+# consumers can migrate without breakage. Retire the codename tools ONLY after all
+# consumers have moved to the a11oy-named tools.
+VERTICAL_ALIAS = {
+    "amaru": "a11oy_memory",
+    "sentra": "a11oy_sentinel",
+    "rosie": "a11oy_operator",
+}
+
+
+def vertical_alias_name(organ: str, leaf: str) -> Optional[str]:
+    """Return the a11oy-vertical alias for an organ tool leaf name, or None if the
+    organ has no vertical alias (a11oy / killinchu keep their own names)."""
+    v = VERTICAL_ALIAS.get(organ)
+    return f"{v}_{leaf}" if v else None
+
 
 @dataclass
 class OrganTool:
@@ -266,22 +287,40 @@ def register_organ_tools(
         if cat.reachable and cat.tools:
             for tool in cat.tools:
                 _register_one(mcp, ad, tool, governed, quorum_decider)
+                # Additionally expose the a11oy-named alias (amaru→a11oy_memory,
+                # sentra→a11oy_sentinel, rosie→a11oy_operator) alongside the codename.
+                alias = vertical_alias_name(organ, tool.name)
+                if alias:
+                    _register_one(mcp, ad, tool, governed, quorum_decider, alias_name=alias)
         else:
             _register_status_tool(mcp, ad, cat, governed)
+            # Honest a11oy-named status alias for an unreachable aliased organ.
+            v = VERTICAL_ALIAS.get(organ)
+            if v:
+                _register_status_tool(mcp, ad, cat, governed, alias_name=f"{v}_status")
     if catalogs_out is not None:
         catalogs_out.update(catalogs)
     return summary
 
 
-def _register_one(mcp, adapter: OrganAdapter, tool: OrganTool, governed, quorum_decider):
-    """Register a single live organ tool as an MCP tool routed through governed()."""
+def _register_one(mcp, adapter: OrganAdapter, tool: OrganTool, governed, quorum_decider,
+                  *, alias_name: Optional[str] = None):
+    """Register a single live organ tool as an MCP tool routed through governed().
+
+    When `alias_name` is given, the tool is registered under that name as an
+    a11oy-vertical alias of `tool.mcp_name` (backward-compat) — routed to the SAME
+    organ backend, so the codename and a11oy-named tools are byte-identical in
+    behaviour. The Khipu receipt records whichever name the consumer invoked.
+    """
+    canonical = tool.mcp_name
+    name = alias_name or canonical
 
     async def _impl(arguments: Optional[dict] = None) -> dict:
         args = arguments or {}
         gate_text = json.dumps(args)[:8000] if args else f"{tool.organ}.{tool.name}"
         needs = "write" if tool.requires_two_person else "read"
         return await governed(
-            tool=tool.mcp_name,
+            tool=name,
             operation_id=f"{tool.organ}.{tool.name}",
             gate_text=gate_text,
             needs_scope=needs,
@@ -290,19 +329,34 @@ def _register_one(mcp, adapter: OrganAdapter, tool: OrganTool, governed, quorum_
         )
 
     # Distinct function name so FastMCP registers a unique tool.
-    _impl.__name__ = tool.mcp_name
-    _impl.__doc__ = (
-        f"[{tool.organ}] {tool.description or tool.name}. "
-        f"Live organ tool aggregated by Hatun-MCP under PURIQ governance"
-        + (" · 2-person Yuyay gate required (state-changing)." if tool.requires_two_person else ".")
-        + (" · governance-critical: routed through Byzantine quorum." if tool.governance_critical else "")
-    )
-    mcp.tool(name=tool.mcp_name)(_impl)
+    _impl.__name__ = name
+    if alias_name:
+        _impl.__doc__ = (
+            f"[a11oy {VERTICAL_ALIAS[tool.organ].split('_', 1)[1]}] "
+            f"{tool.description or tool.name}. a11oy-named alias of the '{canonical}' "
+            f"tool (backward-compat; routes to the same organ backend)"
+            + (" · 2-person Yuyay gate required (state-changing)." if tool.requires_two_person else ".")
+            + (" · governance-critical: routed through Byzantine quorum." if tool.governance_critical else "")
+        )
+    else:
+        _impl.__doc__ = (
+            f"[{tool.organ}] {tool.description or tool.name}. "
+            f"Live organ tool aggregated by Hatun-MCP under PURIQ governance"
+            + (" · 2-person Yuyay gate required (state-changing)." if tool.requires_two_person else ".")
+            + (" · governance-critical: routed through Byzantine quorum." if tool.governance_critical else "")
+        )
+    mcp.tool(name=name)(_impl)
 
 
-def _register_status_tool(mcp, adapter: OrganAdapter, cat: CatalogResult, governed):
-    """For an unreachable organ, register exactly one honest status tool."""
-    status_name = f"{adapter.organ}_status"
+def _register_status_tool(mcp, adapter: OrganAdapter, cat: CatalogResult, governed,
+                          *, alias_name: Optional[str] = None):
+    """For an unreachable organ, register exactly one honest status tool.
+
+    When `alias_name` is given, the status tool is also exposed under that
+    a11oy-vertical name (e.g. a11oy_sentinel_status) so a11oy-named consumers get
+    an honest reachability tool too.
+    """
+    status_name = alias_name or f"{adapter.organ}_status"
 
     async def _status(noop: Optional[dict] = None) -> dict:
         probe = await adapter.probe()
