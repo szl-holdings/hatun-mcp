@@ -10,7 +10,7 @@ commit = api.upload_folder(
     repo_id=repo,
     repo_type="space",
     folder_path="/home/user/workspace/szl_hatun_mcp",
-    commit_message="Hatun-MCP v1.0.0 — doctrine-aware MCP server (23 static tools: 17 szl_* + "
+    commit_message="Hatun-MCP v1.0.0 — doctrine-aware MCP server (25 static tools: 19 szl_* + "
                    "6 governance; PURIQ governance, Khipu receipts, DSSE-signed; "
                    "v11 LOCKED 749/14/163). Real MCP protocol.",
     ignore_patterns=[

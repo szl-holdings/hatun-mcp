@@ -39,19 +39,19 @@ formula:
 
 ### Tools exposed
 
-- **23 static tools** registered at import (verifiable: `tools/list` returns 23 with
+- **25 static tools** registered at import (verifiable: `tools/list` returns 25 with
   `HATUN_MCP_DISABLE_DYNAMIC=true`):
-  - **17 `szl_*` tools** — `szl_a11oy_code_chat`, `szl_killinchu_detect`,
-    `szl_killinchu_cue`, `szl_sentra_scan`, `szl_rosie_reason`, `szl_khipu_verify`,
-    `szl_lean_verify`, `szl_puriq_evaluate`, `szl_yachay_dome_predict`,
-    `szl_wayra_recent`, `szl_anatomy_3d_render`, `szl_doctrine_lookup`,
-    `szl_yuyay_score`, `szl_thesis_query`, `szl_drone_lookup`,
-    `szl_formula_evaluate`, and **`szl_lambda_quorum`** (Byzantine Λ verdict).
+  - **19 `szl_*` tools** — `szl_a11oy_code_chat`, `szl_a11oy_operator_reason`, `szl_a11oy_sentinel_scan`,
+    `szl_anatomy_3d_render`, `szl_doctrine_lookup`, `szl_drone_lookup`,
+    `szl_formula_evaluate`, `szl_khipu_verify`, `szl_killinchu_cue`,
+    `szl_killinchu_detect`, `szl_lean_verify`, `szl_puriq_evaluate`,
+    `szl_rosie_reason`, `szl_sentra_scan`, `szl_thesis_query`, `szl_wayra_recent`,
+    `szl_yachay_dome_predict`, `szl_yuyay_score`, and **`szl_lambda_quorum`** (Byzantine Λ verdict).
   - **6 governance tools** — `yuyay_gate_check`, `khipu_append_and_verify`,
     `dsse_sign`, `mesh_quorum_status`, `puriq_master_tool`, `governance_pacbayes_bound`.
 - **Service-derived tools** registered *dynamically* at startup from each backend
   service's live catalog at `/api/<service>/v1/mcp/tools`, named `<service>_<tool>`. The
-  dynamic count is **probe-dependent**: it equals 23 + (whatever the reachable services
+  dynamic count is **probe-dependent**: it equals 25 + (whatever the reachable services
   publish), and is 0 extra when dynamic registration is disabled or all services are
   unreachable.
 

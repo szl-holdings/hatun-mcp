@@ -7,7 +7,7 @@ Wraps the FastMCP app in a Starlette application that:
   * validates the Origin header (DNS-rebinding defense; MCP transport requirement).
   * honors X-Sovereign-Mode and X-Second-Approver headers (Frontier #4, 2-person gate).
   * serves /.well-known/mcp/server-card.json so registries (Smithery) can enumerate
-    the 23 static tools even behind the auth wall.
+    the 25 static tools even behind the auth wall.
   * serves /healthz and /pubkey (DSSE verification key).
 
 Run:  uvicorn hatun_mcp.server_http:app --host 0.0.0.0 --port 7860
