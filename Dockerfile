@@ -23,8 +23,11 @@ COPY hatun_mcp/server.py          /app/hatun_mcp/server.py
 COPY hatun_mcp/server_http.py     /app/hatun_mcp/server_http.py
 COPY hatun_mcp/backends.py        /app/hatun_mcp/backends.py
 COPY hatun_mcp/governance.py      /app/hatun_mcp/governance.py
+COPY hatun_mcp/puriq.py           /app/hatun_mcp/puriq.py
 COPY hatun_mcp/dsse.py            /app/hatun_mcp/dsse.py
 COPY hatun_mcp/quorum.py          /app/hatun_mcp/quorum.py
+COPY hatun_mcp/tools/__init__.py          /app/hatun_mcp/tools/__init__.py
+COPY hatun_mcp/tools/governance_tools.py  /app/hatun_mcp/tools/governance_tools.py
 COPY hatun_mcp/adapters/__init__.py    /app/hatun_mcp/adapters/__init__.py
 COPY hatun_mcp/adapters/base.py        /app/hatun_mcp/adapters/base.py
 COPY hatun_mcp/adapters/a11oy.py       /app/hatun_mcp/adapters/a11oy.py

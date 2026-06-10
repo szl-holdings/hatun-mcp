@@ -21,7 +21,9 @@ async def main():
             tools = await session.list_tools()
             names = [t.name for t in tools.tools]
             print(f"TOOLS ({len(names)}):", ", ".join(names))
-            assert len(names) == 16, f"expected 16 tools, got {len(names)}"
+            # 25 static tools (19 szl_* + 6 governance) are the floor; dynamic service
+            # registration may add <organ>_<tool> entries when organs are reachable.
+            assert len(names) >= 25, f"expected >= 25 tools, got {len(names)}"
 
             # 1. clean content -> success + receipt + dsse
             res = await session.call_tool("szl_yuyay_score",
