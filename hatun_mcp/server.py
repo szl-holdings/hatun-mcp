@@ -358,6 +358,38 @@ async def szl_rosie_reason(question: str, context: Any = None) -> dict:
     )
 
 
+# ── a11oy-named static aliases (backward-compat) ─────────────────────────────────
+# The internal organ codenames are being retired INTO a11oy as verticals
+# (sentra→a11oy Sentinel, rosie→a11oy Operator). These a11oy-named tools route to
+# the SAME organ backend as their codename twins above, so consumers can migrate
+# off the codename tools without behaviour change. Retire the codename tools only
+# after consumers have moved.
+@mcp.tool()
+async def szl_a11oy_sentinel_scan(code: Optional[str] = None, sbom: Optional[dict] = None,
+                                  image: Optional[str] = None) -> dict:
+    """a11oy Sentinel inline immune screen — a11oy-named alias of szl_sentra_scan
+    (backward-compat). Scan code, an SBOM, or a container image for threat
+    signatures. Calls sentra POST /api/sentra/v1/inspect."""
+    target = {"code": code, "sbom": sbom, "image": image}
+    return await governed(
+        tool="szl_a11oy_sentinel_scan", operation_id="sentra.inspect",
+        gate_text=(code or json.dumps(target))[:8000], needs_scope="read",
+        backend_coro=B.sentra_inspect(target),
+    )
+
+
+@mcp.tool()
+async def szl_a11oy_operator_reason(question: str, context: Any = None) -> dict:
+    """a11oy Operator brain-jack reasoning — a11oy-named alias of szl_rosie_reason
+    (backward-compat). Reason over a question + context.
+    Calls rosie POST /v1/brain/jack."""
+    return await governed(
+        tool="szl_a11oy_operator_reason", operation_id="rosie.brain.ask",
+        gate_text=str(question)[:8000], needs_scope="read",
+        backend_coro=B.rosie_ask(question, context),
+    )
+
+
 @mcp.tool()
 async def szl_khipu_verify(receipt_hash: str, merkle_proof: Optional[list] = None,
                            flagship: str = "a11oy") -> dict:

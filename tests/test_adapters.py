@@ -161,3 +161,82 @@ def test_register_organ_tools_live_and_status(monkeypatch):
     assert not any(r.startswith("a11oy_gate") for r in registered)
     assert summary["a11oy"]["reachable"] is False
     assert summary["amaru"]["reachable"] is True
+
+
+def test_a11oy_named_aliases_registered_alongside_codenames(monkeypatch):
+    """Each live amaru/sentra/rosie tool must ALSO register under its a11oy-vertical
+    alias (amaru→a11oy_memory, sentra→a11oy_sentinel, rosie→a11oy_operator) WITHOUT
+    dropping the codename tool — backward-compat. a11oy/killinchu keep their names."""
+    table = {
+        "/api/amaru/v1/mcp/tools": (200, {"tools": [{"name": "ask"}, {"name": "recall"}]},
+                                    "application/json"),
+        "/api/a11oy/v1/mcp/tools": (200, {"tools": [{"name": "policy_evaluate"}]},
+                                    "application/json"),
+        "/api/killinchu/v1/mcp/tools": (200, {"tools": [{"name": "detect"}]}, "application/json"),
+        "/api/rosie/v1/mcp/tools": (200, {"tools": ["lambda_gate"]}, "application/json"),
+        "/api/sentra/v1/gates": (200, {"gates": [{"gate_id": "gate-01"}]}, "application/json"),
+    }
+    _patch(monkeypatch, table)
+
+    registered = []
+
+    class FakeMCP:
+        def tool(self, name=None):
+            def deco(fn):
+                registered.append(name or fn.__name__)
+                return fn
+            return deco
+
+    async def fake_governed(**kw):
+        return {"tool": kw["tool"], "status": "success"}
+
+    from hatun_mcp.adapters import build_adapters
+    register_organ_tools(FakeMCP(), build_adapters(), fake_governed)
+
+    # codename tools still present (backward-compat)
+    for codename in ("amaru_ask", "amaru_recall", "sentra_gate_gate_01",
+                     "sentra_inspect", "rosie_lambda_gate"):
+        assert codename in registered, f"missing codename tool {codename}"
+    # a11oy-named aliases present alongside
+    for alias in ("a11oy_memory_ask", "a11oy_memory_recall",
+                  "a11oy_sentinel_gate_gate_01", "a11oy_sentinel_inspect",
+                  "a11oy_operator_lambda_gate"):
+        assert alias in registered, f"missing a11oy alias {alias}"
+    # a11oy / killinchu are NOT re-aliased (no double-prefix)
+    assert not any(r.startswith("a11oy_a11oy") for r in registered)
+    assert "killinchu_detect" in registered
+    assert not any(r.startswith("a11oy_memory_detect") for r in registered)
+
+
+def test_a11oy_named_status_alias_for_unreachable_organ(monkeypatch):
+    """A paused aliased organ exposes BOTH <codename>_status and its a11oy-vertical
+    status alias, so a11oy-named consumers still get an honest reachability tool."""
+    table = {
+        "/api/amaru/v1/mcp/tools": (200, {"tools": [{"name": "ask"}]}, "application/json"),
+        "/api/a11oy/v1/mcp/tools": (503, "paused", "text/plain"),
+        "/api/killinchu/v1/mcp/tools": (200, {"tools": [{"name": "detect"}]}, "application/json"),
+        "/api/rosie/v1/mcp/tools": (503, "paused", "text/plain"),
+        "/api/sentra/v1/gates": (503, "paused", "text/plain"),
+    }
+    _patch(monkeypatch, table)
+
+    registered = []
+
+    class FakeMCP:
+        def tool(self, name=None):
+            def deco(fn):
+                registered.append(name or fn.__name__)
+                return fn
+            return deco
+
+    async def fake_governed(**kw):
+        return {"tool": kw["tool"], "status": "success"}
+
+    from hatun_mcp.adapters import build_adapters
+    register_organ_tools(FakeMCP(), build_adapters(), fake_governed)
+
+    assert "sentra_status" in registered and "a11oy_sentinel_status" in registered
+    assert "rosie_status" in registered and "a11oy_operator_status" in registered
+    # a11oy itself keeps a plain status (no vertical alias for the flagship)
+    assert "a11oy_status" in registered
+    assert not any(r.startswith("a11oy_a11oy") for r in registered)
