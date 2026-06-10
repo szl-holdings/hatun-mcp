@@ -49,19 +49,21 @@ formula:
 > across the a11oy capability services (memory 4, policy/gates 11, operator 12, status 1)
 > and killinchu (4).
 >
-> **Naming note.** The live API route segments `/api/amaru/...`, `/api/rosie/...`,
-> `/api/sentra/...` are **immutable infra coordinates** kept verbatim (renaming breaks the
-> live routes). In user-facing terms these are the **YACHAY** reasoning cortex, the operator
-> console, and the **CHAPAQ** egress immune-inspector respectively.
+> **Naming note.** Three backend services are addressed by **immutable internal route
+> segments** that are kept verbatim because renaming them would break the live routes. The
+> exact segment strings are published in the live OpenAPI document at `/openapi.json`; this
+> README refers to each service only by its user-facing role: the **YACHAY** reasoning
+> cortex (read-only memory), the **operator console**, and the **CHAPAQ** egress
+> immune-inspector (policy/gates).
 
 ### Honest reachability (HONESTY OVER CHECKLIST)
 
 | Backend service | Catalog route | Status 2026-06-03 |
 |-----------------|---------------|-------------------|
-| a11oy — **YACHAY** read-only reasoning cortex / memory | `/api/amaru/v1/mcp/tools` | **LIVE** — 4 tools |
+| a11oy — **YACHAY** read-only reasoning cortex / memory | `/api/<yachay>/v1/mcp/tools` | **LIVE** — 4 tools |
 | killinchu | `/api/killinchu/v1/mcp/tools` | **LIVE** — 4 tools (cue/halt_drone are 2-person) |
-| a11oy — operator console | `/api/rosie/v1/mcp/tools` | **LIVE** — 12 tools |
-| a11oy — **CHAPAQ** egress immune-inspector (policy/gates) | `/api/sentra/v1/gates` | **LIVE (gates-derived)** — 8 gates + 3 actions; this service does **not** expose a JSON `/v1/mcp/tools` catalog (SPA shell), so tools are derived from `/gates` |
+| a11oy — operator console | `/api/<operator>/v1/mcp/tools` | **LIVE** — 12 tools |
+| a11oy — **CHAPAQ** egress immune-inspector (policy/gates) | `/api/<chapaq>/v1/gates` | **LIVE (gates-derived)** — 8 gates + 3 actions; this service does **not** expose a JSON `/v1/mcp/tools` catalog (SPA shell), so tools are derived from `/gates` |
 | a11oy — command | `/api/a11oy/v1/mcp/tools` | **PAUSED (503)** — "ask a maintainer to restart it". Registers **zero** tools + one honest `a11oy_status` tool. **Requires a founder-flipped restart of the Space** before its ≤49 policy gates surface. **Self-heals** to a full live catalog on the next server restart once a11oy returns 200 — no code change, no fabricated stubs. |
 
 ### Byzantine quorum + BLS aggregate
