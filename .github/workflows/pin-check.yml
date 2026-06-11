@@ -1,0 +1,20 @@
+name: Pin Check
+
+# Thin caller — delegates to the org-wide reusable SHA-pin check so this repo's
+# workflow files are validated identically to every other repo. The reusable is
+# pinned by commit SHA (the rule it enforces). See szl-holdings/.github
+# replit-sync/FORGE_UPGRADE_pincheck-orgwide.md.
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/**']
+  pull_request:
+    paths: ['.github/workflows/**']
+
+permissions:
+  contents: read
+
+jobs:
+  pin-check:
+    uses: szl-holdings/.github/.github/workflows/pin-check-reusable.yml@1bbd857634a87d3a824be86ec7a79aaa8e4937e8
