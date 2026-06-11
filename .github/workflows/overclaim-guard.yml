@@ -1,0 +1,20 @@
+name: Doctrine Overclaim Guard
+
+# Grep-based honesty gate. The rule lives in ONE place — the org-shared
+# reusable workflow in szl-holdings/.github — so every repo that publishes
+# Λ-uniqueness / Conjecture-1 claims inherits the same check automatically.
+# Fails CI if a governed surface claims Λ uniqueness without the Theorem U /
+# U₁ / U₂ qualifier, or describes Conjecture 1 as proven/closed (it stays OPEN).
+on:
+  workflow_dispatch: {}
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  overclaim:
+    uses: szl-holdings/.github/.github/workflows/reusable-overclaim-guard.yml@main
