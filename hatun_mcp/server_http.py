@@ -22,7 +22,7 @@ import os
 from starlette.applications import Starlette
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from starlette.responses import JSONResponse, PlainTextResponse
+from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from starlette.routing import Mount, Route
 
 from .server import (
@@ -30,6 +30,7 @@ from .server import (
     _ctx_client, _ctx_scope, _ctx_sovereign, _ctx_second_approver,
 )
 from .governance import DOCTRINE
+from .console import CONSOLE_HTML
 
 ALLOWED_ORIGINS = set(
     o.strip() for o in os.environ.get(
@@ -168,14 +169,40 @@ async def pubkey(request: Request):
     return PlainTextResponse(pem, media_type="application/x-pem-file")
 
 
+# The canonical JSON service descriptor — byte-identical to the original index.
+# Returned to API/MCP clients (Accept: application/json, or no text/html). MCP
+# transport handshakes never see HTML.
+_INDEX_JSON = {
+    "service": "hatun-mcp", "tagline": "the great context protocol",
+    "mcp_endpoint": "/mcp", "sse_endpoint": "/sse",
+    "server_card": "/.well-known/mcp/server-card.json",
+    "healthz": "/healthz", "pubkey": "/pubkey",
+    "docs": "https://github.com/szl-holdings/hatun-mcp",
+}
+
+
+def _prefers_html(request: Request) -> bool:
+    """Content-negotiate the root: serve the human console ONLY to browsers.
+
+    A browser sends ``Accept: text/html...`` and ranks it above (or without)
+    ``application/json``. MCP/SSE clients send ``application/json`` (or ``*/*``
+    with no explicit html preference) and must keep receiving the JSON
+    descriptor. We honor an explicit JSON request even if html is also listed:
+    if the caller names application/json at all, we return JSON (safest for
+    machine clients); html is served only when html is requested and json is
+    NOT explicitly named.
+    """
+    accept = request.headers.get("accept", "").lower()
+    if "application/json" in accept:
+        return False
+    return "text/html" in accept
+
+
 async def index(request: Request):
-    return JSONResponse({
-        "service": "hatun-mcp", "tagline": "the great context protocol",
-        "mcp_endpoint": "/mcp", "sse_endpoint": "/sse",
-        "server_card": "/.well-known/mcp/server-card.json",
-        "healthz": "/healthz", "pubkey": "/pubkey",
-        "docs": "https://github.com/szl-holdings/hatun-mcp",
-    })
+    if _prefers_html(request):
+        # no-store so the agentic live fetches always reflect current state.
+        return HTMLResponse(CONSOLE_HTML, headers={"Cache-Control": "no-store"})
+    return JSONResponse(_INDEX_JSON)
 
 
 # Compose the Starlette app: mount FastMCP's SSE + Streamable HTTP apps.
