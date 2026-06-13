@@ -21,6 +21,7 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 COPY hatun_mcp/__init__.py        /app/hatun_mcp/__init__.py
 COPY hatun_mcp/server.py          /app/hatun_mcp/server.py
 COPY hatun_mcp/server_http.py     /app/hatun_mcp/server_http.py
+COPY hatun_mcp/console.py         /app/hatun_mcp/console.py
 COPY hatun_mcp/backends.py        /app/hatun_mcp/backends.py
 COPY hatun_mcp/governance.py      /app/hatun_mcp/governance.py
 COPY hatun_mcp/puriq.py           /app/hatun_mcp/puriq.py
