@@ -48,7 +48,7 @@ CONSOLE_HTML = """<!doctype html>
 <html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="dark">
 <title>hatun-mcp · the great context protocol</title>
 <meta name="description" content="hatun-mcp — SZL Holdings' signed, sovereign Model Context Protocol server. Governed context with provenance, handed to the world's agents.">
@@ -80,7 +80,8 @@ body{
 }
 a{color:var(--cyan);text-decoration:none}
 a:hover{text-decoration:underline}
-.wrap{max-width:var(--maxw);margin:0 auto;padding:0 22px}
+.wrap{max-width:var(--maxw);margin:0 auto;
+  padding:0 max(18px,env(safe-area-inset-right)) 0 max(18px,env(safe-area-inset-left))}
 .mono{font-family:var(--mono)}
 
 /* ── starfield (pure CSS, no assets) ───────────────────────────────────────── */
@@ -107,8 +108,14 @@ header{position:relative;z-index:2;border-bottom:1px solid var(--border);
 .logo b{font-size:16px}
 .logo small{color:var(--faint);font-weight:500;font-size:12px;display:block;margin-top:-2px}
 .bar nav{margin-left:auto;display:flex;gap:18px;font-size:14px;color:var(--muted)}
-.bar nav a{color:var(--muted)}
-@media(max-width:680px){.bar nav{display:none}}
+.bar nav a{color:var(--muted);display:inline-flex;align-items:center;min-height:44px;padding:0 2px}
+.bar nav a:focus-visible,a:focus-visible,.btn:focus-visible{outline:2px solid var(--teal);outline-offset:3px;border-radius:8px}
+/* mobile: wrap nav into a tidy second row instead of hiding it (links stay reachable) */
+@media(max-width:680px){
+  .bar{flex-wrap:wrap;gap:6px 14px;padding:12px 0 6px}
+  .bar nav{margin-left:0;flex-basis:100%;flex-wrap:wrap;gap:4px 16px;
+    border-top:1px solid var(--border);padding-top:4px;font-size:13.5px}
+}
 
 /* ── hero ──────────────────────────────────────────────────────────────────── */
 .hero{position:relative;z-index:2;padding:64px 0 30px}
@@ -170,8 +177,8 @@ section{position:relative;z-index:2;padding:30px 0}
 .tool:hover{border-color:var(--border-2);background:rgba(40,52,86,.5)}
 .tool .name{font-family:var(--mono);font-size:13px;color:var(--teal);font-weight:600;white-space:nowrap}
 .tool .desc{font-size:13px;color:var(--muted)}
-.tool .tag{font-size:10px;color:var(--violet);border:1px solid rgba(154,123,255,.35);
-  border-radius:6px;padding:1px 6px;margin-left:7px;vertical-align:middle}
+.tool .tag{font-size:12px;color:var(--violet);border:1px solid rgba(154,123,255,.35);
+  border-radius:6px;padding:1px 7px;margin-left:7px;vertical-align:middle;white-space:nowrap}
 @media(max-width:560px){.tool{grid-template-columns:1fr}.tool .name{white-space:normal}}
 
 /* connect snippet */
@@ -184,18 +191,30 @@ pre .k{color:var(--violet)} pre .s{color:var(--teal)} pre .c{color:var(--faint)}
 .node{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;
   border:1px solid var(--border);background:var(--surface-2);font-size:13px}
 .node .nm{font-family:var(--mono);color:var(--text)}
-.node .kd{color:var(--faint);font-size:11.5px;margin-left:auto}
+.node .kd{color:var(--muted);font-size:12px;margin-left:auto}
 
 .note{font-size:12.5px;color:var(--faint);margin-top:10px}
 .fp{font-family:var(--mono);font-size:12.5px;color:var(--cyan);word-break:break-all}
 
 footer{position:relative;z-index:2;border-top:1px solid var(--border);margin-top:34px;
   padding:26px 0 40px;color:var(--faint);font-size:13px}
-footer .row{display:flex;gap:18px;flex-wrap:wrap;align-items:center}
-footer a{color:var(--muted)}
+footer .row{display:flex;gap:8px 18px;flex-wrap:wrap;align-items:center}
+footer a{color:var(--muted);display:inline-flex;align-items:center;min-height:44px;padding:0 2px}
+footer{padding-bottom:max(40px,env(safe-area-inset-bottom))}
 .honest{margin-top:14px;font-size:12px;color:var(--faint);max-width:760px;line-height:1.6}
 .skel{color:var(--faint)}
-@media(prefers-reduced-motion:reduce){.pulse{animation:none}}
+@media(prefers-reduced-motion:reduce){
+  .pulse{animation:none}
+  *,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}
+}
+/* mobile rhythm: lighter hero/section padding, comfortable lede */
+@media(max-width:680px){
+  .hero{padding:34px 0 22px}
+  section{padding:22px 0}
+  .lede{font-size:16px}
+  .btn{flex:1 1 auto;justify-content:center}
+  pre{font-size:12.5px}
+}
 </style>
 </head>
 <body>
