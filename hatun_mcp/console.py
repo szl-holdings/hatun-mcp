@@ -543,6 +543,26 @@ GET  <span class="s">/pubkey</span>
         nodes:f.nodes}, true);
     })
     .catch(function(){ renderFabric(SNAP.fabric||{}, false); });
+
+  // ── 4. global watchdog: belt-and-suspenders against a perpetual spinner ────
+  // Every panel above already resolves in both its .then and .catch within an
+  // AbortController timeout, so a hung fetch cannot stall it. This watchdog is a
+  // final guarantee: if any chip is somehow still showing "loading" or any host
+  // still shows its skeleton after the longest fetch budget elapses, force the
+  // honest SNAPSHOT fallback so nothing is ever stuck "loading" forever.
+  setTimeout(function(){
+    ["status-src","key-src","tools-src","fabric-src"].forEach(function(id){
+      var e=$(id); if(e && /loading/i.test(e.textContent)) chip(id,"snap","SNAPSHOT");
+    });
+    var hs=$("hero-status"); if(hs && /probing/i.test(hs.textContent)){ renderHealth(SNAP.healthz||{}, false); }
+    var tl=$("tool-list"); if(tl && /fetching/i.test(tl.textContent)){
+      renderCard({tools:[], resources:[], governance:{}}, false);
+    }
+    var kf=$("key-fp"); if(kf && /computing/i.test(kf.textContent)){
+      kf.textContent="SNAPSHOT \u2014 pubkey unreachable; verify via /pubkey"; chip("key-src","snap","SNAPSHOT");
+    }
+    var nl=$("node-list"); if(nl && /probing/i.test(nl.textContent)){ renderFabric(SNAP.fabric||{}, false); }
+  }, 9000);
 })();
 </script>
 </body>
