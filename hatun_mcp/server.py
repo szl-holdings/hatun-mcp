@@ -335,60 +335,63 @@ async def szl_killinchu_cue(track: dict, asset_value_polygon: dict) -> dict:
 
 
 @mcp.tool()
-async def szl_sentra_scan(code: Optional[str] = None, sbom: Optional[dict] = None,
+async def szl_immune_scan(code: Optional[str] = None, sbom: Optional[dict] = None,
                           image: Optional[str] = None) -> dict:
-    """Sentra inline immune screen — scan code, an SBOM, or a container image for
-    threat signatures. Calls sentra POST /api/sentra/v1/inspect."""
+    """a11oy Immune (Hukulla) inline screen — screen code, an SBOM, or a container
+    image for threat signatures. Calls the live a11oy immune organ
+    POST /api/a11oy/v1/immune/verdict (the screen IS the signed verdict route).
+
+    (Renamed 2026-06-16 from the retired codename tool; see DEPRECATED.md.)"""
     target = {"code": code, "sbom": sbom, "image": image}
     return await governed(
-        tool="szl_sentra_scan", operation_id="sentra.inspect",
+        tool="szl_immune_scan", operation_id="immune.screen",
         gate_text=(code or json.dumps(target))[:8000], needs_scope="read",
-        backend_coro=B.sentra_inspect(target),
+        backend_coro=B.immune_screen(target),
     )
 
 
 @mcp.tool()
-async def szl_rosie_reason(question: str, context: Any = None) -> dict:
-    """Ask Rosie's brain-jack mesh to reason over a question + context.
-    Calls rosie POST /v1/brain/jack."""
+async def szl_companion_reason(question: str, context: Any = None) -> dict:
+    """Ask the a11oy companion to reason over a question + context. Calls the live
+    a11oy companion organ POST /api/a11oy/v1/companion/ask (answers only from live
+    platform data; refuses to fabricate).
+
+    (Renamed 2026-06-16 from the retired codename tool; see DEPRECATED.md.)"""
     return await governed(
-        tool="szl_rosie_reason", operation_id="rosie.brain.ask",
+        tool="szl_companion_reason", operation_id="companion.ask",
         gate_text=str(question)[:8000], needs_scope="read",
-        backend_coro=B.rosie_ask(question, context),
+        backend_coro=B.companion_ask(question, context),
     )
 
 
-# ── a11oy-named static aliases (backward-compat) ─────────────────────────────────
-# The internal organ codenames are being retired INTO a11oy as verticals
-# (sentra→a11oy Sentinel, rosie→a11oy Operator). These a11oy-named tools route to
-# the SAME organ backend as their codename twins above, so consumers can migrate
-# off the codename tools without behaviour change. Retire the codename tools only
-# after consumers have moved.
+# ── a11oy-named honest twins (kept for consumers already on these names) ──────────
+# The purged sentra/rosie/amaru backends are now served by the live honest a11oy
+# organs (immune / companion / llm). These a11oy-named tools route to the SAME
+# live a11oy organ backend as the renamed tools above — honest names, no codename.
 @mcp.tool()
 async def szl_a11oy_sentinel_scan(code: Optional[str] = None, sbom: Optional[dict] = None,
                                   image: Optional[str] = None) -> dict:
-    """a11oy Sentinel inline immune screen — a11oy-named alias of szl_sentra_scan
-    (backward-compat). Scan code, an SBOM, or a container image for threat
-    signatures. Calls sentra POST /api/sentra/v1/inspect."""
+    """a11oy Sentinel inline immune screen — a11oy-named twin of szl_immune_scan.
+    Screen code, an SBOM, or a container image for threat signatures. Calls the
+    live a11oy immune organ POST /api/a11oy/v1/immune/verdict."""
     target = {"code": code, "sbom": sbom, "image": image}
     return await governed(
-        tool="szl_a11oy_sentinel_scan", operation_id="sentra.inspect",
+        tool="szl_a11oy_sentinel_scan", operation_id="immune.screen",
         gate_text=(code or json.dumps(target))[:8000], needs_scope="read",
-        backend_coro=B.sentra_inspect(target),
+        backend_coro=B.immune_screen(target),
     )
 
 
 @mcp.tool()
 async def szl_a11oy_operator_reason(question: str, context: Any = None) -> dict:
-    """a11oy Operator brain-jack reasoning — a11oy-named alias of szl_rosie_reason
-    (backward-compat). Reason over a question + context.
-    Calls rosie POST /v1/brain/jack."""
+    """a11oy Operator reasoning — a11oy-named twin of szl_companion_reason. Reason
+    over a question + context. Calls the live a11oy companion organ
+    POST /api/a11oy/v1/companion/ask."""
     return await governed(
-        tool="szl_a11oy_operator_reason", operation_id="rosie.brain.ask",
+        tool="szl_a11oy_operator_reason", operation_id="companion.ask",
         gate_text=str(question)[:8000], needs_scope="read",
-        backend_coro=B.rosie_ask(question, context),
+        backend_coro=B.companion_ask(question, context),
     )
-
 
 @mcp.tool()
 async def szl_khipu_verify(receipt_hash: str, merkle_proof: Optional[list] = None,
@@ -487,11 +490,11 @@ async def szl_anatomy_3d_render(organ: str, animation_state: str = "idle") -> di
 @mcp.tool()
 async def szl_doctrine_lookup(query: str) -> dict:
     """Semantic lookup across SZL Doctrine v11/v12/v13 + thesis v20.
-    Routed via rosie RAG over the doctrine corpus."""
+    Routed via the a11oy companion grounded-RAG over the doctrine corpus."""
     return await governed(
         tool="szl_doctrine_lookup", operation_id="doctrine.lookup",
         gate_text=str(query)[:5000], needs_scope="read",
-        backend_coro=B.rosie_rag("DOCTRINE: " + query),
+        backend_coro=B.companion_rag("DOCTRINE: " + query),
     )
 
 
@@ -512,11 +515,12 @@ async def szl_yuyay_score(content: str) -> dict:
 
 @mcp.tool()
 async def szl_thesis_query(question: str) -> dict:
-    """RAG query against the thesis-corpus-v18 HF dataset. Calls rosie RAG."""
+    """RAG query against the thesis-corpus-v18 HF dataset. Calls the a11oy
+    companion grounded-RAG."""
     return await governed(
         tool="szl_thesis_query", operation_id="thesis.query",
         gate_text=str(question)[:5000], needs_scope="read",
-        backend_coro=B.rosie_rag(question),
+        backend_coro=B.companion_rag(question),
     )
 
 
@@ -583,14 +587,14 @@ async def szl_lambda_quorum(action: dict, context: Any = None,
     organ's verdict, and decides only if >= 2f+1 (=3) reachable organs AGREE and
     >= 3f+1 (=4) organs are reachable. Each organ's contribution mints a Khipu
     receipt; the participating receipts are BLS-aggregated into one signature. The
-    full quorum tally + aggregate ride in `governance.quorum`. HONEST: with a11oy
-    paused only 4/5 organs are reachable; quorum still holds on the 4 live organs
-    and discloses the degradation.
+    full quorum tally + aggregate ride in `governance.quorum`. HONEST: each organ's
+    reachability is captured from the real HTTP status; any organ whose policy route
+    is not live contributes an honest miss and the degradation is disclosed.
     """
     from .adapters import build_adapters
     client_id = _ctx_client.get()
     sovereign = _ctx_sovereign.get()
-    targets = organs or ["a11oy", "sentra", "rosie", "amaru", "killinchu"]
+    targets = organs or ["a11oy", "immune", "companion", "llm", "killinchu"]
     ads = build_adapters()
     gate_text = json.dumps(action)[:5000]
 

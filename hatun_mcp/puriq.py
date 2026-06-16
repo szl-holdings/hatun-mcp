@@ -35,8 +35,10 @@ from .governance import (
 )
 
 # The 12-organ runtime (v21 PURIQ-OS). Default quorum set when caller gives none.
+# Honest organ role names (the purged sentra/rosie/amaru backends are now served
+# by the live a11oy immune/companion/llm organs).
 DEFAULT_ORGANS = [
-    "a11oy", "killinchu", "sentra", "rosie", "amaru", "wayra",
+    "a11oy", "killinchu", "immune", "companion", "llm", "wayra",
     "yachay", "hatun", "wallpa", "unay", "chaski", "wasi-rikuq",
 ]
 

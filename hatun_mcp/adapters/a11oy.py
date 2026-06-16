@@ -1,18 +1,13 @@
 """
 hatun_mcp.adapters.a11oy — A11oy policy + receipt substrate.
 
-HONEST REALITY (probed 2026-06-03): the a11oy HF Space is PAUSED — every route
-returns HTTP 503 with the body "The space is paused, ask a maintainer to restart
-it". Therefore a11oy's catalog is UNREACHABLE and this adapter registers ZERO MCP
-tools today. a11oy advertises (in its repo) 46 policy-gate modules + 11 MCP tools;
-the mission's headline "49 a11oy gates -> 49 MCP tools" is BLOCKED on a FOUNDER
-restart of the Space.
-
-SELF-HEALING: the default fetch_catalog() already does the right thing — when
-a11oy returns 200 with a JSON catalog at /api/a11oy/v1/mcp/tools, every advertised
-gate is surfaced automatically (named a11oy_<tool> / a11oy_gate_<id>) on the next
-server restart, with NO code change and NO fabricated stubs. Each a11oy policy
-gate is governance-critical and is routed through the Byzantine quorum.
+LIVE as of 2026-06-16 on https://a11oy.net. The a11oy platform now serves the
+immune / companion / llm organs directly (the purged sentra/rosie/amaru backends).
+The default fetch_catalog() reads /api/a11oy/v1/mcp/tools when present; if that
+catalog route is not exposed it registers zero a11oy-flagship tools + one honest
+a11oy_status tool (the immune/companion/llm organs surface their own tools). Each
+a11oy policy gate is governance-critical and routed through the Byzantine quorum —
+never fabricated stubs.
 
 SPDX-License-Identifier: Apache-2.0
 """
@@ -27,7 +22,7 @@ GOVERNANCE_CRITICAL["a11oy"] |= {"router", "route"}
 class A11oyAdapter(OrganAdapter):
     organ = "a11oy"
     base_env = "SZL_A11OY_URL"
-    base_default = "https://szlholdings-a11oy.hf.space"
+    base_default = "https://a11oy.net"
     catalog_route = "/api/a11oy/v1/mcp/tools"
 
     def _parse_catalog_json(self, body, route, status):

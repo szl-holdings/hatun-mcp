@@ -32,9 +32,9 @@ def test_config_too_small_is_not_byzantine_safe():
 
 
 def test_unanimous_five_reaches_quorum():
-    res = decide(_votes([("a11oy", True, "ALLOW"), ("amaru", True, "ALLOW"),
-                         ("sentra", True, "ALLOW"), ("killinchu", True, "ALLOW"),
-                         ("rosie", True, "ALLOW")]))
+    res = decide(_votes([("a11oy", True, "ALLOW"), ("llm", True, "ALLOW"),
+                         ("immune", True, "ALLOW"), ("killinchu", True, "ALLOW"),
+                         ("companion", True, "ALLOW")]))
     assert res.outcome == "QUORUM_REACHED"
     assert res.decided_verdict == "ALLOW"
     assert res.reachable == 5
@@ -42,9 +42,9 @@ def test_unanimous_five_reaches_quorum():
 
 def test_a11oy_down_four_live_still_reaches_quorum():
     # a11oy paused (the real 2026-06-03 state): 4 reachable, 4 agree.
-    res = decide(_votes([("a11oy", False, None), ("amaru", True, "DENY"),
-                         ("sentra", True, "DENY"), ("killinchu", True, "DENY"),
-                         ("rosie", True, "DENY")]))
+    res = decide(_votes([("a11oy", False, None), ("llm", True, "DENY"),
+                         ("immune", True, "DENY"), ("killinchu", True, "DENY"),
+                         ("companion", True, "DENY")]))
     assert res.outcome == "QUORUM_REACHED"
     assert res.decided_verdict == "DENY"
     assert res.reachable == 4
@@ -53,27 +53,27 @@ def test_a11oy_down_four_live_still_reaches_quorum():
 
 def test_three_reachable_is_no_quorum():
     # Only 3 reachable < 3f+1 = 4 -> NO_QUORUM even if they all agree.
-    res = decide(_votes([("a11oy", False, None), ("amaru", False, None),
-                         ("sentra", True, "ALLOW"), ("killinchu", True, "ALLOW"),
-                         ("rosie", True, "ALLOW")]))
+    res = decide(_votes([("a11oy", False, None), ("llm", False, None),
+                         ("immune", True, "ALLOW"), ("killinchu", True, "ALLOW"),
+                         ("companion", True, "ALLOW")]))
     assert res.outcome == "NO_QUORUM"
     assert res.decided_verdict is None
 
 
 def test_split_vote_no_decision():
     # 4 reachable but split 2/2 -> no 2f+1 majority -> SPLIT.
-    res = decide(_votes([("a11oy", True, "ALLOW"), ("amaru", True, "ALLOW"),
-                         ("sentra", True, "DENY"), ("killinchu", True, "DENY"),
-                         ("rosie", False, None)]))
+    res = decide(_votes([("a11oy", True, "ALLOW"), ("llm", True, "ALLOW"),
+                         ("immune", True, "DENY"), ("killinchu", True, "DENY"),
+                         ("companion", False, None)]))
     assert res.outcome == "SPLIT"
     assert res.decided_verdict is None
 
 
 def test_exact_threshold_three_of_four():
     # 4 reachable, 3 ALLOW / 1 DENY -> 3 >= 2f+1 -> QUORUM_REACHED ALLOW.
-    res = decide(_votes([("a11oy", True, "ALLOW"), ("amaru", True, "ALLOW"),
-                         ("sentra", True, "ALLOW"), ("killinchu", True, "DENY"),
-                         ("rosie", False, None)]))
+    res = decide(_votes([("a11oy", True, "ALLOW"), ("llm", True, "ALLOW"),
+                         ("immune", True, "ALLOW"), ("killinchu", True, "DENY"),
+                         ("companion", False, None)]))
     assert res.outcome == "QUORUM_REACHED"
     assert res.decided_verdict == "ALLOW"
 
@@ -95,7 +95,7 @@ def test_merkle_root_deterministic():
 
 def test_bls_aggregate_and_verify():
     agg = BlsAggregator(seed="test-seed")
-    receipts = [("a11oy", "11" * 32), ("amaru", "22" * 32), ("sentra", "33" * 32)]
+    receipts = [("a11oy", "11" * 32), ("llm", "22" * 32), ("immune", "33" * 32)]
     out = agg.aggregate(receipts)
     assert out.n_organs == 3
     assert out.mode in ("BLS12-381", "MERKLE-AGG")
@@ -104,7 +104,7 @@ def test_bls_aggregate_and_verify():
     assert agg.verify(receipts, out.aggregate) is True
     if out.mode == "BLS12-381":
         # tampering one receipt must fail BLS AggregateVerify
-        bad = [("a11oy", "11" * 32), ("amaru", "22" * 32), ("sentra", "44" * 32)]
+        bad = [("a11oy", "11" * 32), ("llm", "22" * 32), ("immune", "44" * 32)]
         assert agg.verify(bad, out.aggregate) is False
 
 

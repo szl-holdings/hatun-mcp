@@ -10,7 +10,7 @@
 **The great context protocol** — *hatun* (Quechua) = "big / great".
 
 The **one signed MCP endpoint** that aggregates the SZL backend services — the
-**a11oy** command platform (and its policy, memory and operator capability services)
+**a11oy** command platform (and its live immune, companion and llm-router organs)
 plus **killinchu** (drones & vessels) — under PURIQ governance and re-exposes their
 tools to any MCP client.
 
@@ -45,8 +45,13 @@ formula:
     `szl_anatomy_3d_render`, `szl_doctrine_lookup`, `szl_drone_lookup`,
     `szl_formula_evaluate`, `szl_khipu_verify`, `szl_killinchu_cue`,
     `szl_killinchu_detect`, `szl_lean_verify`, `szl_puriq_evaluate`,
-    `szl_rosie_reason`, `szl_sentra_scan`, `szl_thesis_query`, `szl_wayra_recent`,
+    `szl_companion_reason`, `szl_immune_scan`, `szl_thesis_query`, `szl_wayra_recent`,
     `szl_yachay_dome_predict`, `szl_yuyay_score`, and **`szl_lambda_quorum`** (Byzantine Λ verdict).
+    > Two tools were **renamed 2026-06-16** to honest organ names —
+    > `szl_immune_scan` (was the retired codename scan tool) and
+    > `szl_companion_reason` (was the retired codename reason tool). See
+    > [`DEPRECATED.md`](DEPRECATED.md) for the old→new mapping. The old names are
+    > **not** served (they are not registered in `tools/list`).
   - **6 governance tools** — `yuyay_gate_check`, `khipu_append_and_verify`,
     `dsse_sign`, `mesh_quorum_status`, `puriq_master_tool`, `governance_pacbayes_bound`.
 - **Service-derived tools** registered *dynamically* at startup from each backend
@@ -55,31 +60,38 @@ formula:
   publish), and is 0 extra when dynamic registration is disabled or all services are
   unreachable.
 
-> **Naming note.** Three backend services are addressed by **immutable internal route
-> segments** that are kept verbatim because renaming them would break the live routes. The
-> exact segment strings are published in the live OpenAPI document at `/openapi.json`; this
-> README refers to each service only by its user-facing role: the **YACHAY** reasoning
-> cortex (read-only memory), the **operator console**, and the **CHAPAQ** egress
-> immune-inspector (policy/gates).
+> **Naming note.** The three previously-codenamed backends were **purged**; their
+> capabilities are now served directly by the **live honest a11oy organs** on
+> `a11oy.net`: the **immune** organ (egress policy/gates inspector — *Hukulla*),
+> the **companion** organ (operator / reasoning console), and the **llm** organ
+> (open-LLM tier router). Hatun-MCP addresses them by these honest role names; the
+> live routes are published in `/openapi.json`.
 
 ### Honest reachability (HONESTY OVER CHECKLIST)
 
-| Backend service | Catalog route | Status 2026-06-03 |
+| Backend organ | Catalog route | Status 2026-06-16 |
 |-----------------|---------------|-------------------|
-| a11oy — **YACHAY** read-only reasoning cortex / memory | `/api/<yachay>/v1/mcp/tools` | **LIVE** — 4 tools |
+| a11oy — **llm** open-LLM tier router | `GET /api/a11oy/v1/llm/tiers` | **LIVE (200)** — `llm_tiers` derived from the live tier catalog |
 | killinchu | `/api/killinchu/v1/mcp/tools` | **LIVE** — 4 tools (cue/halt_drone are 2-person) |
-| a11oy — operator console | `/api/<operator>/v1/mcp/tools` | **LIVE** — 12 tools |
-| a11oy — **CHAPAQ** egress immune-inspector (policy/gates) | `/api/<chapaq>/v1/gates` | **LIVE (gates-derived)** — 8 gates + 3 actions; this service does **not** expose a JSON `/v1/mcp/tools` catalog (SPA shell), so tools are derived from `/gates` |
-| a11oy — command | `/api/a11oy/v1/mcp/tools` | **PAUSED (503)** — "ask a maintainer to restart it". Registers **zero** tools + one honest `a11oy_status` tool. **Requires a founder-flipped restart of the Space** before its ≤49 policy gates surface. **Self-heals** to a full live catalog on the next server restart once a11oy returns 200 — no code change, no fabricated stubs. |
+| a11oy — **companion** operator / reasoning console | `/api/a11oy/v1/companion/{ask,act,recommend}` | **LIVE (200)** — 3 tools derived from live action routes (no JSON `/v1/mcp/tools` catalog) |
+| a11oy — **immune** (Hukulla) egress policy inspector | `GET /api/a11oy/v1/immune/gates` | **LIVE (200, gates-derived)** — gates + `screen`/`verdict`; the immune *screen* is the signed `/immune/verdict` route (there is no separate `/screen`) |
+| a11oy — command / flagship | `/api/a11oy/v1/mcp/tools` | Registers a11oy-flagship tools when the JSON catalog is exposed, else one honest `a11oy_status` tool. **Self-heals** on the next server restart once the catalog returns 200 — no code change, no fabricated stubs. |
+
+> **Purge note (2026-06-16).** The three previously-codenamed backends were purged
+> (their old routes now 404). Hatun-MCP was repointed to the **live honest a11oy
+> twins** above and verified 200 before wiring. No tool is ever pointed at a 404;
+> where a sub-route does not exist (e.g. `/immune/screen`) the tool maps to the
+> closest real route (`/immune/verdict`) and the mapping is disclosed in the
+> adapter docstring and the catalog `reason`.
 
 ### Byzantine quorum + BLS aggregate
 
 `szl_lambda_quorum` fans a governance-critical Λ verdict out to the five backend services
 and decides under a **Byzantine n ≥ 3f+1 quorum (n=5, f=1)**: ≥ 4 services must be reachable
 and ≥ 3 must agree. Participating receipts are **BLS12-381 aggregated** (`py_ecc`;
-honest sha256 Merkle-root fallback if the BLS backend is absent). With a11oy paused,
-quorum degrades gracefully to the 4 live services (n=4 still satisfies n ≥ 3f+1) and
-discloses the degradation in `governance.quorum`.
+honest sha256 Merkle-root fallback if the BLS backend is absent). If any organ's
+policy route is not live, quorum degrades gracefully (n=4 still satisfies n ≥ 3f+1)
+and discloses the degradation in `governance.quorum`.
 
 ---
 

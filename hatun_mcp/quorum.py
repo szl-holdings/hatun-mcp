@@ -1,9 +1,9 @@
 """
 hatun_mcp.quorum — Byzantine fault-tolerant quorum for governance-critical tools.
 
-Governance-critical MCP tools (Λ verdicts: szl_puriq_evaluate, a11oy/sentra/rosie
-policy verdicts) must NOT trust a single organ. We require a Byzantine quorum
-across the five SZL organs.
+Governance-critical MCP tools (Λ verdicts: szl_puriq_evaluate, a11oy/immune/
+companion policy verdicts) must NOT trust a single organ. We require a Byzantine
+quorum across the five SZL organs.
 
 Model (classic BFT, e.g. PBFT):
   * n participating organs, tolerate f Byzantine (arbitrary-fault) participants.
@@ -11,14 +11,14 @@ Model (classic BFT, e.g. PBFT):
   * AGREEMENT requires   >= 2f + 1 matching verdicts (a quorum that necessarily
     intersects any other quorum in at least one honest node).
 
-Default config: n = 5 organs (a11oy, amaru, sentra, killinchu, rosie), f = 1.
+Default config: n = 5 organs (a11oy, llm, immune, killinchu, companion), f = 1.
   -> min_total() = 3f+1 = 4 reachable organs required.
   -> agreement_threshold() = 2f+1 = 3 matching verdicts required.
 
-HONEST DEGRADATION: with a11oy paused, only 4 of 5 organs are reachable. n=4,f=1
-still satisfies n>=3f+1 (4>=4), and 2f+1 = 3 matching verdicts still reaches
-quorum on the 4 live organs. If a second organ drops (n=3 < 4) the quorum returns
-NO_QUORUM — disclosed, never forced.
+HONEST DEGRADATION: if only 4 of 5 organs are reachable, n=4,f=1 still satisfies
+n>=3f+1 (4>=4), and 2f+1 = 3 matching verdicts still reaches quorum on the 4 live
+organs. If a second organ drops (n=3 < 4) the quorum returns NO_QUORUM — disclosed,
+never forced.
 
 SPDX-License-Identifier: Apache-2.0
 Author: Yachay (CTO authority) · Built by Perplexity Computer Agent · 2026-06-03
@@ -29,7 +29,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
-ORGANS = ("a11oy", "amaru", "sentra", "killinchu", "rosie")
+ORGANS = ("a11oy", "llm", "immune", "killinchu", "companion")
 
 
 @dataclass(frozen=True)

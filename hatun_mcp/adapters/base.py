@@ -32,32 +32,31 @@ from .. import backends as B
 
 DEFAULT_TIMEOUT = float(os.environ.get("HATUN_MCP_ADAPTER_TIMEOUT", "8.0"))
 # Governance-critical organ tools that must run through the Byzantine quorum.
+# Keyed by HONEST organ name (the purged codename backends are now served by the
+# live a11oy organs: immune / companion / llm).
 GOVERNANCE_CRITICAL = {
     "a11oy": {"policy_evaluate", "lambda_gate", "verdict"},
-    "sentra": {"verdict", "doctrine_guard", "policy_evaluate"},
-    "rosie": {"lambda_gate", "doctrine_gate", "policy_evaluate"},
-    "amaru": set(),
+    "immune": {"verdict", "screen", "policy_evaluate"},
+    "companion": {"act"},
+    "llm": set(),
     "killinchu": {"evaluate"},
 }
 
-# Codename → a11oy vertical. The three internal organ codenames are being retired
-# INTO a11oy as verticals (owner-confirmed):
-#   amaru  → a11oy Memory   (provenance / receipt anchoring)
-#   sentra → a11oy Sentinel (security-posture / observability)
-#   rosie  → a11oy Operator (admission control / Khipu receipt DAG)
-# Hatun-MCP registers a11oy-named tool aliases ALONGSIDE the codename tools so
-# consumers can migrate without breakage. Retire the codename tools ONLY after all
-# consumers have moved to the a11oy-named tools.
-VERTICAL_ALIAS = {
-    "amaru": "a11oy_memory",
-    "sentra": "a11oy_sentinel",
-    "rosie": "a11oy_operator",
-}
+# The three previously-codenamed organ backends (sentra/rosie/amaru) were PURGED
+# and their capabilities are now served DIRECTLY by the live honest a11oy organs:
+#   amaru  → llm        (a11oy LLM tier router / model catalog)
+#   sentra → immune     (a11oy Immune (Hukulla) egress policy inspector)
+#   rosie  → companion  (a11oy operator / reasoning console)
+# Because the adapters are now NAMED for the honest organs, their MCP tools are
+# already honest (immune_* / companion_* / llm_*) — no codename ever reaches
+# tools/list, so no alias-remapping is needed. VERTICAL_ALIAS is intentionally
+# empty; the old codename→alias machinery is retired. See DEPRECATED.md.
+VERTICAL_ALIAS: dict[str, str] = {}
 
 
 def vertical_alias_name(organ: str, leaf: str) -> Optional[str]:
-    """Return the a11oy-vertical alias for an organ tool leaf name, or None if the
-    organ has no vertical alias (a11oy / killinchu keep their own names)."""
+    """Return the alias for an organ tool leaf name, or None. With honest organ
+    names there are no aliases to register (VERTICAL_ALIAS is empty)."""
     v = VERTICAL_ALIAS.get(organ)
     return f"{v}_{leaf}" if v else None
 

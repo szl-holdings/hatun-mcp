@@ -1,13 +1,13 @@
 """Adapter wiring tests with MOCKED organ endpoints (no real network).
 
-Verifies:
-  * a live JSON catalog (amaru/killinchu shape) parses into <organ>_<tool> names;
-  * a string-name catalog (rosie shape) parses with defaulted schemas;
-  * a paused organ (a11oy 503) yields reachable=False + zero tools (honest);
-  * sentra derives tools from /gates (no /v1/mcp/tools JSON);
+Verifies (post-2026-06-16 purge → honest-twin repoint):
+  * llm adapter derives an `llm_tiers` tool;
+  * companion adapter derives ask/act/recommend tools;
+  * immune adapter derives tools from the live /immune/gates catalog + screen/verdict;
   * killinchu marks cue/halt_drone as 2-person;
   * register_organ_tools registers <organ>_<tool> for live organs and an honest
-    <organ>_status tool for unreachable ones.
+    <organ>_status tool for unreachable ones;
+  * NO codename (sentra/rosie/amaru) tool name is ever registered.
 
 SPDX-License-Identifier: Apache-2.0
 """
@@ -22,7 +22,7 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from hatun_mcp.adapters import (  # noqa: E402
-    AmaruAdapter, KillinchuAdapter, RosieAdapter, SentraAdapter, A11oyAdapter,
+    LlmAdapter, KillinchuAdapter, CompanionAdapter, ImmuneAdapter, A11oyAdapter,
 )
 from hatun_mcp.adapters.base import register_organ_tools  # noqa: E402
 
@@ -55,16 +55,15 @@ def _patch(monkeypatch, table):
     monkeypatch.setattr(httpx.AsyncClient, "__init__", init)
 
 
-def test_amaru_live_catalog(monkeypatch):
-    table = {"/api/amaru/v1/mcp/tools": (200, {"tools": [
-        {"name": "ask", "description": "RAG", "inputSchema": {"type": "object"}},
-        {"name": "recall"}, {"name": "semantic_search"}, {"name": "cite"},
+def test_llm_tiers_catalog(monkeypatch):
+    table = {"/api/a11oy/v1/llm/tiers": (200, {"count": 2, "tiers": [
+        {"id": "claude_sonnet_4_6", "rank": 0}, {"id": "gpt_5_5", "rank": 4},
     ]}, "application/json")}
     _patch(monkeypatch, table)
-    cat = asyncio.run(AmaruAdapter().fetch_catalog())
+    cat = asyncio.run(LlmAdapter().fetch_catalog())
     assert cat.reachable is True
     names = [t.mcp_name for t in cat.tools]
-    assert names == ["amaru_ask", "amaru_recall", "amaru_semantic_search", "amaru_cite"]
+    assert names == ["llm_tiers"]
 
 
 def test_killinchu_two_person_flag(monkeypatch):
@@ -79,61 +78,53 @@ def test_killinchu_two_person_flag(monkeypatch):
     assert two == {"cue", "halt_drone"}
 
 
-def test_rosie_string_name_catalog(monkeypatch):
-    table = {"/api/rosie/v1/mcp/tools": (200, {"count": 3, "tools":
-             ["lambda_gate", "doctrine_gate", "memory_query"]}, "application/json")}
-    _patch(monkeypatch, table)
-    cat = asyncio.run(RosieAdapter().fetch_catalog())
+def test_companion_action_tools(monkeypatch):
+    # The companion organ exposes no JSON catalog; the adapter surfaces the three
+    # known live action tools directly.
+    cat = asyncio.run(CompanionAdapter().fetch_catalog())
     assert cat.reachable is True
-    assert [t.mcp_name for t in cat.tools] == \
-        ["rosie_lambda_gate", "rosie_doctrine_gate", "rosie_memory_query"]
-    # governance-critical flags set for lambda_gate / doctrine_gate
-    crit = {t.name for t in cat.tools if t.governance_critical}
-    assert "lambda_gate" in crit and "doctrine_gate" in crit
+    names = [t.mcp_name for t in cat.tools]
+    assert names == ["companion_ask", "companion_act", "companion_recommend"]
+    assert "/companion/" in cat.reason
 
 
-def test_a11oy_paused_is_honest_zero_tools(monkeypatch):
+def test_immune_gates_and_actions(monkeypatch):
+    # immune.fetch_catalog reads /immune/gates (live JSON) + screen/verdict actions.
+    table = {"/api/a11oy/v1/immune/gates": (200, {"gates": [
+        {"id": "gate-01"}, {"id": "gate-02"}, {"id": "gate-03"},
+    ]}, "application/json")}
+    _patch(monkeypatch, table)
+    cat = asyncio.run(ImmuneAdapter().fetch_catalog())
+    assert cat.reachable is True
+    names = [t.mcp_name for t in cat.tools]
+    assert "immune_gate_gate_01" in names
+    assert "immune_screen" in names and "immune_verdict" in names
+    assert "/immune/gates" in cat.source_route
+
+
+def test_immune_screen_routes_to_verdict():
+    # There is no /immune/screen route; the screen IS the verdict route.
+    routes = ImmuneAdapter().call_routes("screen")
+    assert routes == ["/api/a11oy/v1/immune/verdict"]
+
+
+def test_a11oy_unreachable_is_honest_zero_tools(monkeypatch):
     table = {"/api/a11oy/v1/mcp/tools":
-             (503, "The space is paused, ask a maintainer to restart it", "text/plain")}
+             (404, '{"detail":"not found"}', "application/json")}
     _patch(monkeypatch, table)
     cat = asyncio.run(A11oyAdapter().fetch_catalog())
     assert cat.reachable is False
     assert cat.tools == []
-    assert "503" in str(cat.http_status) or "paused" in cat.reason.lower()
-
-
-def test_sentra_spa_shell_rejected_then_gates_used(monkeypatch):
-    # sentra's fetch_catalog reads /gates (not /v1/mcp/tools). Provide gates JSON.
-    table = {"/api/sentra/v1/gates": (200, {"gates": [
-        {"gate_id": "gate-01"}, {"gate_id": "gate-02"}, {"gate_id": "gate-03"},
-    ]}, "application/json")}
-    _patch(monkeypatch, table)
-    cat = asyncio.run(SentraAdapter().fetch_catalog())
-    assert cat.reachable is True
-    names = [t.mcp_name for t in cat.tools]
-    assert "sentra_gate_gate_01" in names
-    assert "sentra_inspect" in names and "sentra_verdict" in names
-    assert "/gates" in cat.source_route
-
-
-def test_base_rejects_spa_html(monkeypatch):
-    # The default base parser must reject a 200 HTML SPA shell as non-JSON (honest).
-    table = {"/api/amaru/v1/mcp/tools": (200, "<!DOCTYPE html><html></html>", "text/html")}
-    _patch(monkeypatch, table)
-    cat = asyncio.run(AmaruAdapter().fetch_catalog())
-    assert cat.reachable is False
-    assert "non-json" in cat.reason.lower() or "spa" in cat.reason.lower()
 
 
 def test_register_organ_tools_live_and_status(monkeypatch):
     """register_organ_tools must add <organ>_<tool> for live organs and an honest
-    <organ>_status tool for unreachable ones."""
+    <organ>_status tool for unreachable ones — with HONEST names only."""
     table = {
-        "/api/amaru/v1/mcp/tools": (200, {"tools": [{"name": "ask"}]}, "application/json"),
-        "/api/a11oy/v1/mcp/tools": (503, "paused", "text/plain"),
+        "/api/a11oy/v1/llm/tiers": (200, {"tiers": [{"id": "t0", "rank": 0}]}, "application/json"),
+        "/api/a11oy/v1/mcp/tools": (404, "not found", "application/json"),
         "/api/killinchu/v1/mcp/tools": (200, {"tools": [{"name": "detect"}]}, "application/json"),
-        "/api/rosie/v1/mcp/tools": (200, {"tools": ["lambda_gate"]}, "application/json"),
-        "/api/sentra/v1/gates": (200, {"gates": [{"gate_id": "gate-01"}]}, "application/json"),
+        "/api/a11oy/v1/immune/gates": (200, {"gates": [{"id": "gate-01"}]}, "application/json"),
     }
     _patch(monkeypatch, table)
 
@@ -152,29 +143,25 @@ def test_register_organ_tools_live_and_status(monkeypatch):
     from hatun_mcp.adapters import build_adapters
     summary = register_organ_tools(FakeMCP(), build_adapters(), fake_governed)
 
-    assert "amaru_ask" in registered
+    assert "llm_tiers" in registered
     assert "killinchu_detect" in registered
-    assert "rosie_lambda_gate" in registered
-    assert "sentra_gate_gate_01" in registered
-    # a11oy paused -> honest status tool, no a11oy_<gate> tools
+    assert "companion_ask" in registered
+    assert "immune_gate_gate_01" in registered and "immune_screen" in registered
+    # a11oy flagship catalog absent -> honest status tool, no a11oy_<gate> tools
     assert "a11oy_status" in registered
-    assert not any(r.startswith("a11oy_gate") for r in registered)
     assert summary["a11oy"]["reachable"] is False
-    assert summary["amaru"]["reachable"] is True
+    assert summary["llm"]["reachable"] is True
+    # NO codename tool name is ever registered.
+    assert not any(r.startswith(("sentra", "rosie", "amaru")) for r in registered)
 
 
-def test_a11oy_named_aliases_registered_alongside_codenames(monkeypatch):
-    """Each live amaru/sentra/rosie tool must ALSO register under its a11oy-vertical
-    alias (amaru→a11oy_memory, sentra→a11oy_sentinel, rosie→a11oy_operator) WITHOUT
-    dropping the codename tool — backward-compat. a11oy/killinchu keep their names."""
+def test_no_codename_tool_names(monkeypatch):
+    """Across all adapters, no registered MCP tool name carries a codename."""
     table = {
-        "/api/amaru/v1/mcp/tools": (200, {"tools": [{"name": "ask"}, {"name": "recall"}]},
-                                    "application/json"),
-        "/api/a11oy/v1/mcp/tools": (200, {"tools": [{"name": "policy_evaluate"}]},
-                                    "application/json"),
+        "/api/a11oy/v1/llm/tiers": (200, {"tiers": [{"id": "t0"}]}, "application/json"),
+        "/api/a11oy/v1/mcp/tools": (404, "x", "application/json"),
         "/api/killinchu/v1/mcp/tools": (200, {"tools": [{"name": "detect"}]}, "application/json"),
-        "/api/rosie/v1/mcp/tools": (200, {"tools": ["lambda_gate"]}, "application/json"),
-        "/api/sentra/v1/gates": (200, {"gates": [{"gate_id": "gate-01"}]}, "application/json"),
+        "/api/a11oy/v1/immune/gates": (200, {"gates": [{"id": "gate-01"}]}, "application/json"),
     }
     _patch(monkeypatch, table)
 
@@ -192,51 +179,6 @@ def test_a11oy_named_aliases_registered_alongside_codenames(monkeypatch):
 
     from hatun_mcp.adapters import build_adapters
     register_organ_tools(FakeMCP(), build_adapters(), fake_governed)
-
-    # codename tools still present (backward-compat)
-    for codename in ("amaru_ask", "amaru_recall", "sentra_gate_gate_01",
-                     "sentra_inspect", "rosie_lambda_gate"):
-        assert codename in registered, f"missing codename tool {codename}"
-    # a11oy-named aliases present alongside
-    for alias in ("a11oy_memory_ask", "a11oy_memory_recall",
-                  "a11oy_sentinel_gate_gate_01", "a11oy_sentinel_inspect",
-                  "a11oy_operator_lambda_gate"):
-        assert alias in registered, f"missing a11oy alias {alias}"
-    # a11oy / killinchu are NOT re-aliased (no double-prefix)
-    assert not any(r.startswith("a11oy_a11oy") for r in registered)
-    assert "killinchu_detect" in registered
-    assert not any(r.startswith("a11oy_memory_detect") for r in registered)
-
-
-def test_a11oy_named_status_alias_for_unreachable_organ(monkeypatch):
-    """A paused aliased organ exposes BOTH <codename>_status and its a11oy-vertical
-    status alias, so a11oy-named consumers still get an honest reachability tool."""
-    table = {
-        "/api/amaru/v1/mcp/tools": (200, {"tools": [{"name": "ask"}]}, "application/json"),
-        "/api/a11oy/v1/mcp/tools": (503, "paused", "text/plain"),
-        "/api/killinchu/v1/mcp/tools": (200, {"tools": [{"name": "detect"}]}, "application/json"),
-        "/api/rosie/v1/mcp/tools": (503, "paused", "text/plain"),
-        "/api/sentra/v1/gates": (503, "paused", "text/plain"),
-    }
-    _patch(monkeypatch, table)
-
-    registered = []
-
-    class FakeMCP:
-        def tool(self, name=None):
-            def deco(fn):
-                registered.append(name or fn.__name__)
-                return fn
-            return deco
-
-    async def fake_governed(**kw):
-        return {"tool": kw["tool"], "status": "success"}
-
-    from hatun_mcp.adapters import build_adapters
-    register_organ_tools(FakeMCP(), build_adapters(), fake_governed)
-
-    assert "sentra_status" in registered and "a11oy_sentinel_status" in registered
-    assert "rosie_status" in registered and "a11oy_operator_status" in registered
-    # a11oy itself keeps a plain status (no vertical alias for the flagship)
-    assert "a11oy_status" in registered
-    assert not any(r.startswith("a11oy_a11oy") for r in registered)
+    for codename in ("sentra", "rosie", "amaru", "jarvis"):
+        assert not any(codename in r for r in registered), \
+            f"codename '{codename}' leaked into a tool name: {registered}"

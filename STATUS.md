@@ -17,32 +17,36 @@
   ECDSA-P256 DSSE envelope, reputation factor, 2-person gate for state-changing tools.
 - **Byzantine quorum** (`szl_lambda_quorum`, n=5 / f=1) + **BLS12-381 aggregate** of
   participating organ receipts.
-- **Organ adapters** — amaru (4), killinchu (4), rosie (12), sentra (8 gates + 3 actions),
-  all wired live from `/api/<organ>/v1/...`.
+- **Organ adapters** — llm (tiers), killinchu (4), companion (ask/act/recommend),
+  immune (gates + screen/verdict), all wired live from the a11oy.net routes
+  (`/api/a11oy/v1/{immune,companion,llm}/...`).
 - **CITATION.cff** — citable, ORCID 0009-0001-0110-4173.
 
 ## What's Experimental / Honest Gaps
 
-- **a11oy** — HF Space is **PAUSED (503)**. Registers zero tools + one honest
-  `a11oy_status` tool until a **founder restarts** the Space. Self-heals on next
-  server restart once a11oy returns 200. The "49 a11oy gates" target is blocked on this.
-- **sentra** — exposes no JSON `/v1/mcp/tools` catalog (SPA shell); tools are derived
-  from `/api/sentra/v1/gates` + known action routes. Disclosed, not faked.
+- **immune** — there is no separate `/api/a11oy/v1/immune/screen` route (404); the
+  immune *screen* IS the signed `/immune/verdict` route (live 200). The `screen`
+  tool maps to `/immune/verdict`. Disclosed in the adapter, never faked.
+- **companion / llm** — expose no JSON `/v1/mcp/tools` catalog; tools are derived
+  from the known live action routes (`/companion/{ask,act,recommend}`,
+  `/llm/tiers`), each verified 200. Disclosed, not faked.
 - **DSSE signer** — runs in honest `PLACEHOLDER` mode unless `HATUN_MCP_SIGNING_KEY`
   (PEM) is injected as a Space secret.
 - **Sigstore Rekor** transparency-log inclusion remains a disclosed placeholder
   boundary (Doctrine v12 §2).
 
-## Correction (this PR)
+## Correction (this PR, 2026-06-16)
 
-The previous README claimed hatun-mcp had **MOVED to `platform/services/hatun-mcp`** and
-was archived. That was **stale/incorrect**: the repo is not archived, the merge target
-does not exist (404), and this repo is the canonical, operational home. The README is
-restored to reflect reality.
+The three previously-codenamed backends (sentra/rosie/amaru) were **purged** — every
+old route now returns 404. Hatun-MCP was repointed to the **live honest a11oy twins**
+(immune / companion / llm on `a11oy.net`), each verified **200** before wiring. The
+two codename tool names were renamed to honest names (`szl_immune_scan`,
+`szl_companion_reason`) and the old names are no longer served. See `DEPRECATED.md`.
 
 ## What's Deprecated
 
-Nothing deprecated in this repo.
+- `szl_sentra_scan` → **`szl_immune_scan`** (old name not served; see DEPRECATED.md)
+- `szl_rosie_reason` → **`szl_companion_reason`** (old name not served; see DEPRECATED.md)
 
 ---
 

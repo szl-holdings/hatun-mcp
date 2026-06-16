@@ -6,12 +6,11 @@ deployed (e.g. WAYRA, or a flagship route still in-flight), the call returns an
 HONEST structured payload {"deployed": false, "reason": ...} captured from the real
 HTTP status — disclosed in the Khipu receipt, never faked.
 
-Live base URLs (verified from the SZL Space inventory, 2026-06-01):
-  a11oy       https://szlholdings-a11oy.hf.space
-  amaru       https://szlholdings-amaru.hf.space
-  sentra      https://szlholdings-sentra.hf.space
+Live base URLs (re-verified 2026-06-16). The immune/companion/llm organs (which
+replaced the PURGED sentra/rosie/amaru backends) are served by the live a11oy
+platform on a11oy.net:
+  a11oy       https://a11oy.net           (immune / companion / llm / policy / router)
   killinchu   https://szlholdings-killinchu.hf.space
-  rosie       https://szlholdings-rosie.hf.space
   lean-kernel https://szlholdings-lean-kernel.hf.space
   anatomy-3d  https://szlholdings-anatomy-3d.hf.space
 
@@ -24,12 +23,15 @@ from typing import Any, Optional
 
 import httpx
 
+# The a11oy platform now serves the immune/companion/llm organs directly, so they
+# all point at the same live base. SZL_A11OY_URL overrides all three at once.
+_A11OY = os.environ.get("SZL_A11OY_URL", "https://a11oy.net")
 BASES = {
-    "a11oy": os.environ.get("SZL_A11OY_URL", "https://szlholdings-a11oy.hf.space"),
-    "amaru": os.environ.get("SZL_AMARU_URL", "https://szlholdings-amaru.hf.space"),
-    "sentra": os.environ.get("SZL_SENTRA_URL", "https://szlholdings-sentra.hf.space"),
+    "a11oy": _A11OY,
+    "llm": os.environ.get("SZL_LLM_URL", _A11OY),
+    "immune": os.environ.get("SZL_IMMUNE_URL", _A11OY),
     "killinchu": os.environ.get("SZL_KILLINCHU_URL", "https://szlholdings-killinchu.hf.space"),
-    "rosie": os.environ.get("SZL_ROSIE_URL", "https://szlholdings-rosie.hf.space"),
+    "companion": os.environ.get("SZL_COMPANION_URL", _A11OY),
     "lean": os.environ.get("SZL_LEAN_URL", "https://szlholdings-lean-kernel.hf.space"),
     "anatomy": os.environ.get("SZL_ANATOMY_URL", "https://szlholdings-anatomy-3d.hf.space"),
 }
@@ -151,18 +153,25 @@ async def killinchu_drones(model_or_signature: str) -> BackendResult:
     return await _get("killinchu", ["/v1/drones"], params={"q": model_or_signature})
 
 
-async def sentra_inspect(target: dict) -> BackendResult:
-    return await _post("sentra", ["/api/sentra/v1/inspect", "/v1/threats"], target)
+async def immune_screen(target: dict) -> BackendResult:
+    """Immune screen of an action (code / SBOM / image). The a11oy immune organ has
+    no separate /screen route — the screen IS the signed verdict route (live 200)."""
+    return await _post("immune", ["/api/a11oy/v1/immune/verdict"],
+                       {"action": target, "context": {}})
 
 
-async def rosie_ask(question: str, context: Any) -> BackendResult:
-    return await _post("rosie", ["/v1/brain/jack", "/v1/brain/ask", "/api/rosie/v1/rag"],
+async def companion_ask(question: str, context: Any) -> BackendResult:
+    """Ask the a11oy companion to reason. Live route POST /api/a11oy/v1/companion/ask
+    (answers only from live platform data; refuses to fabricate)."""
+    return await _post("companion", ["/api/a11oy/v1/companion/ask"],
                        {"question": question, "context": context})
 
 
-async def rosie_rag(question: str) -> BackendResult:
-    return await _post("rosie", ["/api/rosie/v1/rag", "/v1/rag"],
-                       {"query": question, "corpus": "thesis-corpus-v18"})
+async def companion_rag(question: str) -> BackendResult:
+    """Grounded RAG-style query routed through the a11oy companion /ask endpoint."""
+    return await _post("companion", ["/api/a11oy/v1/companion/ask"],
+                       {"question": question, "topic": "doctrine",
+                        "corpus": "thesis-corpus-v18"})
 
 
 async def khipu_verify(flagship: str, receipt_hash: str,
