@@ -75,7 +75,7 @@ class OrganTool:
 
     @property
     def mcp_name(self) -> str:
-        """Globally-unique MCP tool name, e.g. 'amaru_ask'."""
+        """Globally-unique MCP tool name, e.g. 'llm_tiers' / 'immune_screen'."""
         return f"{self.organ}_{self.name}"
 
 
@@ -286,8 +286,9 @@ def register_organ_tools(
         if cat.reachable and cat.tools:
             for tool in cat.tools:
                 _register_one(mcp, ad, tool, governed, quorum_decider)
-                # Additionally expose the a11oy-named alias (amaru→a11oy_memory,
-                # sentra→a11oy_sentinel, rosie→a11oy_operator) alongside the codename.
+                # VERTICAL_ALIAS is empty now that organs are honest-named
+                # (immune/companion/llm), so this normally yields no alias; it is
+                # retained only as a generic hook for any future a11oy-named alias.
                 alias = vertical_alias_name(organ, tool.name)
                 if alias:
                     _register_one(mcp, ad, tool, governed, quorum_decider, alias_name=alias)
