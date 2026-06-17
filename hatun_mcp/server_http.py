@@ -39,20 +39,35 @@ ALLOWED_ORIGINS = set(
     ).split(",")
 )
 
+# Fixed domain-separation salt + iteration count for the API-key fingerprint KDF.
+# The salt is a public, non-secret constant: it makes the fingerprint deterministic
+# (so the same caller keeps a stable client_id / reputation) while forcing every
+# guess through a computationally expensive KDF. Overridable for ops rotation.
+_FP_SALT = os.environ.get("HATUN_MCP_FP_SALT", "hatun-mcp/api-key-fingerprint/v1").encode()
+_FP_ITERATIONS = int(os.environ.get("HATUN_MCP_FP_ITERATIONS", "210000"))
+
 
 def resolve_api_key(raw_key: str | None) -> tuple[str | None, str]:
     """Resolve an SZL API key to (client_id, scope).
 
     The authoritative store is the customer-portal (customer_surface/API_KEY_SYSTEM.md);
-    this gateway derives a deterministic client_id from sha256(key) and reads scope from
-    the key's env binding. A key shaped 'szl_{env}_{flagship?}_{rand}' is accepted; the
-    client_id is the key fingerprint so the same caller keeps a stable reputation.
+    this gateway derives a deterministic client_id from a slow KDF over the key and reads
+    scope from the key's env binding. A key shaped 'szl_{env}_{flagship?}_{rand}' is
+    accepted; the client_id is the key fingerprint so the same caller keeps a stable
+    reputation. The fingerprint is computed with PBKDF2-HMAC-SHA256 (a computationally
+    expensive KDF) over a fixed domain-separation salt rather than a bare fast hash, so a
+    captured fingerprint cannot be brute-forced back to the API key.
     """
     if not raw_key:
         return None, "read"
     if not raw_key.startswith("szl_"):
         return None, "read"
-    fp = hashlib.sha256(raw_key.encode()).hexdigest()[:16]
+    fp = hashlib.pbkdf2_hmac(
+        "sha256",
+        raw_key.encode(),
+        _FP_SALT,
+        _FP_ITERATIONS,
+    ).hex()[:16]
     # scope: an explicit override env var maps fingerprints -> scope; default read.
     # admin/write keys are provisioned by the portal; demo keys are read.
     scope = os.environ.get(f"HATUN_MCP_SCOPE_{fp}", "read")
