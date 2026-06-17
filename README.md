@@ -128,7 +128,7 @@ Drop `examples/claude-desktop-config.json` into
     "hatun-mcp": {
       "command": "npx",
       "args": ["-y", "mcp-remote",
-        "https://szlholdings-hatun-mcp.hf.space/mcp",
+        "https://szlholdings-hatun-mcp.hf.space/mcp/",
         "--header", "Authorization: Bearer szl_YOUR_KEY"]
     }
   }
@@ -139,7 +139,7 @@ Drop `examples/claude-desktop-config.json` into
 ```toml
 [mcp_servers.hatun-mcp]
 command = "npx"
-args = ["-y", "mcp-remote", "https://szlholdings-hatun-mcp.hf.space/mcp",
+args = ["-y", "mcp-remote", "https://szlholdings-hatun-mcp.hf.space/mcp/",
         "--header", "Authorization: Bearer szl_YOUR_KEY"]
 ```
 
@@ -153,7 +153,7 @@ args = ["-y", "mcp-remote", "https://szlholdings-hatun-mcp.hf.space/mcp",
           "type": "stdio",
           "command": "npx",
           "args": ["-y", "mcp-remote",
-            "https://szlholdings-hatun-mcp.hf.space/mcp",
+            "https://szlholdings-hatun-mcp.hf.space/mcp/",
             "--header", "Authorization: Bearer szl_YOUR_KEY"]
         }
       }
