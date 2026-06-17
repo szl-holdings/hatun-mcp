@@ -32,10 +32,10 @@ COPY hatun_mcp/tools/governance_tools.py  /app/hatun_mcp/tools/governance_tools.
 COPY hatun_mcp/adapters/__init__.py    /app/hatun_mcp/adapters/__init__.py
 COPY hatun_mcp/adapters/base.py        /app/hatun_mcp/adapters/base.py
 COPY hatun_mcp/adapters/a11oy.py       /app/hatun_mcp/adapters/a11oy.py
-COPY hatun_mcp/adapters/amaru.py       /app/hatun_mcp/adapters/amaru.py
-COPY hatun_mcp/adapters/sentra.py      /app/hatun_mcp/adapters/sentra.py
+COPY hatun_mcp/adapters/immune.py      /app/hatun_mcp/adapters/immune.py
+COPY hatun_mcp/adapters/companion.py   /app/hatun_mcp/adapters/companion.py
 COPY hatun_mcp/adapters/killinchu.py   /app/hatun_mcp/adapters/killinchu.py
-COPY hatun_mcp/adapters/rosie.py       /app/hatun_mcp/adapters/rosie.py
+COPY hatun_mcp/adapters/llm.py         /app/hatun_mcp/adapters/llm.py
 COPY README.md                    /app/README.md
 
 # The DSSE signing key is injected at runtime as a Space secret
