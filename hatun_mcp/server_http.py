@@ -170,6 +170,61 @@ async def server_card(request: Request):
     return JSONResponse(_server_card())
 
 
+# Convenience aliases for the server card. The canonical discovery doc lives at
+# /.well-known/mcp/server-card.json (MCP well-known convention); these short,
+# guessable paths are the ones a human pokes at first. They serve the SAME real
+# card (not a redirect to avoid the http-scheme downgrade some proxies apply to
+# 3xx Location headers) so "inspect the server card" resolves no matter which
+# path the caller tried.
+async def server_card_alias(request: Request):
+    return JSONResponse(_server_card())
+
+
+# The agent-connect descriptor: the real, working way to wire an MCP client into
+# this server. Points at the trailing-slash /mcp/ endpoint (the streamable-HTTP
+# app is mounted there; the bare /mcp 307-redirects, and behind the HF reverse
+# proxy that redirect's Location downgrades to http://, which trips strict
+# clients). Giving clients /mcp/ directly avoids the redirect entirely.
+def _connect_info() -> dict:
+    base = "https://szlholdings-hatun-mcp.hf.space"
+    return {
+        "service": "hatun-mcp",
+        "transport": "streamable-http",
+        "mcp_endpoint": f"{base}/mcp/",
+        "sse_endpoint": f"{base}/sse/",
+        "authentication": {
+            "scheme": "apiKey",
+            "header": "Authorization: Bearer szl_...",
+            "note": "An SZL API key is required; anonymous calls are declined and receipted.",
+        },
+        "server_card": f"{base}/.well-known/mcp/server-card.json",
+        "clients": {
+            "claude_desktop": {
+                "mcpServers": {
+                    "hatun-mcp": {
+                        "command": "npx",
+                        "args": ["-y", "mcp-remote", f"{base}/mcp/",
+                                 "--header", "Authorization: Bearer szl_YOUR_KEY"],
+                    }
+                }
+            },
+            "cursor": {
+                "mcpServers": {
+                    "hatun-mcp": {
+                        "url": f"{base}/mcp/",
+                        "headers": {"Authorization": "Bearer szl_YOUR_KEY"},
+                    }
+                }
+            },
+        },
+        "docs": "https://github.com/szl-holdings/hatun-mcp",
+    }
+
+
+async def connect(request: Request):
+    return JSONResponse(_connect_info())
+
+
 async def healthz(request: Request):
     return JSONResponse({"status": "ok", "service": "hatun-mcp",
                          "chain_verified": KHIPU.verify(),
@@ -189,8 +244,9 @@ async def pubkey(request: Request):
 # transport handshakes never see HTML.
 _INDEX_JSON = {
     "service": "hatun-mcp", "tagline": "the great context protocol",
-    "mcp_endpoint": "/mcp", "sse_endpoint": "/sse",
+    "mcp_endpoint": "/mcp/", "sse_endpoint": "/sse/",
     "server_card": "/.well-known/mcp/server-card.json",
+    "connect": "/connect",
     "healthz": "/healthz", "pubkey": "/pubkey",
     "docs": "https://github.com/szl-holdings/hatun-mcp",
 }
@@ -249,7 +305,12 @@ app = Starlette(
         Route("/", index),
         Route("/healthz", healthz),
         Route("/pubkey", pubkey),
+        Route("/connect", connect),
         Route("/.well-known/mcp/server-card.json", server_card),
+        Route("/.well-known/mcp", server_card_alias),
+        Route("/.well-known/mcp/", server_card_alias),
+        Route("/server-card", server_card_alias),
+        Route("/card", server_card_alias),
         Mount("/mcp", app=http_app),
         Mount("/sse", app=sse_app),
         Mount("/messages", app=sse_app),

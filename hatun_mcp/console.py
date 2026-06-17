@@ -308,7 +308,7 @@ footer{padding-bottom:max(40px,env(safe-area-inset-bottom))}
 {
   <span class="k">"mcpServers"</span>: {
     <span class="k">"hatun"</span>: {
-      <span class="k">"url"</span>: <span class="s">"https://szlholdings-hatun-mcp.hf.space/mcp"</span>,
+      <span class="k">"url"</span>: <span class="s">"https://szlholdings-hatun-mcp.hf.space/mcp/"</span>,
       <span class="k">"headers"</span>: {
         <span class="k">"Authorization"</span>: <span class="s">"Bearer szl_..."</span>
       }
@@ -319,13 +319,14 @@ footer{padding-bottom:max(40px,env(safe-area-inset-bottom))}
       <div class="card">
         <div style="font-size:13px;color:var(--muted);margin-bottom:10px">Endpoints &amp; legacy SSE transport</div>
 <pre><span class="c"># Streamable HTTP (preferred)</span>
-POST <span class="s">https://szlholdings-hatun-mcp.hf.space/mcp</span>
+POST <span class="s">https://szlholdings-hatun-mcp.hf.space/mcp/</span>
 
 <span class="c"># Legacy SSE transport</span>
-GET  <span class="s">https://szlholdings-hatun-mcp.hf.space/sse</span>
+GET  <span class="s">https://szlholdings-hatun-mcp.hf.space/sse/</span>
 
 <span class="c"># Machine descriptors (no auth)</span>
 GET  <span class="s">/.well-known/mcp/server-card.json</span>
+GET  <span class="s">/connect</span>
 GET  <span class="s">/healthz</span>
 GET  <span class="s">/pubkey</span>
 

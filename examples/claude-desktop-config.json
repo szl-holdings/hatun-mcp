@@ -6,7 +6,7 @@
       "args": [
         "-y",
         "mcp-remote",
-        "https://szlholdings-hatun-mcp.hf.space/mcp",
+        "https://szlholdings-hatun-mcp.hf.space/mcp/",
         "--header",
         "Authorization: Bearer szl_YOUR_KEY"
       ]
