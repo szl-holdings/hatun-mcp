@@ -74,6 +74,47 @@ def resolve_api_key(raw_key: str | None) -> tuple[str | None, str]:
     return f"client_{fp}", scope
 
 
+# ── SAFE-NOW hardening (R2): real security response headers on every route ──────
+# The browser-facing surface is the HTML console at "/"; it ships inline <script>,
+# inline <style>, and inline style="" attributes, so script-src/style-src keep
+# 'unsafe-inline' (a strict nonce CSP would blank the console). The console fetches
+# this server's own routes (/healthz, /pubkey, the server card) AND one cross-origin
+# live read of the a11oy compute-pool, so connect-src is 'self' + https://a11oy.net
+# (verified against the console source: that is the only off-origin fetch; widening
+# it would weaken the policy). JSON/MCP responses ignore CSP, so one policy is safe
+# for every route. frame-ancestors allows the legitimate HF embed but nothing else;
+# we never send X-Frame-Options: DENY (it would break that embed). HSTS is honest
+# here — this is a real TLS server.
+_CSP = (
+    "default-src 'self'; "
+    "script-src 'self' 'unsafe-inline'; "
+    "style-src 'self' 'unsafe-inline'; "
+    "img-src 'self' data:; "
+    "font-src 'self'; "
+    "connect-src 'self' https://a11oy.net; "
+    "object-src 'none'; "
+    "base-uri 'self'; "
+    "form-action 'self'; "
+    "frame-ancestors 'self' https://huggingface.co https://*.hf.space"
+)
+_SECURITY_HEADERS = {
+    "Content-Security-Policy": _CSP,
+    "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Cross-Origin-Opener-Policy": "same-origin",
+    "Cross-Origin-Resource-Policy": "cross-origin",
+}
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        for k, v in _SECURITY_HEADERS.items():
+            response.headers.setdefault(k, v)
+        return response
+
+
 class GovernanceAuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         # Origin validation (DNS-rebinding defense) — only enforce for /mcp & /sse.
@@ -318,3 +359,4 @@ app = Starlette(
     lifespan=lifespan,
 )
 app.add_middleware(GovernanceAuthMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)

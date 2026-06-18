@@ -93,3 +93,31 @@ def test_console_connect_snippet_uses_trailing_slash_mcp():
     assert f"{BASE}/mcp/" in CONSOLE_HTML
     assert f'{BASE}/mcp"' not in CONSOLE_HTML
     assert f"{BASE}/mcp<" not in CONSOLE_HTML
+
+
+def test_security_headers_on_every_route():
+    # SAFE-NOW hardening (R2): real headers on the HTML console AND the JSON/health
+    # routes. Hitting the browser console path (Accept: text/html) and a machine
+    # route both carry the full set.
+    for path, accept in (("/", "text/html"), ("/healthz", "application/json")):
+        r = client.get(path, headers={"accept": accept})
+        assert r.status_code == 200, path
+        h = r.headers
+        csp = h["content-security-policy"]
+        assert "default-src 'self'" in csp
+        assert "object-src 'none'" in csp
+        # legit HF embed allowed; not wide open
+        assert "frame-ancestors 'self' https://huggingface.co https://*.hf.space" in csp
+        assert h["x-content-type-options"] == "nosniff"
+        assert h["referrer-policy"] == "strict-origin-when-cross-origin"
+        assert h["strict-transport-security"].startswith("max-age=")
+        # never X-Frame-Options: DENY (it would break the HF iframe embed)
+        assert h.get("x-frame-options", "").upper() != "DENY"
+
+
+def test_origin_allowlist_still_guards_mcp_transport():
+    # Pre-existing DNS-rebinding defense must remain: an untrusted Origin on the
+    # MCP transport path is rejected, the new header middleware doesn't bypass it.
+    r = client.get("/mcp/", headers={"origin": "https://evil.example.com"})
+    assert r.status_code == 403
+    assert r.json()["error"] == "origin_not_allowed"
