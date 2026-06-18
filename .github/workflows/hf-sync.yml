@@ -1,0 +1,74 @@
+# Copyright 2026 SZL Holdings — SPDX-License-Identifier: Apache-2.0
+name: Sync to HuggingFace Space
+
+# Mirrors this repo to the live Hugging Face Space (SZLHOLDINGS/hatun-mcp) on
+# every push to main, so the Space never drifts behind GitHub. Until now the
+# Space was pushed only by the manual local push_to_hf.py (founder-token, local
+# folder), so the live Space lagged main (e.g. #38 security headers / #37 wiring).
+#
+# This is the CI replacement for push_to_hf.py: it uploads the repo (which IS the
+# Space source — it carries its own Dockerfile) via huggingface_hub.upload_folder,
+# excluding VCS/CI/secret/cache files and the local-only push_to_hf.py. It reads
+# the token from the HF_TOKEN secret (never a filesystem path) and fails loudly if
+# the secret is absent rather than faking a sync.
+#
+# Requires repo secret HF_TOKEN (HF write token with org write to SZLHOLDINGS).
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hf-sync-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.11"
+      - name: Install huggingface_hub
+        run: pip install --quiet "huggingface_hub>=0.25"
+      - name: Mirror repo to the Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          SPACE_ID: SZLHOLDINGS/hatun-mcp
+        run: |
+          set -euo pipefail
+          if [ -z "${HF_TOKEN:-}" ]; then
+            echo "::error::HF_TOKEN secret is not set — cannot sync the Space."
+            echo "::error::Founder action required: add repo secret HF_TOKEN (HF write token, org write to SZLHOLDINGS)."
+            exit 1
+          fi
+          python3 <<'PYEOF'
+          import os
+          from huggingface_hub import HfApi
+
+          api = HfApi(token=os.environ["HF_TOKEN"])
+          space = os.environ["SPACE_ID"]
+          commit = api.upload_folder(
+              repo_id=space, repo_type="space", folder_path=".",
+              commit_message=f"hf-sync: mirror repo from GitHub {os.environ.get('GITHUB_SHA','')[:8]}",
+              ignore_patterns=[
+                  ".git", ".git/*", "**/.git/**",
+                  ".github", ".github/**",
+                  "**/__pycache__/**", "*.pyc", ".pytest_cache/*",
+                  # Exclude ONLY private keys; PUBKEY_*.pem is served by /pubkey
+                  # and must reach the Space.
+                  ".keys_DO_NOT_COMMIT.pem", ".secret/*", ".env", "*.log",
+                  "push_to_hf.py",
+              ],
+          )
+          print("Space commit:", getattr(commit, "commit_url", commit))
+          info = api.space_info(space)
+          print("Space sha:", info.sha, "runtime:",
+                getattr(getattr(info, "runtime", None), "stage", None))
+          PYEOF
