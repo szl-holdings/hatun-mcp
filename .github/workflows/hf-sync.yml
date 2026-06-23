@@ -1,27 +1,35 @@
 # Copyright 2026 SZL Holdings — SPDX-License-Identifier: Apache-2.0
 name: Sync to HuggingFace Space
 
-# Mirrors this repo to the live Hugging Face Space (SZLHOLDINGS/hatun-mcp) on
-# every push to main, so the Space never drifts behind GitHub. Until now the
-# Space was pushed only by the manual local push_to_hf.py (founder-token, local
-# folder), so the live Space lagged main (e.g. #38 security headers / #37 wiring).
+# Mirrors this repo to the live Hugging Face Space (SZLHOLDINGS/hatun-mcp).
+# Until now the Space was pushed only by the manual local push_to_hf.py
+# (founder-token, local folder), so the live Space lagged main
+# (e.g. #38 security headers / #37 wiring).
 #
 # This is the CI replacement for push_to_hf.py: it uploads the repo (which IS the
 # Space source — it carries its own Dockerfile) via huggingface_hub.upload_folder,
 # excluding VCS/CI/secret/cache files and the local-only push_to_hf.py. It reads
-# the token from the HF_TOKEN secret (never a filesystem path) and skips cleanly
-# if the secret is absent (founder action required to enable full auto-sync).
+# the token from the HF_TOKEN secret (never a filesystem path) and fails loudly if
+# the secret is absent rather than faking a sync.
 #
 # Requires repo secret HF_TOKEN (HF write token with org write to SZLHOLDINGS).
-# Until the secret is added, the job is skipped (not failed) on push.
-# Workflow can be triggered manually via workflow_dispatch at any time.
 #
-# FOUNDER NOTE: add repository secret HF_TOKEN (HF write token, org write to
-# SZLHOLDINGS) to re-enable full auto-sync on every push to main.
+# TRIGGER: workflow_dispatch only (not on push).
+# Reason: GitHub Actions does not permit the 'secrets' context in a job-level
+# 'if' condition, so we cannot skip the job on push when the secret is absent.
+# The repo has no HF_TOKEN secret; running on push would fail every commit.
+# workflow_dispatch means this job only fires when a human explicitly runs it
+# from the Actions UI — i.e. exactly when the founder has the token and intends
+# to sync. Re-add 'push: branches: [main]' once HF_TOKEN is provisioned.
+#
+# FOUNDER ACTION REQUIRED: add repository secret HF_TOKEN (HF write token,
+# org write access to SZLHOLDINGS), then restore the push trigger by adding:
+#   on:
+#     push:
+#       branches: [main]
+#     workflow_dispatch: {}
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch: {}
 
 permissions:
@@ -35,11 +43,6 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    # Skip cleanly when HF_TOKEN secret is absent; run when founder adds the secret.
-    # This is NOT a safety gate — it matches config to reality: the repo is
-    # founder-local-push until the secret is provisioned. Removing this gate
-    # would cause every push to fail loudly for all contributors.
-    if: ${{ secrets.HF_TOKEN != '' }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
@@ -54,9 +57,9 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${HF_TOKEN:-}" ]; then
-            echo "::warning::HF_TOKEN secret is not set — skipping sync."
-            echo "::warning::Founder action required: add repo secret HF_TOKEN (HF write token, org write to SZLHOLDINGS)."
-            exit 0
+            echo "::error::HF_TOKEN secret is not set — cannot sync the Space."
+            echo "::error::Founder action required: add repo secret HF_TOKEN (HF write token, org write to SZLHOLDINGS)."
+            exit 1
           fi
           python3 <<'PYEOF'
           import os
