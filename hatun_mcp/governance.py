@@ -24,6 +24,7 @@ import json
 import os
 import threading
 import time
+import urllib.request
 import uuid
 from dataclasses import dataclass, field
 from typing import Any, Optional
@@ -222,7 +223,58 @@ class KhipuChain:
             )
             self._receipts.append(r)
             self._last_hash = continuum
-            return r
+        self._forward_to_ledger(r)
+        return r
+
+    def _forward_to_ledger(self, r: "KhipuReceipt") -> None:
+        """Best-effort, non-blocking forward of a receipt to the unified ledger.
+
+        Fire-and-forget: spawns a daemon thread, uses a short timeout, and
+        swallows every error. A sink hiccup must never affect emit() or the
+        Khipu chain. No-op if SZL_RECEIPT_SINK is unset.
+        """
+        sink = os.environ.get("SZL_RECEIPT_SINK")
+        if not sink:
+            return
+        payload = {
+            "id": r.continuum_hash,
+            "hash": r.continuum_hash,
+            "ts": r.ts,
+            "organ": "hatun-mcp",
+            "decision": r.status,
+            "governance": {
+                # yuyay_min_axis is the measured min-axis floor; honest value
+                # (may be None when the gate did not run).
+                "lambda": r.yuyay_min_axis,
+                "gates": {
+                    "hatun_mcp_factor": r.hatun_mcp_factor,
+                    "puriq_score": r.puriq_score,
+                    "tripwire": r.tripwire,
+                    "chain_verified": r.chain_verified,
+                },
+            },
+            "dsse": r.dsse,
+            # No energy meter in hatun-mcp — honest label, never fabricated.
+            "energy": {"label": "UNAVAILABLE", "joules": None},
+        }
+
+        def _send() -> None:
+            try:
+                data = json.dumps(payload).encode("utf-8")
+                req = urllib.request.Request(
+                    sink.rstrip("/") + "/receipts",
+                    data=data,
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                urllib.request.urlopen(req, timeout=2.0).close()
+            except Exception:
+                pass  # fire-and-forget: never raise, never block the chain
+
+        try:
+            threading.Thread(target=_send, daemon=True).start()
+        except Exception:
+            pass
 
     def verify(self) -> bool:
         """Recompute the whole chain — auditor-grade ('verify our logs')."""
