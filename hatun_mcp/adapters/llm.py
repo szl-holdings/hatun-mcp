@@ -3,7 +3,7 @@ hatun_mcp.adapters.llm — a11oy LLM tier router (model catalog).
 
 HONEST REALITY (re-probed 2026-06-16): the previous backend for this organ was
 PURGED (old routes now 404). Its model/tier capability is now served by the LIVE
-honest a11oy "llm" organ on a11oy.net:
+honest a11oy "llm" organ on a-11-oy.com:
 
   * GET /api/a11oy/v1/llm/tiers  → 200, JSON {"count":N,"tiers":[{id,rank,use,why}...]}
 
@@ -26,7 +26,7 @@ from .base import CatalogResult, OrganAdapter, OrganTool, DEFAULT_TIMEOUT, GOVER
 class LlmAdapter(OrganAdapter):
     organ = "llm"
     base_env = "SZL_LLM_URL"
-    base_default = "https://a11oy.net"
+    base_default = "https://a-11-oy.com"
     catalog_route = "/api/a11oy/v1/llm/tiers"
 
     ACTION_TOOLS = [

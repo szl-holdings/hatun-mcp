@@ -79,7 +79,7 @@ def resolve_api_key(raw_key: str | None) -> tuple[str | None, str]:
 # inline <style>, and inline style="" attributes, so script-src/style-src keep
 # 'unsafe-inline' (a strict nonce CSP would blank the console). The console fetches
 # this server's own routes (/healthz, /pubkey, the server card) AND one cross-origin
-# live read of the a11oy compute-pool, so connect-src is 'self' + https://a11oy.net
+# live read of the a11oy compute-pool, so connect-src is 'self' + https://a-11-oy.com
 # (verified against the console source: that is the only off-origin fetch; widening
 # it would weaken the policy). JSON/MCP responses ignore CSP, so one policy is safe
 # for every route. frame-ancestors allows the legitimate HF embed but nothing else;
@@ -91,7 +91,7 @@ _CSP = (
     "style-src 'self' 'unsafe-inline'; "
     "img-src 'self' data:; "
     "font-src 'self'; "
-    "connect-src 'self' https://a11oy.net; "
+    "connect-src 'self' https://a-11-oy.com; "
     "object-src 'none'; "
     "base-uri 'self'; "
     "form-action 'self'; "

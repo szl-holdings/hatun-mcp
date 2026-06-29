@@ -3,7 +3,7 @@ hatun_mcp.adapters.companion — a11oy Companion operator / reasoning console.
 
 HONEST REALITY (re-probed 2026-06-16): the previous backend for this organ was
 PURGED (old routes now 404). Its reasoning/operator capabilities are now served
-by the LIVE honest a11oy "companion" organ on a11oy.net:
+by the LIVE honest a11oy "companion" organ on a-11-oy.com:
 
   * POST /api/a11oy/v1/companion/ask        → 200, grounded Q&A (answers only from
     live platform data; refuses to fabricate, discloses grounded=false otherwise).
@@ -24,7 +24,7 @@ from .base import CatalogResult, OrganAdapter, OrganTool, DEFAULT_TIMEOUT, GOVER
 class CompanionAdapter(OrganAdapter):
     organ = "companion"
     base_env = "SZL_COMPANION_URL"
-    base_default = "https://a11oy.net"
+    base_default = "https://a-11-oy.com"
     # No JSON tool catalog is published; tools are derived from the known live routes.
     catalog_route = "/api/a11oy/v1/companion/recommend"
 

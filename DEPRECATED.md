@@ -2,7 +2,7 @@
 
 The three previously-codenamed backend Spaces were **purged** (every old route now
 returns HTTP 404). Hatun-MCP was repointed to the **live honest a11oy organs** on
-`a11oy.net` (each verified **200** before wiring), and the two user-visible tool
+`a-11-oy.com` (each verified **200** before wiring), and the two user-visible tool
 names that carried a codename were renamed to honest organ names.
 
 ## Renamed MCP tools

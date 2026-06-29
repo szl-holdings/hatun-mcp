@@ -8,8 +8,8 @@ HTTP status — disclosed in the Khipu receipt, never faked.
 
 Live base URLs (re-verified 2026-06-16). The immune/companion/llm organs (which
 replaced the PURGED sentra/rosie/amaru backends) are served by the live a11oy
-platform on a11oy.net:
-  a11oy       https://a11oy.net           (immune / companion / llm / policy / router)
+platform on a-11-oy.com:
+  a11oy       https://a-11-oy.com           (immune / companion / llm / policy / router)
   killinchu   https://szlholdings-killinchu.hf.space
   lean-kernel https://szlholdings-lean-kernel.hf.space
   anatomy-3d  https://szlholdings-anatomy-3d.hf.space
@@ -25,7 +25,7 @@ import httpx
 
 # The a11oy platform now serves the immune/companion/llm organs directly, so they
 # all point at the same live base. SZL_A11OY_URL overrides all three at once.
-_A11OY = os.environ.get("SZL_A11OY_URL", "https://a11oy.net")
+_A11OY = os.environ.get("SZL_A11OY_URL", "https://a-11-oy.com")
 BASES = {
     "a11oy": _A11OY,
     "llm": os.environ.get("SZL_LLM_URL", _A11OY),
