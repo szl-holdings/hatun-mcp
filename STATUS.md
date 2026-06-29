@@ -18,7 +18,7 @@
 - **Byzantine quorum** (`szl_lambda_quorum`, n=5 / f=1) + **BLS12-381 aggregate** of
   participating organ receipts.
 - **Organ adapters** — llm (tiers), killinchu (4), companion (ask/act/recommend),
-  immune (gates + screen/verdict), all wired live from the a11oy.net routes
+  immune (gates + screen/verdict), all wired live from the a-11-oy.com routes
   (`/api/a11oy/v1/{immune,companion,llm}/...`).
 - **CITATION.cff** — citable, ORCID 0009-0001-0110-4173.
 
@@ -39,7 +39,7 @@
 
 The three previously-codenamed backends (sentra/rosie/amaru) were **purged** — every
 old route now returns 404. Hatun-MCP was repointed to the **live honest a11oy twins**
-(immune / companion / llm on `a11oy.net`), each verified **200** before wiring. The
+(immune / companion / llm on `a-11-oy.com`), each verified **200** before wiring. The
 two codename tool names were renamed to honest names (`szl_immune_scan`,
 `szl_companion_reason`) and the old names are no longer served. See `DEPRECATED.md`.
 

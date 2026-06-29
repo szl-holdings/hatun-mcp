@@ -536,7 +536,7 @@ GET  <span class="s">/pubkey</span>
       host.appendChild(d);
     });
   }
-  getJSON("https://a11oy.net/api/a11oy/v1/compute-pool", 4500)
+  getJSON("https://a-11-oy.com/api/a11oy/v1/compute-pool", 4500)
     .then(function(f){
       var c = f.counts||{};
       renderFabric({nodes_reachable:c.nodes_reachable, nodes_total:c.nodes_total,

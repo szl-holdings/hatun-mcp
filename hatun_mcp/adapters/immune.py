@@ -3,7 +3,7 @@ hatun_mcp.adapters.immune — a11oy Immune (Hukulla) policy / egress inspector.
 
 HONEST REALITY (re-probed 2026-06-16): the previous backend for this organ was
 PURGED (every old route now 404). Its capabilities are now served by the LIVE
-honest a11oy "immune" organ on a11oy.net:
+honest a11oy "immune" organ on a-11-oy.com:
 
   * GET  /api/a11oy/v1/immune/gates    → 200, JSON {"gates":[{id,name,...}, ...]}
   * GET|POST /api/a11oy/v1/immune/verdict → 200, signed policy verdict (organ
@@ -30,7 +30,7 @@ from .base import CatalogResult, OrganAdapter, OrganTool, DEFAULT_TIMEOUT, GOVER
 class ImmuneAdapter(OrganAdapter):
     organ = "immune"
     base_env = "SZL_IMMUNE_URL"
-    base_default = "https://a11oy.net"
+    base_default = "https://a-11-oy.com"
     catalog_route = "/api/a11oy/v1/immune/gates"  # live 200 JSON gates catalog
 
     # Known live action tools (routes verified live 200, 2026-06-16). The immune

@@ -1,7 +1,7 @@
 """
 hatun_mcp.adapters.a11oy — A11oy policy + receipt substrate.
 
-LIVE as of 2026-06-16 on https://a11oy.net. The a11oy platform now serves the
+LIVE as of 2026-06-16 on https://a-11-oy.com. The a11oy platform now serves the
 immune / companion / llm organs directly (the purged sentra/rosie/amaru backends).
 The default fetch_catalog() reads /api/a11oy/v1/mcp/tools when present; if that
 catalog route is not exposed it registers zero a11oy-flagship tools + one honest
@@ -22,7 +22,7 @@ GOVERNANCE_CRITICAL["a11oy"] |= {"router", "route"}
 class A11oyAdapter(OrganAdapter):
     organ = "a11oy"
     base_env = "SZL_A11OY_URL"
-    base_default = "https://a11oy.net"
+    base_default = "https://a-11-oy.com"
     catalog_route = "/api/a11oy/v1/mcp/tools"
 
     def _parse_catalog_json(self, body, route, status):

@@ -62,7 +62,7 @@ formula:
 
 > **Naming note.** The three previously-codenamed backends were **purged**; their
 > capabilities are now served directly by the **live honest a11oy organs** on
-> `a11oy.net`: the **immune** organ (egress policy/gates inspector — *Hukulla*),
+> `a-11-oy.com`: the **immune** organ (egress policy/gates inspector — *Hukulla*),
 > the **companion** organ (operator / reasoning console), and the **llm** organ
 > (open-LLM tier router). Hatun-MCP addresses them by these honest role names; the
 > live routes are published in `/openapi.json`.
