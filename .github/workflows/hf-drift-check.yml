@@ -1,0 +1,32 @@
+# Copyright 2026 SZL Holdings — SPDX-License-Identifier: Apache-2.0
+name: HF Module Drift Check
+
+# Thin caller for the canonical org drift guard. Compares every root-Dockerfile
+# COPY source's git blob against the live HF Space tree (SZLHOLDINGS/hatun-mcp)
+# and, on divergence, names which side is ahead. It never auto-overwrites.
+# Known/pre-existing divergences live in .github/hf-module-drift-allow.json
+# (printed as warnings); any NEW drift fails the job.
+#
+# DEPENDS ON szl-holdings/.github#172 — `reusable-hf-module-drift-check.yml@main`
+# only resolves once that PR merges to .github main.
+#
+# No HF write token needed (read-only compare via github.token).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "hatun_mcp/**"
+      - "requirements.txt"
+      - "Dockerfile"
+      - "README.md"
+  schedule:
+    - cron: "37 6 * * 1"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  hf-drift:
+    uses: szl-holdings/.github/.github/workflows/reusable-hf-module-drift-check.yml@main

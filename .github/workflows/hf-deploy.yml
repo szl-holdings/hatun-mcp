@@ -1,0 +1,41 @@
+# Copyright 2026 SZL Holdings — SPDX-License-Identifier: Apache-2.0
+name: Deploy to HuggingFace Space
+
+# Thin caller for the canonical org deployer, replacing the hand-rolled
+# upload_folder hf-sync.yml. The file set pushed to the live Space
+# (SZLHOLDINGS/hatun-mcp) is DERIVED from this repo's root Dockerfile per-file
+# COPY sources (it already uses explicit per-file COPY, no glob/dir copies),
+# then attested live-vs-git (sha256) after the Space rebuilds.
+#
+# DEPENDS ON szl-holdings/.github#172 — `reusable-hf-deploy.yml@main` only
+# resolves once that PR merges to .github main.
+#
+# TRIGGER: workflow_dispatch only (unchanged from the prior hf-sync.yml).
+# Reason: this repo has NO HF_TOKEN secret yet, and GitHub Actions forbids the
+# `secrets` context in a job-level `if`, so a push trigger would fail every
+# commit. Re-add `push: { branches: [main] }` once HF_TOKEN is provisioned.
+#
+# FOUNDER ACTIONS REQUIRED before the first deploy:
+#   1. Add org/repo secret HF_TOKEN (HF write token, org write to SZLHOLDINGS).
+#   2. Add YAML front-matter (sdk: docker + app_port: 7860, plus the curated
+#      card fields) to README.md. The Dockerfile does `COPY README.md`, so the
+#      repo README IS in the derived deploy set; the repo README currently has
+#      NO front-matter while the live Space card does, so an un-reconciled
+#      deploy would overwrite the live card and CONFIG_ERROR the Space.
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hf-deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    uses: szl-holdings/.github/.github/workflows/reusable-hf-deploy.yml@main
+    secrets: inherit
+    with:
+      include-readme: false
