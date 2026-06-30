@@ -1,0 +1,37 @@
+{
+  "_comment": "Allowlist for the GitHub<->HF-Space module-drift guard (hatun-mcp). ignore_paths/ignore_extensions are excluded entirely (binary/vendored assets). accepted_divergences are KNOWN, pre-existing GitHub<->HF divergences recorded so the guard lands green; each is still printed as a warning every run. Every entry below is ahead=github (the live Space is simply STALE: hf-sync was workflow_dispatch-only with no HF_TOKEN, so it never ran). Remove each entry once the first hf-deploy.yml run reconciles GitHub->HF and the OIDs match.",
+  "ignore_paths": [],
+  "ignore_extensions": [
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".webp",
+    ".ico",
+    ".svg",
+    ".wasm",
+    ".woff",
+    ".woff2",
+    ".ttf",
+    ".eot",
+    ".mp4",
+    ".mp3",
+    ".pdf",
+    ".zip",
+    ".gz",
+    ".br",
+    ".map"
+  ],
+  "accepted_divergences": {
+    "README.md": "ahead=github by date, but CONTENT-DIVERGENT: the repo README has NO YAML front-matter (badges only) while the live Space card carries `sdk: docker` front-matter. Founder must reconcile (add front-matter to the repo README mirroring the curated card) BEFORE enabling a push-triggered deploy, else the COPY'd README clobbers the Space card. Remove this entry once reconciled.",
+    "requirements.txt": "ahead=github. Pre-existing staleness (Space never redeployed). Remove once the first hf-deploy.yml run reconciles GitHub->HF.",
+    "hatun_mcp/server_http.py": "ahead=github. Pre-existing staleness (Space never redeployed). Remove after first hf-deploy.yml reconcile.",
+    "hatun_mcp/console.py": "ahead=github. Pre-existing staleness (Space never redeployed). Remove after first hf-deploy.yml reconcile.",
+    "hatun_mcp/backends.py": "ahead=github. Pre-existing staleness (Space never redeployed). Remove after first hf-deploy.yml reconcile.",
+    "hatun_mcp/governance.py": "ahead=github. Pre-existing staleness (Space never redeployed). Remove after first hf-deploy.yml reconcile.",
+    "hatun_mcp/adapters/a11oy.py": "ahead=github. Pre-existing staleness (Space never redeployed). Remove after first hf-deploy.yml reconcile.",
+    "hatun_mcp/adapters/companion.py": "ahead=github. Pre-existing staleness (Space never redeployed). Remove after first hf-deploy.yml reconcile.",
+    "hatun_mcp/adapters/immune.py": "ahead=github. Pre-existing staleness (Space never redeployed). Remove after first hf-deploy.yml reconcile.",
+    "hatun_mcp/adapters/llm.py": "ahead=github. Pre-existing staleness (Space never redeployed). Remove after first hf-deploy.yml reconcile."
+  }
+}
