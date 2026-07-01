@@ -12,6 +12,12 @@ regexes = [
   '''-----BEGIN PUBLIC KEY-----[\s\S]*?-----END PUBLIC KEY-----''',
   # cosign key-ID label in governance.py:127 (public key identifier, not a secret)
   '''szlholdings-ec-p256''',
+  # docs/DSSE_KEY_INJECTION.md:41 quotes the PEM BEGIN+END markers inline in one
+  # instructional sentence ("...including `-----BEGIN EC PRIVATE KEY-----` and
+  # `-----END EC PRIVATE KEY-----`"). No key body is present — the doc explicitly
+  # says "Never commit the private key". A real multi-line PEM can never have both
+  # markers on one line, so this regex can only ever match documentation prose.
+  '''-----BEGIN EC PRIVATE KEY-----`? and `?-----END EC PRIVATE KEY-----''',
 ]
 paths = [
   '''cosign\.pub''',
