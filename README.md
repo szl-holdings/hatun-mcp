@@ -17,6 +17,20 @@ tools to any MCP client.
 [Hugging Face Space](https://huggingface.co/spaces/SZLHOLDINGS/hatun-mcp) ·
 [GitHub Org](https://github.com/szl-holdings)
 
+</div>
+
+> **📦 Canonical MCP server (Wave D consolidation).** This standalone repository is the
+> **canonical, live** doctrine-aware MCP server — the fleet's only spec-compliant Streamable
+> HTTP MCP transport, carrying the full governed tool catalog and the `hf-deploy` workflow that
+> ships the running server. The monorepo copy at
+> [`platform/packages/hatun-mcp`](https://github.com/szl-holdings/platform/tree/main/packages/hatun-mcp)
+> is a **non-canonical embedded copy** (it carries `CANONICAL.md` pointing here) that exposes a
+> smaller tool set for local imports and must not diverge from this server's contracts. Folding
+> the platform copy in is a later founder step; repos are **not deleted** here. Λ = **Conjecture
+> 1** (advisory) is preserved verbatim.
+
+<div align="center">
+
 `receipts.in ≡ receipts.out`
 
 </div>
