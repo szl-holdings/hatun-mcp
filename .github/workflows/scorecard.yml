@@ -1,0 +1,22 @@
+# Copyright 2026 SZL Holdings — SPDX-License-Identifier: Apache-2.0
+name: Scorecard
+
+# Org reusable OpenSSF Scorecard gate (SHA-pinned caller). Wave G CI parity.
+# branch_protection_rule trigger intentionally omitted (see reusable note).
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+  id-token: write
+  actions: read
+
+jobs:
+  scorecard:
+    uses: szl-holdings/.github/.github/workflows/reusable-scorecard.yml@ebd2128c691b850c84438b671fbb512945933776
+    secrets: inherit

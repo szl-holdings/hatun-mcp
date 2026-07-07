@@ -1,0 +1,16 @@
+# Copyright 2026 SZL Holdings — SPDX-License-Identifier: Apache-2.0
+name: DCO
+
+# Org reusable DCO sign-off gate (SHA-pinned caller). Wave G CI parity.
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  dco:
+    uses: szl-holdings/.github/.github/workflows/reusable-dco.yml@ebd2128c691b850c84438b671fbb512945933776
+    secrets: inherit
