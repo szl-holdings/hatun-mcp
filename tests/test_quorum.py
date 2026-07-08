@@ -31,6 +31,43 @@ def test_config_too_small_is_not_byzantine_safe():
     assert QuorumConfig(n=2, f=1).tolerates_byzantine() is False
 
 
+def test_config_is_valid_rejects_ill_formed():
+    # Well-formed Byzantine configs are valid.
+    assert QuorumConfig(n=5, f=1).is_valid() is True
+    assert QuorumConfig(n=1, f=0).is_valid() is True   # degenerate but honest (trust-1)
+    # A negative fault budget drives 2f+1 <= 0 -> fail-open -> must be rejected.
+    assert QuorumConfig(n=5, f=-1).is_valid() is False
+    assert QuorumConfig(n=5, f=-2).is_valid() is False
+    # Zero / negative participant count is ill-formed.
+    assert QuorumConfig(n=0, f=0).is_valid() is False
+    assert QuorumConfig(n=-3, f=0).is_valid() is False
+
+
+def test_negative_f_config_fails_closed_not_open():
+    """Regression: a negative f makes 2f+1 <= 0. Without the fail-closed guard a
+    SINGLE vote would forge QUORUM_REACHED. decide() must refuse and return
+    NO_QUORUM — Byzantine safety is never fabricated from an unsafe config."""
+    one_vote = _votes([("a11oy", True, "ALLOW")])
+    res = decide(one_vote, QuorumConfig(n=5, f=-1))
+    assert res.outcome == "NO_QUORUM"
+    assert res.decided_verdict is None
+    assert "ill-formed" in res.reason
+    # Even a would-be unanimous set cannot forge quorum under an ill-formed config.
+    unanimous = _votes([("a11oy", True, "ALLOW"), ("llm", True, "ALLOW"),
+                        ("immune", True, "ALLOW"), ("killinchu", True, "ALLOW"),
+                        ("companion", True, "ALLOW")])
+    res2 = decide(unanimous, QuorumConfig(n=5, f=-1))
+    assert res2.outcome == "NO_QUORUM"
+    assert res2.decided_verdict is None
+
+
+def test_empty_votes_ill_formed_config_fails_closed():
+    # No votes + negative f: threshold is <= 0, but decide must NOT declare quorum.
+    res = decide([], QuorumConfig(n=5, f=-1))
+    assert res.outcome == "NO_QUORUM"
+    assert res.decided_verdict is None
+
+
 def test_unanimous_five_reaches_quorum():
     res = decide(_votes([("a11oy", True, "ALLOW"), ("llm", True, "ALLOW"),
                          ("immune", True, "ALLOW"), ("killinchu", True, "ALLOW"),

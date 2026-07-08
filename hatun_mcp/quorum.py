@@ -49,6 +49,23 @@ class QuorumConfig:
         """Matching-verdict count required to decide: 2f+1."""
         return 2 * self.f + 1
 
+    def is_valid(self) -> bool:
+        """True iff this is a well-formed Byzantine config that decide() may act on.
+
+        Requires a NON-NEGATIVE fault budget f and at least one participant, which
+        gives strictly positive agreement (2f+1) and safety (3f+1) thresholds. A
+        negative f is rejected FAIL-CLOSED: it drives 2f+1 <= 0, and any threshold
+        <= 0 is trivially satisfied by a single (or even zero) matching vote — a
+        fail-open hole that would let one organ forge quorum. Byzantine safety is
+        never fabricated: an ill-formed config must not decide.
+        """
+        return (
+            self.f >= 0
+            and self.n >= 1
+            and self.agreement_threshold() >= 1
+            and self.min_total() >= 1
+        )
+
 
 @dataclass
 class OrganVote:
@@ -111,6 +128,21 @@ def decide(votes: list[OrganVote], config: Optional[QuorumConfig] = None) -> Quo
         reachable=reachable, total=total, tally=tally_d,
         agreement_threshold=thr, min_total=min_total, votes=votes_d,
     )
+
+    # 0. FAIL-CLOSED on an ill-formed / adversarial config BEFORE any tally.
+    #    A negative fault budget f makes the agreement threshold 2f+1 <= 0, which
+    #    the "top_count >= thr" test below would treat as trivially satisfied —
+    #    letting a SINGLE organ (or none) forge QUORUM_REACHED. We refuse to decide
+    #    on such a config and return NO_QUORUM with a disclosed reason; Byzantine
+    #    safety is never fabricated from a config that cannot provide it.
+    if not cfg.is_valid():
+        return QuorumResult(
+            outcome="NO_QUORUM", decided_verdict=None, **base,
+            reason=(f"ill-formed quorum config (n={cfg.n}, f={cfg.f}): requires "
+                    f"f >= 0 and n >= 1 with positive thresholds "
+                    f"(2f+1={thr}, 3f+1={min_total}). Fail-closed; Byzantine "
+                    "safety not fabricated."),
+        )
 
     if reachable < min_total:
         return QuorumResult(
