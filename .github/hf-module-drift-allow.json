@@ -32,6 +32,7 @@
     "hatun_mcp/adapters/a11oy.py": "ahead=github. Pre-existing staleness (Space never redeployed). Remove after first hf-deploy.yml reconcile.",
     "hatun_mcp/adapters/companion.py": "ahead=github. Pre-existing staleness (Space never redeployed). Remove after first hf-deploy.yml reconcile.",
     "hatun_mcp/adapters/immune.py": "ahead=github. Pre-existing staleness (Space never redeployed). Remove after first hf-deploy.yml reconcile.",
-    "hatun_mcp/adapters/llm.py": "ahead=github. Pre-existing staleness (Space never redeployed). Remove after first hf-deploy.yml reconcile."
+    "hatun_mcp/adapters/llm.py": "ahead=github. Pre-existing staleness (Space never redeployed). Remove after first hf-deploy.yml reconcile.",
+    "hatun_mcp/quorum.py": "ahead=github. Pre-existing staleness (Space never redeployed; hf-deploy is workflow_dispatch-only with no HF_TOKEN yet). Same class as the other backlog entries; recorded so the guard lands green. Remove after first hf-deploy.yml run reconciles GitHub->HF."
   }
 }
