@@ -27,6 +27,7 @@ COPY hatun_mcp/governance.py      /app/hatun_mcp/governance.py
 COPY hatun_mcp/puriq.py           /app/hatun_mcp/puriq.py
 COPY hatun_mcp/dsse.py            /app/hatun_mcp/dsse.py
 COPY hatun_mcp/quorum.py          /app/hatun_mcp/quorum.py
+COPY hatun_mcp/loop.py            /app/hatun_mcp/loop.py
 COPY hatun_mcp/tools/__init__.py          /app/hatun_mcp/tools/__init__.py
 COPY hatun_mcp/tools/governance_tools.py  /app/hatun_mcp/tools/governance_tools.py
 COPY hatun_mcp/adapters/__init__.py    /app/hatun_mcp/adapters/__init__.py
