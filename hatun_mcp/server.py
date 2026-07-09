@@ -572,6 +572,7 @@ register_governance_tools(mcp, KHIPU, SIGNER, CLIENTS)
 #  GOVERNANCE-CRITICAL: Byzantine quorum + BLS aggregate over N organs
 # ════════════════════════════════════════════════════════════════════════════════
 from .dsse import BlsAggregator
+from .loop import run_bounded_loop
 from .quorum import QuorumConfig, OrganVote, decide as quorum_decide
 
 BLS = BlsAggregator()
@@ -590,6 +591,15 @@ async def szl_lambda_quorum(action: dict, context: Any = None,
     full quorum tally + aggregate ride in `governance.quorum`. HONEST: each organ's
     reachability is captured from the real HTTP status; any organ whose policy route
     is not live contributes an honest miss and the degradation is disclosed.
+
+    OUROBOROS LOOP (in-code, receipt-closed). The organ fan-out — the repo's actual
+    multi-step orchestration path — runs inside `hatun_mcp.loop.run_bounded_loop`: a
+    HARD step budget (env `HATUN_MCP_LOOP_MAX_STEPS`, safe default 12), per-step
+    trace entries, and an HONEST exit reason (`converged` | `budget_exhausted` |
+    `error`, never fake convergence). The trace rides in `governance.loop` and in the
+    top-level Khipu receipt detail. Default behavior is unchanged: the default
+    5-organ set is well under the budget, so it always exits `converged`. Doctrine:
+    "bounded, terminating, receipt-closed" (Λ = Conjecture 1, never a theorem).
     """
     from .adapters import build_adapters
     client_id = _ctx_client.get()
@@ -598,13 +608,17 @@ async def szl_lambda_quorum(action: dict, context: Any = None,
     ads = build_adapters()
     gate_text = json.dumps(action)[:5000]
 
-    votes = []
-    organ_receipts = []
-    for organ in targets:
+    votes: list = []
+    organ_receipts: list = []
+
+    async def _organ_step(idx: int, organ: str, trace) -> Optional[OrganVote]:
+        """One bounded loop iteration: query one organ, mint its receipt, tally."""
         ad = ads.get(organ)
         if ad is None:
-            continue
+            trace.add("action", f"organ '{organ}': no adapter registered; skipped")
+            return None
         # Each organ evaluates the action via its policy/verdict route.
+        trace.add("network", f"organ '{organ}': policy_evaluate")
         res = await ad.call("policy_evaluate", {"action": action, "context": context or {}})
         reachable = bool(res.get("deployed")) and res.get("error") in (None, "")
         verdict = None
@@ -623,9 +637,15 @@ async def szl_lambda_quorum(action: dict, context: Any = None,
             signer=SIGNER,
         )
         organ_receipts.append((organ, rr.continuum_hash))
-        votes.append(OrganVote(organ=organ, reachable=reachable, verdict=verdict,
-                               receipt_hash=rr.continuum_hash,
-                               detail={"backend": _summ(res)}))
+        vote = OrganVote(organ=organ, reachable=reachable, verdict=verdict,
+                         receipt_hash=rr.continuum_hash,
+                         detail={"backend": _summ(res)})
+        votes.append(vote)
+        return vote
+
+    # Bounded Ouroboros walk over the organ fan-out (no unbounded loop on this path).
+    _, loop_trace = await run_bounded_loop(list(targets), _organ_step)
+    loop = loop_trace.to_dict()
 
     qresult = quorum_decide(votes, QUORUM_CFG)
     agg = BLS.aggregate(organ_receipts)
@@ -634,7 +654,8 @@ async def szl_lambda_quorum(action: dict, context: Any = None,
     async def _payload():
         return B.BackendResult(
             deployed=True, http_status=200, endpoint="(hatun-mcp quorum)", error=None,
-            data={"quorum": qresult.to_dict(), "bls_aggregate": agg.to_dict()},
+            data={"quorum": qresult.to_dict(), "bls_aggregate": agg.to_dict(),
+                  "loop": loop},
         )
     out = await governed(
         tool="szl_lambda_quorum", operation_id="lambda.quorum", gate_text=gate_text,
@@ -642,6 +663,7 @@ async def szl_lambda_quorum(action: dict, context: Any = None,
     )
     out["governance"]["quorum"] = qresult.to_dict()
     out["governance"]["bls_aggregate"] = agg.to_dict()
+    out["governance"]["loop"] = loop
     out["governance"]["sovereign_mode"] = sovereign
     return out
 
