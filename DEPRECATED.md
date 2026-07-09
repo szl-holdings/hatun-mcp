@@ -1,5 +1,9 @@
 # DEPRECATED — old → new mapping (2026-06-16)
 
+> **This repository is NOT deprecated.** `hatun-mcp` is active and maintained. This
+> file documents the deprecation of old *codename tool names* only (old → new
+> mapping). See the [README](README.md) for repo status.
+
 The three previously-codenamed backend Spaces were **purged** (every old route now
 returns HTTP 404). Hatun-MCP was repointed to the **live honest a11oy organs** on
 `a-11-oy.com` (each verified **200** before wiring), and the two user-visible tool
