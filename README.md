@@ -189,6 +189,33 @@ HATUN_MCP_DISABLE_DYNAMIC=true python -m pytest tests/ -q
 # tests/test_governance.py— Khipu chain, Yuyay gate, PURIQ factor (pre-existing)
 ```
 
+## The Ouroboros loop (doctrine cross-reference)
+
+hatun-mcp does **not** implement the estate's Ouroboros bounded-recursion kernel itself; its
+PURIQ orchestrator is a **bounded, single-pass per-tool-call flow**, not recursion. This
+section is a **doctrine cross-reference** plus an honest note on how that flow embodies the
+loop's receipt-closed identity (`receipts.in ≡ receipts.out`, already carried in this README).
+
+The canonical definition is the receipt-closed kernel
+[`szl-holdings/ouroboros` → `src/loop-kernel.ts`](https://github.com/szl-holdings/ouroboros/blob/main/src/loop-kernel.ts) (`runLoop`): *bounded recursion with measurable convergence* that MUST terminate on one
+of four exit conditions — `converged | consistent | aborted | budgetExhausted` — and emits a
+governance receipt for every run. **The trace is the product.**
+
+How hatun-mcp embodies that primitive (in `hatun_mcp/puriq.py`):
+
+- **Bounded & terminating.** Each tool call is a finite pipeline — Yuyay-13 gate → mesh
+  quorum (Byzantine n ≥ 3f+1) → HUKLLA tripwire → Khipu append → DSSE-sign → compose the
+  master-formula scalar — that always terminates within a latency budget and returns a
+  receipt hash. There is no unbounded loop.
+- **Receipt-closed.** Every call mints a Khipu link on an append-only sha256 DAG and the
+  client receives the **receipt hash**. That is this repo's live realization of the header
+  identity `receipts.in ≡ receipts.out` — a **metaphor (doctrine, not math)**, where each
+  signed receipt is fed back into the DAG as an auditable input.
+
+**Honesty (Doctrine v11 · 749/14/163):** Λ is consumed here as an input scalar in [0,1] and
+is **Conjecture 1** — advisory, *never* a proven theorem. This is a *bounded, terminating*
+governance flow — it makes **no** perpetual-motion or zero-cost claim.
+
 ---
 
 <sub>
