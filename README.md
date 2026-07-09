@@ -15,7 +15,8 @@ plus **killinchu** (drones & vessels) — under PURIQ governance and re-exposes 
 tools to any MCP client.
 
 [Hugging Face Space](https://huggingface.co/spaces/SZLHOLDINGS/hatun-mcp) ·
-[GitHub Org](https://github.com/szl-holdings)
+[GitHub Org](https://github.com/szl-holdings) ·
+[LLM Router](https://github.com/szl-holdings/szl-router)
 
 </div>
 
