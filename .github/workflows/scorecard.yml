@@ -12,11 +12,11 @@ on:
 
 permissions:
   contents: read
-  security-events: write
-  id-token: write
-  actions: read
 
 jobs:
   scorecard:
+    permissions:
+      security-events: write
+      id-token: write
     uses: szl-holdings/.github/.github/workflows/reusable-scorecard.yml@ebd2128c691b850c84438b671fbb512945933776
     secrets: inherit
