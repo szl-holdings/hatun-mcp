@@ -5,6 +5,7 @@ py_ecc is installed; honest Merkle-root fallback otherwise).
 
 SPDX-License-Identifier: Apache-2.0
 """
+import json
 import os
 import sys
 
@@ -29,12 +30,13 @@ def test_config_thresholds_n5_f1():
 def test_config_too_small_is_not_byzantine_safe():
     assert QuorumConfig(n=3, f=1).tolerates_byzantine() is False  # 3 < 4
     assert QuorumConfig(n=2, f=1).tolerates_byzantine() is False
+    assert QuorumConfig(n=3, f=1).is_valid() is False
 
 
 def test_config_is_valid_rejects_ill_formed():
     # Well-formed Byzantine configs are valid.
     assert QuorumConfig(n=5, f=1).is_valid() is True
-    assert QuorumConfig(n=1, f=0).is_valid() is True   # degenerate but honest (trust-1)
+    assert QuorumConfig(n=1, f=0, participants=("solo",)).is_valid() is True
     # A negative fault budget drives 2f+1 <= 0 -> fail-open -> must be rejected.
     assert QuorumConfig(n=5, f=-1).is_valid() is False
     assert QuorumConfig(n=5, f=-2).is_valid() is False
@@ -66,6 +68,15 @@ def test_empty_votes_ill_formed_config_fails_closed():
     res = decide([], QuorumConfig(n=5, f=-1))
     assert res.outcome == "NO_QUORUM"
     assert res.decided_verdict is None
+
+
+def test_unsafe_n_f_config_fails_closed_even_with_enough_submitted_votes():
+    votes = _votes([("a", True, "ALLOW"), ("b", True, "ALLOW"),
+                    ("c", True, "ALLOW"), ("d", True, "ALLOW")])
+    res = decide(votes, QuorumConfig(n=3, f=1))
+    assert res.outcome == "NO_QUORUM"
+    assert res.decided_verdict is None
+    assert res.to_dict()["byzantine_safe"] is False
 
 
 def test_unanimous_five_reaches_quorum():
@@ -116,11 +127,175 @@ def test_exact_threshold_three_of_four():
 
 
 def test_dict_verdicts_tally_canonically():
-    v = [("a", True, {"x": 1}), ("b", True, {"x": 1}), ("c", True, {"x": 1}),
-         ("d", True, {"x": 2})]
+    v = [("a11oy", True, {"x": 1}), ("llm", True, {"x": 1}),
+         ("immune", True, {"x": 1}), ("killinchu", True, {"x": 2})]
     res = decide(_votes(v))
     assert res.outcome == "QUORUM_REACHED"
     assert res.decided_verdict == {"x": 1}
+
+
+def test_duplicate_organ_cannot_forge_quorum():
+    votes = _votes([("a11oy", True, "ALLOW"), ("a11oy", True, "ALLOW"),
+                    ("a11oy", True, "ALLOW"), ("immune", True, "DENY")])
+    res = decide(votes)
+    assert res.outcome == "NO_QUORUM"
+    assert res.decided_verdict is None
+    assert "duplicate organ identity" in res.reason
+    assert res.to_dict()["byzantine_safe"] is False
+
+
+def test_duplicate_organ_case_variant_cannot_forge_quorum():
+    votes = _votes([("A11OY", True, "ALLOW"), ("a11oy", True, "ALLOW"),
+                    ("immune", True, "ALLOW"), ("llm", True, "ALLOW")])
+    res = decide(votes)
+    assert res.outcome == "NO_QUORUM"
+    assert "duplicate organ identity" in res.reason
+
+
+def test_more_votes_than_configured_participants_fails_closed():
+    votes = _votes([("a", True, "ALLOW"), ("b", True, "ALLOW"),
+                    ("c", True, "ALLOW"), ("d", True, "ALLOW"),
+                    ("e", True, "ALLOW"), ("f", True, "ALLOW")])
+    res = decide(votes, QuorumConfig(n=5, f=1))
+    assert res.outcome == "NO_QUORUM"
+    assert "configured n=5" in res.reason
+
+
+def test_verdict_types_do_not_collide():
+    votes = _votes([("a11oy", True, True), ("llm", True, "True"),
+                    ("immune", True, True), ("killinchu", True, "True")])
+    res = decide(votes)
+    assert res.outcome == "SPLIT"
+    assert res.decided_verdict is None
+
+
+def test_non_finite_and_unsupported_verdicts_fail_closed():
+    nan_votes = _votes([("a11oy", True, float("nan")), ("llm", True, "ALLOW"),
+                        ("immune", True, "ALLOW"), ("killinchu", True, "ALLOW")])
+    nan_result = decide(nan_votes)
+    assert nan_result.outcome == "NO_QUORUM"
+    assert "non-finite float" in nan_result.reason
+    assert nan_result.to_dict()["byzantine_safe"] is False
+    json.dumps(nan_result.to_dict(), allow_nan=False)
+
+    object_votes = _votes([("a11oy", True, object()), ("llm", True, "ALLOW"),
+                           ("immune", True, "ALLOW"), ("killinchu", True, "ALLOW")])
+    object_result = decide(object_votes)
+    assert object_result.outcome == "NO_QUORUM"
+    assert "unsupported type object" in object_result.reason
+    json.dumps(object_result.to_dict(), allow_nan=False)
+
+
+def test_nested_python_json_coercions_cannot_forge_quorum():
+    votes = _votes([
+        ("a11oy", True, {"1": "ALLOW"}),
+        ("llm", True, {1: "ALLOW"}),
+        ("immune", True, {"1": "ALLOW"}),
+        ("killinchu", True, "DENY"),
+    ])
+    result = decide(votes)
+    assert result.outcome == "NO_QUORUM"
+    assert "non-string object key" in result.reason
+    assert result.to_dict()["byzantine_safe"] is False
+
+    tuple_result = decide(_votes([
+        ("a11oy", True, ["ALLOW", (1, 2)]),
+        ("llm", True, ["ALLOW", [1, 2]]),
+        ("immune", True, ["ALLOW", [1, 2]]),
+        ("killinchu", True, "DENY"),
+    ]))
+    assert tuple_result.outcome == "NO_QUORUM"
+    assert "unsupported type tuple" in tuple_result.reason
+
+
+def test_malformed_configs_are_total_json_safe_and_never_safe():
+    configs = [
+        QuorumConfig(n="5", f=1),
+        QuorumConfig(n=True, f=1),
+        QuorumConfig(n=5.0, f=1),
+        QuorumConfig(n=5, f=-1),
+        QuorumConfig(n=5, f=False),
+        QuorumConfig(n=5, f=1, participants=object()),
+        QuorumConfig(n=10**5000, f=1),
+        QuorumConfig(n=5, f=10**5000),
+    ]
+    for config in configs:
+        result = decide([], config)
+        assert result.outcome == "NO_QUORUM"
+        assert result.to_dict()["byzantine_safe"] is False
+        json.dumps(result.to_dict(), allow_nan=False)
+
+
+def test_huge_integer_verdict_fails_closed_and_remains_json_safe():
+    result = decide(_votes([
+        ("a11oy", True, 10**5000),
+        ("llm", True, "ALLOW"),
+        ("immune", True, "ALLOW"),
+        ("killinchu", True, "ALLOW"),
+    ]))
+    assert result.outcome == "NO_QUORUM"
+    assert "signed 64-bit" in result.reason
+    assert result.to_dict()["byzantine_safe"] is False
+    json.dumps(result.to_dict(), allow_nan=False)
+
+
+def test_vote_metadata_and_container_shape_fail_closed_json_safe():
+    bad_votes = [
+        OrganVote(organ=object(), reachable=True, verdict="ALLOW", receipt_hash=object()),
+        OrganVote(organ="llm", reachable=1, verdict="ALLOW", receipt_hash=None),
+        OrganVote(organ="immune", reachable=True, verdict="ALLOW", receipt_hash=object()),
+    ]
+    for vote in bad_votes:
+        result = decide([vote])
+        assert result.outcome == "NO_QUORUM"
+        assert result.to_dict()["byzantine_safe"] is False
+        json.dumps(result.to_dict(), allow_nan=False)
+
+    raw_result = decide([object()])
+    assert raw_result.outcome == "NO_QUORUM"
+    json.dumps(raw_result.to_dict(), allow_nan=False)
+
+    tuple_result = decide(tuple())  # type: ignore[arg-type]
+    assert tuple_result.outcome == "NO_QUORUM"
+    json.dumps(tuple_result.to_dict(), allow_nan=False)
+
+
+def test_participants_are_registry_bound_and_unicode_canonical():
+    sybil = decide(_votes([("attacker-1", True, "ALLOW")]))
+    assert sybil.outcome == "NO_QUORUM"
+    assert "outside the configured participant registry" in sybil.reason
+
+    noncanonical = QuorumConfig(n=1, f=0, participants=("Å",))
+    result = decide([], noncanonical)
+    assert result.outcome == "NO_QUORUM"
+    assert "NFKC-normalized" in result.reason
+
+
+def test_cyclic_and_overdeep_verdicts_fail_closed_without_crashing():
+    cyclic = []
+    cyclic.append(cyclic)
+    cyclic_result = decide(_votes([
+        ("a11oy", True, cyclic),
+        ("llm", True, "ALLOW"),
+        ("immune", True, "ALLOW"),
+        ("killinchu", True, "ALLOW"),
+    ]))
+    assert cyclic_result.outcome == "NO_QUORUM"
+    assert "cyclic list" in cyclic_result.reason
+    json.dumps(cyclic_result.to_dict(), allow_nan=False)
+
+    deep = "ALLOW"
+    for _ in range(34):
+        deep = [deep]
+    deep_result = decide(_votes([
+        ("a11oy", True, deep),
+        ("llm", True, "ALLOW"),
+        ("immune", True, "ALLOW"),
+        ("killinchu", True, "ALLOW"),
+    ]))
+    assert deep_result.outcome == "NO_QUORUM"
+    assert "depth limit" in deep_result.reason
+    json.dumps(deep_result.to_dict(), allow_nan=False)
 
 
 def test_merkle_root_deterministic():
