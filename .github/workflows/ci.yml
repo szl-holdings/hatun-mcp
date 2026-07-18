@@ -42,6 +42,32 @@ jobs:
             tests/test_adapters.py tests/test_governance.py \
             tests/test_http_routes.py -q
 
+  container-contract:
+    name: build and exercise pinned Space image
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Build pinned Space image
+        run: docker build --tag hatun-mcp-space-ci .
+      - name: Start Space image
+        run: docker run --detach --name hatun-mcp-space-ci --publish 7860:7860 --env HATUN_MCP_DISABLE_DYNAMIC=true hatun-mcp-space-ci
+      - name: Verify live container contract
+        run: |
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error http://127.0.0.1:7860/healthz > health.json; then
+              python -c "import json; data=json.load(open('health.json', encoding='utf-8')); assert data['status']=='ok'; assert data['service']=='hatun-mcp'; assert isinstance(data['chain_verified'], bool); assert data['protocol_revision']"
+              test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:7860/this-route-must-not-exist)" = "404"
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs hatun-mcp-space-ci
+          exit 1
+      - name: Stop Space image
+        if: always()
+        run: docker rm --force hatun-mcp-space-ci || true
+
   build-and-push:
     name: build container + push to GHCR (main only) + SLSA L2 attest
     needs: test

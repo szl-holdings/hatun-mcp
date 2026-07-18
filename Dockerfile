@@ -2,7 +2,7 @@
 # HF Space sdk=docker. Port 7860 is the HF Spaces convention.
 # Doctrine v11 LOCKED — 749 / 14 / 163 — per-file COPY (no directory copies).
 # SPDX-License-Identifier: Apache-2.0
-FROM public.ecr.aws/docker/library/python:3.14-slim
+FROM mirror.gcr.io/library/python:3.14-slim@sha256:cea0e6040540fb2b965b6e7fb5ffa00871e632eef63719f0ea54bca189ce14a6
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -44,6 +44,9 @@ COPY README.md                    /app/README.md
 USER hatun
 
 EXPOSE 7860
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+  CMD python -c "import json,urllib.request; data=json.load(urllib.request.urlopen('http://127.0.0.1:7860/healthz', timeout=2)); assert data['status']=='ok' and data['service']=='hatun-mcp'"
 
 # uvicorn serves the Starlette gateway that mounts /mcp, /sse, /messages.
 CMD ["sh", "-c", "uvicorn hatun_mcp.server_http:app --host 0.0.0.0 --port ${PORT:-7860}"]
