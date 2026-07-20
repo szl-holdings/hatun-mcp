@@ -596,7 +596,7 @@ async def szl_lambda_quorum(action: dict, context: Any = None,
     multi-step orchestration path — runs inside `hatun_mcp.loop.run_bounded_loop`: a
     HARD step budget (env `HATUN_MCP_LOOP_MAX_STEPS`, safe default 12), per-step
     trace entries, and an HONEST exit reason (`converged` | `budget_exhausted` |
-    `error`, never fake convergence). The trace rides in `governance.loop` and in the
+    `error`, never fabricate convergence). The trace rides in `governance.loop` and in the
     top-level Khipu receipt detail. Default behavior is unchanged: the default
     5-organ set is well under the budget, so it always exits `converged`. Doctrine:
     "bounded, terminating, receipt-closed" (Λ = Conjecture 1, never a theorem).
