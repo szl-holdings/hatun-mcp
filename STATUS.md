@@ -30,8 +30,13 @@
 - **companion / llm** — expose no JSON `/v1/mcp/tools` catalog; tools are derived
   from the known live action routes (`/companion/{ask,act,recommend}`,
   `/llm/tiers`), each verified 200. Disclosed, not faked.
-- **DSSE signer** — runs in honest `PLACEHOLDER` mode unless `HATUN_MCP_SIGNING_KEY`
-  (PEM) is injected as a Space secret.
+- **DSSE signer** — **REAL ECDSA-P256 as of 2026-07-21** (verified live: `dsse_sign`
+  reports `signer_mode: ECDSA-P256`, keyid `szlholdings-ec-p256`, key injected via the
+  `SZL_COSIGN_PRIVATE_PEM` Space secret; signatures verify against the committed
+  `PUBKEY_szlholdings-ec-p256.pem`). Falls back to the honest `PLACEHOLDER` mode only
+  if the key secret is absent. The gateway now signs the anatomy alive-harness runs
+  published to the restored public sink
+  ([`SZLHOLDINGS/test-results`](https://huggingface.co/datasets/SZLHOLDINGS/test-results)).
 - **Sigstore Rekor** transparency-log inclusion remains a disclosed placeholder
   boundary (Doctrine v12 §2).
 
