@@ -4,6 +4,13 @@ import asyncio
 import os
 import sys
 
+from cryptography.hazmat.primitives.asymmetric import ec, rsa
+from cryptography.hazmat.primitives.serialization import (
+    Encoding,
+    NoEncryption,
+    PrivateFormat,
+)
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from hatun_mcp.governance import (  # noqa: E402
@@ -84,6 +91,48 @@ def test_dsse_signs_or_discloses_placeholder():
     assert env["_mode"] in ("ECDSA-P256", "PLACEHOLDER")
     if env["_mode"] == "ECDSA-P256":
         assert env["signatures"] and env["signatures"][0]["sig"]
+
+
+def _private_key_pem(key) -> str:
+    return key.private_bytes(
+        Encoding.PEM,
+        PrivateFormat.PKCS8,
+        NoEncryption(),
+    ).decode()
+
+
+def test_dsse_accepts_only_usable_p256_key(monkeypatch):
+    monkeypatch.setenv(
+        "HATUN_MCP_SIGNING_KEY",
+        _private_key_pem(ec.generate_private_key(ec.SECP256R1())),
+    )
+    signer = DsseSigner()
+    envelope = signer.sign({"probe": True})
+
+    assert signer.mode == "ECDSA-P256"
+    assert len(envelope["signatures"]) == 1
+
+
+def test_dsse_rejects_rsa_key(monkeypatch):
+    monkeypatch.setenv(
+        "HATUN_MCP_SIGNING_KEY",
+        _private_key_pem(rsa.generate_private_key(public_exponent=65537, key_size=2048)),
+    )
+    signer = DsseSigner()
+
+    assert signer.mode == "PLACEHOLDER"
+    assert signer.sign({"probe": True})["signatures"] == []
+
+
+def test_dsse_rejects_non_p256_ec_key(monkeypatch):
+    monkeypatch.setenv(
+        "HATUN_MCP_SIGNING_KEY",
+        _private_key_pem(ec.generate_private_key(ec.SECP384R1())),
+    )
+    signer = DsseSigner()
+
+    assert signer.mode == "PLACEHOLDER"
+    assert signer.sign({"probe": True})["signatures"] == []
 
 
 def test_tool_pipeline_declines_anonymous():

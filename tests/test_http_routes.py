@@ -19,15 +19,22 @@ import os
 os.environ.setdefault("HATUN_MCP_DISABLE_DYNAMIC", "true")
 os.environ.setdefault("HATUN_MCP_BACKEND_TIMEOUT", "1.0")
 
+from cryptography.hazmat.primitives.asymmetric import rsa  # noqa: E402
+from cryptography.hazmat.primitives.serialization import (  # noqa: E402
+    Encoding,
+    NoEncryption,
+    PrivateFormat,
+)
 from starlette.testclient import TestClient  # noqa: E402
 
-from hatun_mcp.server_http import app  # noqa: E402
+from hatun_mcp import server_http  # noqa: E402
 from hatun_mcp.console import CONSOLE_HTML  # noqa: E402
+from hatun_mcp.governance import DsseSigner  # noqa: E402
 
 BASE = "https://szlholdings-hatun-mcp.hf.space"
 REPO = "https://github.com/szl-holdings/hatun-mcp"
 
-client = TestClient(app, base_url=BASE)
+client = TestClient(server_http.app, base_url=BASE)
 
 # Every path a human or registry might poke for "the server card".
 CARD_PATHS = [
@@ -49,6 +56,7 @@ def test_server_card_and_aliases_serve_real_card():
         assert body["serverInfo"]["name"] == "hatun-mcp"
         assert len(body["tools"]) >= 1
         assert "governance" in body
+        assert body["authentication"]["schemes"] == ["apiKey"]
 
 
 def test_no_card_path_404s():
@@ -75,12 +83,44 @@ def test_index_json_advertises_trailing_slash_mcp():
     j = r.json()
     assert j["mcp_endpoint"] == "/mcp/"
     assert j["connect"] == "/connect"
+    assert j["readyz"] == "/readyz"
     assert j["docs"] == REPO
 
 
 def test_healthz_and_pubkey_resolve():
     assert client.get("/healthz").status_code == 200
     assert client.get("/pubkey").status_code == 200
+
+
+def test_readyz_separates_liveness_from_signed_release_readiness():
+    response = client.get("/readyz")
+    body = response.json()
+
+    assert response.status_code == (200 if body["ready"] else 503)
+    assert body["status"] == ("ready" if body["ready"] else "not_ready")
+    assert body["checks"]["receipt_chain"] in {"VERIFIED", "FAILED"}
+    assert body["checks"]["signer"] in {"CONFIGURED", "UNAVAILABLE"}
+    assert response.headers["cache-control"] == "no-store"
+
+
+def test_readyz_rejects_parseable_but_incompatible_signer(monkeypatch):
+    rsa_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    pem = rsa_key.private_bytes(
+        Encoding.PEM,
+        PrivateFormat.PKCS8,
+        NoEncryption(),
+    ).decode()
+    monkeypatch.setenv("HATUN_MCP_SIGNING_KEY", pem)
+    incompatible_signer = DsseSigner()
+    monkeypatch.setattr(server_http, "SIGNER", incompatible_signer)
+
+    response = client.get("/readyz")
+    body = response.json()
+
+    assert response.status_code == 503
+    assert body["ready"] is False
+    assert body["checks"]["signer"] == "UNAVAILABLE"
+    assert body["signer_mode"] == "PLACEHOLDER"
 
 
 def test_console_source_button_links_real_repo():
@@ -99,9 +139,13 @@ def test_security_headers_on_every_route():
     # SAFE-NOW hardening (R2): real headers on the HTML console AND the JSON/health
     # routes. Hitting the browser console path (Accept: text/html) and a machine
     # route both carry the full set.
-    for path, accept in (("/", "text/html"), ("/healthz", "application/json")):
+    for path, accept in (
+        ("/", "text/html"),
+        ("/healthz", "application/json"),
+        ("/readyz", "application/json"),
+    ):
         r = client.get(path, headers={"accept": accept})
-        assert r.status_code == 200, path
+        assert r.status_code in {200, 503}, path
         h = r.headers
         csp = h["content-security-policy"]
         assert "default-src 'self'" in csp

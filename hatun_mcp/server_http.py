@@ -8,7 +8,7 @@ Wraps the FastMCP app in a Starlette application that:
   * honors X-Sovereign-Mode and X-Second-Approver headers (Frontier #4, 2-person gate).
   * serves /.well-known/mcp/server-card.json so registries (Smithery) can enumerate
     the 25 static tools even behind the auth wall.
-  * serves /healthz and /pubkey (DSSE verification key).
+  * serves /healthz, /readyz, and /pubkey (DSSE verification key).
 
 Run:  uvicorn hatun_mcp.server_http:app --host 0.0.0.0 --port 7860
 SPDX-License-Identifier: Apache-2.0
@@ -193,7 +193,7 @@ def _server_card() -> dict:
                                       "(Yuyay-13 gate, Khipu receipts, DSSE-signed "
                                       "responses) extended to the world's agents."},
         "authentication": {"required": not (os.environ.get("HATUN_MCP_ALLOW_ANON", "false").lower() == "true"),
-                            "schemes": ["apiKey", "oauth2"],
+                            "schemes": ["apiKey"],
                             "note": "Provide an SZL API key as Authorization: Bearer szl_... "
                                     "Anonymous calls are declined and receipted."},
         "tools": tools, "resources": [
@@ -273,6 +273,33 @@ async def healthz(request: Request):
                          "protocol_revision": DOCTRINE["protocol_revision"]})
 
 
+async def readyz(request: Request):
+    """Report release readiness without hiding an unsigned or broken chain.
+
+    Liveness and release readiness are deliberately separate. The process can
+    remain alive while the receipt chain is invalid or the real signing key is
+    absent; callers must not infer signed-tool readiness from ``/healthz``.
+    """
+    chain_verified = KHIPU.verify()
+    signer_ready = SIGNER.mode != "PLACEHOLDER"
+    ready = chain_verified and signer_ready
+    return JSONResponse(
+        {
+            "status": "ready" if ready else "not_ready",
+            "service": "hatun-mcp",
+            "ready": ready,
+            "checks": {
+                "receipt_chain": "VERIFIED" if chain_verified else "FAILED",
+                "signer": "CONFIGURED" if signer_ready else "UNAVAILABLE",
+            },
+            "signer_mode": SIGNER.mode,
+            "protocol_revision": DOCTRINE["protocol_revision"],
+        },
+        status_code=200 if ready else 503,
+        headers={"Cache-Control": "no-store"},
+    )
+
+
 async def pubkey(request: Request):
     pem = SIGNER.public_key_pem()
     if pem is None:
@@ -288,7 +315,7 @@ _INDEX_JSON = {
     "mcp_endpoint": "/mcp/", "sse_endpoint": "/sse/",
     "server_card": "/.well-known/mcp/server-card.json",
     "connect": "/connect",
-    "healthz": "/healthz", "pubkey": "/pubkey",
+    "healthz": "/healthz", "readyz": "/readyz", "pubkey": "/pubkey",
     "docs": "https://github.com/szl-holdings/hatun-mcp",
 }
 
@@ -345,6 +372,7 @@ app = Starlette(
     routes=[
         Route("/", index),
         Route("/healthz", healthz),
+        Route("/readyz", readyz),
         Route("/pubkey", pubkey),
         Route("/connect", connect),
         Route("/.well-known/mcp/server-card.json", server_card),

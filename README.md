@@ -122,11 +122,19 @@ python -m hatun_mcp.server          # stdio mode for Claude Desktop / Codex
 ```bash
 uvicorn hatun_mcp.server_http:app --host 0.0.0.0 --port 7860
 # MCP endpoint:  http://127.0.0.1:7860/mcp   (legacy SSE at /sse)
+# Process liveness: http://127.0.0.1:7860/healthz
+# Signed-release readiness: http://127.0.0.1:7860/readyz
 ```
 
 The DSSE signing key is injected at runtime via the `HATUN_MCP_SIGNING_KEY` (PEM)
 Space secret; without it the signer runs in honest `PLACEHOLDER` mode (clearly
 labeled, never a fake signature).
+
+`/healthz` proves that the process and local receipt chain can answer. `/readyz`
+is the fail-closed investor/deployment contract: it returns `200` only when the
+receipt chain verifies and a non-placeholder signing key is active; otherwise it
+returns `503` with the failing check named. The public server card advertises only
+the API-key scheme that this server actually implements.
 
 ---
 
