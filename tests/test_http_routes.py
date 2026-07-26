@@ -19,15 +19,22 @@ import os
 os.environ.setdefault("HATUN_MCP_DISABLE_DYNAMIC", "true")
 os.environ.setdefault("HATUN_MCP_BACKEND_TIMEOUT", "1.0")
 
+from cryptography.hazmat.primitives.asymmetric import rsa  # noqa: E402
+from cryptography.hazmat.primitives.serialization import (  # noqa: E402
+    Encoding,
+    NoEncryption,
+    PrivateFormat,
+)
 from starlette.testclient import TestClient  # noqa: E402
 
-from hatun_mcp.server_http import app  # noqa: E402
+from hatun_mcp import server_http  # noqa: E402
 from hatun_mcp.console import CONSOLE_HTML  # noqa: E402
+from hatun_mcp.governance import DsseSigner  # noqa: E402
 
 BASE = "https://szlholdings-hatun-mcp.hf.space"
 REPO = "https://github.com/szl-holdings/hatun-mcp"
 
-client = TestClient(app, base_url=BASE)
+client = TestClient(server_http.app, base_url=BASE)
 
 # Every path a human or registry might poke for "the server card".
 CARD_PATHS = [
@@ -94,6 +101,26 @@ def test_readyz_separates_liveness_from_signed_release_readiness():
     assert body["checks"]["receipt_chain"] in {"VERIFIED", "FAILED"}
     assert body["checks"]["signer"] in {"CONFIGURED", "UNAVAILABLE"}
     assert response.headers["cache-control"] == "no-store"
+
+
+def test_readyz_rejects_parseable_but_incompatible_signer(monkeypatch):
+    rsa_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    pem = rsa_key.private_bytes(
+        Encoding.PEM,
+        PrivateFormat.PKCS8,
+        NoEncryption(),
+    ).decode()
+    monkeypatch.setenv("HATUN_MCP_SIGNING_KEY", pem)
+    incompatible_signer = DsseSigner()
+    monkeypatch.setattr(server_http, "SIGNER", incompatible_signer)
+
+    response = client.get("/readyz")
+    body = response.json()
+
+    assert response.status_code == 503
+    assert body["ready"] is False
+    assert body["checks"]["signer"] == "UNAVAILABLE"
+    assert body["signer_mode"] == "PLACEHOLDER"
 
 
 def test_console_source_button_links_real_repo():

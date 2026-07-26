@@ -89,7 +89,19 @@ class DsseSigner:
             pem = open(path).read()
         if _CRYPTO and pem:
             try:
-                self._key = load_pem_private_key(pem.encode(), password=None)
+                candidate = load_pem_private_key(pem.encode(), password=None)
+                if not isinstance(candidate, ec.EllipticCurvePrivateKey):
+                    raise TypeError("signing key is not an EC private key")
+                if not isinstance(candidate.curve, ec.SECP256R1):
+                    raise ValueError("signing key curve is not P-256")
+                probe = _pae(DSSE_PAYLOAD_TYPE, b'{"readiness":"probe"}')
+                signature = candidate.sign(probe, ec.ECDSA(hashes.SHA256()))
+                candidate.public_key().verify(
+                    signature,
+                    probe,
+                    ec.ECDSA(hashes.SHA256()),
+                )
+                self._key = candidate
                 self._mode = "ECDSA-P256"
             except Exception:
                 self._key = None
