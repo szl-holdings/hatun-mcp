@@ -1,25 +1,17 @@
 # Copyright 2026 SZL Holdings — SPDX-License-Identifier: Apache-2.0
 name: HF Module Drift Check
 
-# Thin caller for the canonical org drift guard. Compares every root-Dockerfile
-# COPY source's git blob against the live HF Space tree (SZLHOLDINGS/hatun-mcp)
-# and, on divergence, names which side is ahead. It never auto-overwrites.
-# Known/pre-existing divergences live in .github/hf-module-drift-allow.json
-# (printed as warnings); any NEW drift fails the job.
-#
-# DEPENDS ON szl-holdings/.github#172 — `reusable-hf-module-drift-check.yml@main`
-# only resolves once that PR merges to .github main.
-#
-# No HF write token needed (read-only compare via github.token).
+# Strict post-deployment parity. The default-branch sweep runs only after the
+# governed Space deployer succeeds, eliminating the old race where drift checked
+# stale live bytes before publication completed. Scheduled/manual checks remain
+# read-only and fail on any source/live divergence.
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "hatun_mcp/**"
-      - "requirements.txt"
-      - "Dockerfile"
-      - "README.md"
+  workflow_run:
+    workflows:
+      - Deploy to HuggingFace Space
+    types:
+      - completed
   schedule:
     - cron: "37 6 * * 1"
   workflow_dispatch: {}
@@ -27,6 +19,18 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: hf-drift-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   hf-drift:
-    uses: szl-holdings/.github/.github/workflows/reusable-hf-module-drift-check.yml@main
+    if: >-
+      github.event_name != 'workflow_run' ||
+      github.event.workflow_run.conclusion == 'success'
+    uses: szl-holdings/.github/.github/workflows/reusable-hf-module-drift-check.yml@5d339cf22e394635285f2c5fccb14d9ebb4f7455
+    with:
+      hf-repo: SZLHOLDINGS/hatun-mcp
+      ref: main
+      mode: direct
+      dockerfile-path: Dockerfile
