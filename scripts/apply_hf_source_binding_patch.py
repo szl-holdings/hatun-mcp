@@ -8,7 +8,6 @@ ROOT = Path(__file__).resolve().parents[1]
 README = ROOT / "README.md"
 SERVER = ROOT / "hatun_mcp/server_http.py"
 HTTP_TESTS = ROOT / "tests/test_http_routes.py"
-CI = ROOT / ".github/workflows/ci.yml"
 
 FRONTMATTER = """---
 title: Hatun MCP — Governed Agent Gateway
@@ -128,20 +127,8 @@ def patch_http_tests() -> bool:
     return True
 
 
-def patch_ci() -> bool:
-    text = CI.read_text(encoding="utf-8")
-    if "tests/test_hf_deploy_contract.py" in text:
-        return False
-    old = "tests/test_http_routes.py -q"
-    new = "tests/test_http_routes.py tests/test_hf_deploy_contract.py -q"
-    if old not in text:
-        raise RuntimeError("CI pytest list marker not found")
-    CI.write_text(text.replace(old, new, 1), encoding="utf-8")
-    return True
-
-
 def main() -> int:
-    changed = patch_readme() | patch_server() | patch_http_tests() | patch_ci()
+    changed = patch_readme() | patch_server() | patch_http_tests()
     print("changed=true" if changed else "changed=false")
     return 0
 
