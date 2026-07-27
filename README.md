@@ -1,3 +1,15 @@
+---
+title: Hatun MCP — Governed Agent Gateway
+emoji: 🪢
+colorFrom: indigo
+colorTo: blue
+sdk: docker
+app_port: 7860
+pinned: false
+license: apache-2.0
+short_description: Source-bound MCP gateway with PURIQ gates, Khipu receipts, and DSSE responses
+---
+
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Doctrine v11 LOCKED](https://img.shields.io/badge/Doctrine-v11_LOCKED-d4a444.svg)](https://github.com/szl-holdings/lutar-lean)
 [![CI](https://github.com/szl-holdings/hatun-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/szl-holdings/hatun-mcp/actions/workflows/ci.yml)

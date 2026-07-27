@@ -92,6 +92,27 @@ def test_healthz_and_pubkey_resolve():
     assert client.get("/pubkey").status_code == 200
 
 
+def test_build_info_is_exact_source_bound(monkeypatch):
+    revision = "a" * 40
+    monkeypatch.setenv("SZL_GIT_SHA", revision)
+    response = client.get("/api/build-info")
+    body = response.json()
+    assert response.status_code == 200
+    assert body["build"] == {"state": "OBSERVED", "revision": revision}
+    assert body["runtime"]["transport"] == "streamable-http"
+    assert body["receipt_minted"] is False
+    assert response.headers["cache-control"] == "no-store"
+
+
+def test_build_info_fails_closed_without_exact_revision(monkeypatch):
+    monkeypatch.setenv("SZL_GIT_SHA", "not-a-full-sha")
+    response = client.get("/api/build-info")
+    body = response.json()
+    assert response.status_code == 503
+    assert body["build"] == {"state": "UNAVAILABLE", "revision": None}
+    assert body["receipt_minted"] is False
+
+
 def test_readyz_separates_liveness_from_signed_release_readiness():
     response = client.get("/readyz")
     body = response.json()

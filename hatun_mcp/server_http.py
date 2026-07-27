@@ -266,6 +266,30 @@ async def connect(request: Request):
     return JSONResponse(_connect_info())
 
 
+async def build_info(request: Request):
+    """Expose the exact protected Git revision injected by the Space deployer."""
+    revision = os.environ.get("SZL_GIT_SHA", "").strip().lower()
+    observed = len(revision) == 40 and all(
+        character in "0123456789abcdef" for character in revision
+    )
+    return JSONResponse(
+        {
+            "service": "hatun-mcp",
+            "build": {
+                "state": "OBSERVED" if observed else "UNAVAILABLE",
+                "revision": revision if observed else None,
+            },
+            "runtime": {
+                "transport": "streamable-http",
+                "protocol_revision": DOCTRINE["protocol_revision"],
+            },
+            "receipt_minted": False,
+        },
+        status_code=200 if observed else 503,
+        headers={"Cache-Control": "no-store"},
+    )
+
+
 async def healthz(request: Request):
     return JSONResponse({"status": "ok", "service": "hatun-mcp",
                          "chain_verified": KHIPU.verify(),
@@ -315,7 +339,7 @@ _INDEX_JSON = {
     "mcp_endpoint": "/mcp/", "sse_endpoint": "/sse/",
     "server_card": "/.well-known/mcp/server-card.json",
     "connect": "/connect",
-    "healthz": "/healthz", "readyz": "/readyz", "pubkey": "/pubkey",
+    "healthz": "/healthz", "readyz": "/readyz", "build_info": "/api/build-info", "pubkey": "/pubkey",
     "docs": "https://github.com/szl-holdings/hatun-mcp",
 }
 
@@ -372,6 +396,7 @@ app = Starlette(
     routes=[
         Route("/", index),
         Route("/healthz", healthz),
+        Route("/api/build-info", build_info),
         Route("/readyz", readyz),
         Route("/pubkey", pubkey),
         Route("/connect", connect),
