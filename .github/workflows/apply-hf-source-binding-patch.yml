@@ -27,11 +27,15 @@ jobs:
       github.event.pull_request.head.ref == 'fix/source-bound-hf-deploy-v1'
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.pull_request.head.ref }}
-          persist-credentials: true
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
           fetch-depth: 1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
@@ -43,17 +47,90 @@ jobs:
           python scripts/apply_hf_source_binding_patch.py
           python -m py_compile hatun_mcp/server_http.py tests/test_http_routes.py tests/test_hf_deploy_contract.py
           git diff --check
-      - name: Commit source wiring when required
+      - name: Create one GitHub-signed exact patch commit
+        id: commit
+        shell: python
+        run: |
+          import base64
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+
+          paths = (
+              'README.md',
+              'hatun_mcp/server_http.py',
+              'tests/test_http_routes.py',
+              '.github/workflows/ci.yml',
+          )
+          changed = subprocess.run(
+              ['git', 'diff', '--quiet', '--', *paths],
+              check=False,
+          ).returncode != 0
+          if not changed:
+              print('Source binding is already exact.')
+              with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+                  output.write('created=false\n')
+              raise SystemExit(0)
+
+          additions = [
+              {
+                  'path': path,
+                  'contents': base64.b64encode(Path(path).read_bytes()).decode('ascii'),
+              }
+              for path in paths
+          ]
+          query = '''
+          mutation($input: CreateCommitOnBranchInput!) {
+            createCommitOnBranch(input: $input) {
+              commit { oid url }
+            }
+          }
+          '''
+          variables = {
+              'input': {
+                  'branch': {
+                      'repositoryNameWithOwner': os.environ['GITHUB_REPOSITORY'],
+                      'branchName': os.environ['HEAD_BRANCH'],
+                  },
+                  'message': {
+                      'headline': 'fix(hf): wire exact runtime source identity',
+                      'body': 'Signed-off-by: Stephen Lutar <stephenlutar2@gmail.com>',
+                  },
+                  'expectedHeadOid': os.environ['EXPECTED_HEAD'],
+                  'fileChanges': {'additions': additions},
+              }
+          }
+          payload = {'query': query, 'variables': variables}
+          process = subprocess.run(
+              ['gh', 'api', 'graphql', '--input', '-'],
+              input=json.dumps(payload),
+              text=True,
+              capture_output=True,
+              env=os.environ,
+          )
+          if process.returncode != 0:
+              print(process.stderr)
+              raise SystemExit(process.returncode)
+          response = json.loads(process.stdout)
+          errors = response.get('errors') or []
+          if errors:
+              print(json.dumps(errors, indent=2))
+              raise SystemExit(1)
+          commit = response['data']['createCommitOnBranch']['commit']
+          print(json.dumps(commit, indent=2, sort_keys=True))
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+              output.write('created=true\n')
+              output.write(f"sha={commit['oid']}\n")
+      - name: Verify exact branch head after signed publication
+        if: steps.commit.outputs.created == 'true'
         env:
-          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+          COMMIT_SHA: ${{ steps.commit.outputs.sha }}
         run: |
           set -euo pipefail
-          if git diff --quiet -- README.md hatun_mcp/server_http.py tests/test_http_routes.py .github/workflows/ci.yml; then
-            echo 'Source binding is already exact.'
-            exit 0
-          fi
-          git config user.name 'hatun-source-binding[bot]'
-          git config user.email 'hatun-source-binding@users.noreply.github.com'
-          git add README.md hatun_mcp/server_http.py tests/test_http_routes.py .github/workflows/ci.yml
-          git commit -s -m 'fix(hf): wire exact runtime source identity'
-          git push origin "HEAD:${HEAD_BRANCH}"
+          observed="$(gh api "repos/$GITHUB_REPOSITORY/branches/$HEAD_BRANCH" --jq .commit.sha)"
+          test "$observed" = "$COMMIT_SHA"
+          verification="$(gh api "repos/$GITHUB_REPOSITORY/commits/$COMMIT_SHA" --jq .commit.verification.verified)"
+          reason="$(gh api "repos/$GITHUB_REPOSITORY/commits/$COMMIT_SHA" --jq .commit.verification.reason)"
+          test "$verification" = 'true'
+          test "$reason" = 'valid'
