@@ -16,7 +16,7 @@ permissions:
 
 concurrency:
   group: apply-hatun-source-binding-${{ github.event.pull_request.number }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   apply:
@@ -47,7 +47,7 @@ jobs:
           python scripts/apply_hf_source_binding_patch.py
           python -m py_compile hatun_mcp/server_http.py tests/test_http_routes.py tests/test_hf_deploy_contract.py
           git diff --check
-      - name: Create one GitHub-signed exact patch commit
+      - name: Create one GitHub-signed exact source commit
         id: commit
         shell: python
         run: |
@@ -63,7 +63,6 @@ jobs:
               'README.md',
               'hatun_mcp/server_http.py',
               'tests/test_http_routes.py',
-              '.github/workflows/ci.yml',
           )
           changed = subprocess.run(
               ['git', 'diff', '--quiet', '--', *paths],
