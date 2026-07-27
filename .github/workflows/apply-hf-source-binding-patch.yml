@@ -1,0 +1,59 @@
+name: Apply Hatun HF Source Binding Patch — Controlled
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/apply-hf-source-binding-patch.yml
+      - scripts/apply_hf_source_binding_patch.py
+      - tests/test_hf_deploy_contract.py
+      - .github/workflows/hf-deploy.yml
+      - .github/workflows/hf-drift-check.yml
+      - .github/hf-module-drift-allow.json
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-hatun-source-binding-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    name: Deterministically wire build identity and card metadata
+    if: >-
+      github.repository == 'szl-holdings/hatun-mcp' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'fix/source-bound-hf-deploy-v1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          persist-credentials: true
+          fetch-depth: 1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Apply and compile the bounded changes
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/apply_hf_source_binding_patch.py
+          python scripts/apply_hf_source_binding_patch.py
+          python -m py_compile hatun_mcp/server_http.py tests/test_http_routes.py tests/test_hf_deploy_contract.py
+          git diff --check
+      - name: Commit source wiring when required
+        env:
+          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- README.md hatun_mcp/server_http.py tests/test_http_routes.py .github/workflows/ci.yml; then
+            echo 'Source binding is already exact.'
+            exit 0
+          fi
+          git config user.name 'hatun-source-binding[bot]'
+          git config user.email 'hatun-source-binding@users.noreply.github.com'
+          git add README.md hatun_mcp/server_http.py tests/test_http_routes.py .github/workflows/ci.yml
+          git commit -s -m 'fix(hf): wire exact runtime source identity'
+          git push origin "HEAD:${HEAD_BRANCH}"
