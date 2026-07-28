@@ -7,7 +7,7 @@ sdk: docker
 app_port: 7860
 pinned: false
 license: apache-2.0
-short_description: Source-bound MCP gateway with PURIQ gates, Khipu receipts, and DSSE responses
+short_description: Source-bound MCP gateway with signed governance receipts
 ---
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
