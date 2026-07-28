@@ -20,6 +20,12 @@ def test_space_card_is_source_controlled_and_complete():
     )
     for marker in required:
         assert marker in header, marker
+    short_description = next(
+        line.removeprefix("short_description: ").strip()
+        for line in header.splitlines()
+        if line.startswith("short_description: ")
+    )
+    assert len(short_description) <= 60
 
 
 def test_deployer_is_pinned_source_bound_and_automatic():
