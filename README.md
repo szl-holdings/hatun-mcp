@@ -76,6 +76,8 @@ formula:
 
 - **LIVE**: a runtime-backed route with source and observation time. It never means perpetual
   availability.
+- **PARTIAL**: Hatun is locally ready, but one or more required upstream organ observations are
+  missing, stale, or degraded.
 - **SAMPLE**: checked-in configuration, payload, or transcript for reuse; not observed runtime
   evidence.
 - **SIMULATED**: a mocked backend or hermetic test fixture. CI intentionally uses these where
@@ -116,7 +118,14 @@ formula:
 ### Recorded reachability snapshot (HONESTY OVER CHECKLIST)
 
 The table below records repository evidence dated **2026-06-16**. It is not a current health
-probe. Re-evaluate the hosted contract below before presenting any row as currently **LIVE**.
+probe. `/healthz` and `/readyz` establish Hatun's local process, receipt chain, and signer only;
+they do not probe the upstream organs. Before presenting any row as currently **LIVE**, make a
+separate bounded, read-only probe of that row's listed route (or a documented non-mutating
+readiness route), and record the response status, source, and observation timestamp. For
+POST-only or state-changing surfaces, use a pre-authorized non-mutating contract probe or a
+timestamped receipt; never trigger an action merely to claim availability. If any required
+upstream observation is missing, stale, or unusable, present that row as **PARTIAL** or
+**UNAVAILABLE**.
 
 | Backend organ | Catalog route | Recorded state (2026-06-16) |
 |-----------------|---------------|-------------------|
@@ -177,10 +186,15 @@ curl -i https://szlholdings-hatun-mcp.hf.space/healthz
 curl -i https://szlholdings-hatun-mcp.hf.space/readyz
 ```
 
-Record the response status and observation time. Report `healthz=200` as process liveness only.
-Report `readyz=200` as the repository-defined signed-release readiness result only. A timeout,
-connection failure, or non-successful readiness response is **UNAVAILABLE** or degraded evidence,
-not permission to fall back to the sample client configuration.
+Record the response status and observation time. Report `healthz=200` as Hatun process liveness
+only. Report `readyz=200` as Hatun's repository-defined local receipt-chain and signer readiness
+only. These checks do not establish killinchu or a11oy organ availability. Before labeling any
+upstream row **LIVE**, separately run a bounded, read-only probe of its listed route (or a
+documented non-mutating readiness route) and record the route, response status, source, and
+observation timestamp. For POST-only or state-changing surfaces, require a pre-authorized
+non-mutating contract probe or timestamped receipt instead of triggering an action. If Hatun is
+ready but an upstream observation is missing, stale, or unusable, report that row as **PARTIAL**
+or **UNAVAILABLE**. Never fall back to the sample client configuration.
 
 ---
 
