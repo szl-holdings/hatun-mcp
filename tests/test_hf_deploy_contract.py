@@ -84,6 +84,23 @@ def test_runtime_exposes_fail_closed_build_identity():
         assert marker in source, marker
 
 
+def test_readme_separates_hatun_readiness_from_upstream_live_evidence():
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    normalized = " ".join(readme.split())
+    required = (
+        "**PARTIAL**: Hatun is locally ready",
+        "Hatun's local process, receipt chain, and signer only",
+        "they do not probe the upstream organs",
+        "separate bounded, read-only probe",
+        "response status, source, and observation timestamp",
+        "never trigger an action merely to claim availability",
+        "present that row as **PARTIAL** or **UNAVAILABLE**",
+        "These checks do not establish killinchu or a11oy organ availability",
+    )
+    for marker in required:
+        assert marker in normalized, marker
+
+
 def test_dockerfile_deploy_set_contains_build_identity_code_and_card():
     dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
     assert "COPY hatun_mcp/server_http.py" in dockerfile
