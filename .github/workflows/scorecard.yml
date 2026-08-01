@@ -20,5 +20,5 @@ jobs:
       contents: read
       security-events: write
       id-token: write
-    uses: szl-holdings/.github/.github/workflows/reusable-scorecard.yml@ebd2128c691b850c84438b671fbb512945933776
+    uses: szl-holdings/.github/.github/workflows/reusable-scorecard.yml@47607d3149dd54c4e107d7eeb2129ebdff5d2d03
     secrets: inherit
