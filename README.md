@@ -64,6 +64,25 @@ formula:
 6. Mint a **Khipu receipt** on success **and** failure (append-only sha256 DAG).
 7. Return a **DSSE-signed** response — the client receives the **receipt hash**.
 
+### Choose your route
+
+| Audience | Start here | Evidence boundary |
+|----------|------------|-------------------|
+| **Developer** | [Run locally](#run-locally-stdio), then inspect `tools/list` | Local startup proves only the local process; backend reachability is separate |
+| **Integrator** | [MCP client setup](#mcp-client-setup) | The checked-in client configuration is **SAMPLE** and does not include credentials |
+| **Evaluator** | [Hosted health contracts](#evaluate-the-hosted-contract), then [Tests](#tests) | `/healthz` is liveness; `/readyz` is signed-release readiness; neither is an uptime guarantee |
+
+### KANCHAY status contract
+
+- **LIVE**: a runtime-backed route with source and observation time. It never means perpetual
+  availability.
+- **SAMPLE**: checked-in configuration, payload, or transcript for reuse; not observed runtime
+  evidence.
+- **SIMULATED**: a mocked backend or hermetic test fixture. CI intentionally uses these where
+  external services would make tests nondeterministic.
+- **UNAVAILABLE**: the dependency or readiness check cannot produce a usable result. Preserve the
+  reason and do not substitute sample data.
+
 ### Tools exposed
 
 - **25 static tools** registered at import (verifiable: `tools/list` returns 25 with
@@ -94,9 +113,12 @@ formula:
 > (open-LLM tier router). Hatun-MCP addresses them by these honest role names; the
 > live routes are published in `/openapi.json`.
 
-### Honest reachability (HONESTY OVER CHECKLIST)
+### Recorded reachability snapshot (HONESTY OVER CHECKLIST)
 
-| Backend organ | Catalog route | Status 2026-06-16 |
+The table below records repository evidence dated **2026-06-16**. It is not a current health
+probe. Re-evaluate the hosted contract below before presenting any row as currently **LIVE**.
+
+| Backend organ | Catalog route | Recorded state (2026-06-16) |
 |-----------------|---------------|-------------------|
 | a11oy — **llm** open-LLM tier router | `GET /api/a11oy/v1/llm/tiers` | **LIVE (200)** — `llm_tiers` derived from the live tier catalog |
 | killinchu | `/api/killinchu/v1/mcp/tools` | **LIVE** — 4 tools (cue/halt_drone are 2-person) |
@@ -147,6 +169,18 @@ is the fail-closed investor/deployment contract: it returns `200` only when the
 receipt chain verifies and a non-placeholder signing key is active; otherwise it
 returns `503` with the failing check named. The public server card advertises only
 the API-key scheme that this server actually implements.
+
+## Evaluate the hosted contract
+
+```bash
+curl -i https://szlholdings-hatun-mcp.hf.space/healthz
+curl -i https://szlholdings-hatun-mcp.hf.space/readyz
+```
+
+Record the response status and observation time. Report `healthz=200` as process liveness only.
+Report `readyz=200` as the repository-defined signed-release readiness result only. A timeout,
+connection failure, or non-successful readiness response is **UNAVAILABLE** or degraded evidence,
+not permission to fall back to the sample client configuration.
 
 ---
 
