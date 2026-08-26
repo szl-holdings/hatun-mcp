@@ -6,7 +6,10 @@ on:
     paths:
       - README.md
       - Dockerfile
+      - requirements.txt
+      - hatun_mcp/server.py
       - hatun_mcp/server_http.py
+      - tests/test_dependency_contract.py
       - tests/test_http_routes.py
       - tests/test_hf_deploy_contract.py
       - .github/workflows/hf-deploy.yml
@@ -18,7 +21,10 @@ on:
     paths:
       - README.md
       - Dockerfile
+      - requirements.txt
+      - hatun_mcp/server.py
       - hatun_mcp/server_http.py
+      - tests/test_dependency_contract.py
       - tests/test_http_routes.py
       - tests/test_hf_deploy_contract.py
       - .github/workflows/hf-deploy.yml

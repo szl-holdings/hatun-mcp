@@ -105,3 +105,15 @@ def test_dockerfile_deploy_set_contains_build_identity_code_and_card():
     dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
     assert "COPY hatun_mcp/server_http.py" in dockerfile
     assert "COPY README.md" in dockerfile
+
+
+def test_source_contract_runs_for_runtime_dependency_changes():
+    workflow = (ROOT / ".github/workflows/hf-deploy-contract.yml").read_text(
+        encoding="utf-8"
+    )
+    for path in (
+        "requirements.txt",
+        "hatun_mcp/server.py",
+        "tests/test_dependency_contract.py",
+    ):
+        assert workflow.count(f"- {path}") == 2, path
