@@ -32,6 +32,13 @@ updates:
       python-deps:
         patterns:
           - "*"
+    # Hatun imports mcp.server.fastmcp, which was removed in mcp 2.x.
+    # Keep receiving compatible 1.x updates without reopening the major-version
+    # outage that reached protected main in Dependabot PR #84.
+    ignore:
+      - dependency-name: "mcp"
+        update-types:
+          - "version-update:semver-major"
 
   # Docker base images
   - package-ecosystem: "docker"
