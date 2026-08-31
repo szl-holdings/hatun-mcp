@@ -15,19 +15,8 @@ All contributions must comply with **Doctrine v11 LOCKED** (749/14/163):
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/your-change`)
-3. Commit with DCO sign-off:
-   ```
-   Signed-off-by: Your Name <email@example.com>
-   ```
-4. Open a Pull Request — one reviewer required (see CODEOWNERS)
-
-## DCO Sign-off
-
-All commits require a DCO sign-off trailer:
-
-```bash
-git commit --signoff -m "your message"
-```
+3. Commit the focused change.
+4. Open a Pull Request and address every applicable CI finding.
 
 ## Code of Conduct
 
