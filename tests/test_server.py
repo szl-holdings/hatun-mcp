@@ -77,9 +77,25 @@ def test_formula_evaluate_real_math():
     assert abs(out["data"]["value"] - 0.5) < 1e-9
 
 
-def test_lambda_quorum_shape_and_bls():
-    # No network (backends time out fast / 404) -> organs unreachable -> NO_QUORUM,
-    # but the envelope + quorum + bls_aggregate blocks must be well-formed and HONEST.
+def test_lambda_quorum_shape_and_bls(monkeypatch):
+    # Deterministic no-network misses -> NO_QUORUM, while the envelope, quorum,
+    # per-organ receipts, and aggregate remain well-formed and honest.
+    class UnavailableAdapter:
+        async def call(self, _operation, _payload):
+            return {
+                "deployed": False,
+                "http_status": 503,
+                "endpoint": "test://unavailable",
+                "error": "hermetic test miss",
+            }
+
+    monkeypatch.setattr(
+        "hatun_mcp.adapters.build_adapters",
+        lambda: {
+            organ: UnavailableAdapter()
+            for organ in ("a11oy", "immune", "companion", "llm", "killinchu")
+        },
+    )
     out = asyncio.run(S.szl_lambda_quorum(
         action={"op": "promote", "risk": "high"}, context={"env": "prod"}))
     _assert_envelope(out)
@@ -90,6 +106,35 @@ def test_lambda_quorum_shape_and_bls():
     agg = out["governance"]["bls_aggregate"]
     assert agg["mode"] in ("BLS12-381", "MERKLE-AGG")
     assert len(agg["receipt_hashes"]) == 5  # one per organ contribution
+
+
+def test_lambda_quorum_converts_adapter_exceptions_to_honest_misses(monkeypatch):
+    class RaisingAdapter:
+        async def call(self, _operation, _payload):
+            raise TimeoutError("sensitive transport detail must not escape")
+
+    monkeypatch.setattr(
+        "hatun_mcp.adapters.build_adapters",
+        lambda: {
+            organ: RaisingAdapter()
+            for organ in ("a11oy", "immune", "companion", "llm", "killinchu")
+        },
+    )
+    out = asyncio.run(
+        S.szl_lambda_quorum(
+            action={"op": "promote", "risk": "high"}, context={"env": "prod"}
+        )
+    )
+    quorum = out["governance"]["quorum"]
+    aggregate = out["governance"]["bls_aggregate"]
+    loop = out["governance"]["loop"]
+    assert quorum["outcome"] == "NO_QUORUM"
+    assert quorum["reachable"] == 0
+    assert quorum["total"] == 5
+    assert aggregate["n_organs"] == 5
+    assert len(aggregate["receipt_hashes"]) == 5
+    assert loop["exit"] == "converged"
+    assert "sensitive transport detail" not in str(out)
 
 
 def test_khipu_chain_verifies_after_calls():

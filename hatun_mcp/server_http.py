@@ -6,8 +6,9 @@ Wraps the FastMCP app in a Starlette application that:
     or X-Api-Key). Resolves key -> client_id + scope and sets the request contextvars.
   * validates the Origin header (DNS-rebinding defense; MCP transport requirement).
   * honors X-Sovereign-Mode and X-Second-Approver headers (Frontier #4, 2-person gate).
-  * serves /.well-known/mcp/server-card.json so registries (Smithery) can enumerate
+  * serves the draft server-card discovery extension so registries can enumerate
     the 25 static tools even behind the auth wall.
+  * binds the exact card bytes to a cached in-toto Statement v1 / DSSE artifact.
   * serves /healthz, /readyz, and /pubkey (DSSE verification key).
 
 Run:  uvicorn hatun_mcp.server_http:app --host 0.0.0.0 --port 7860
@@ -22,14 +23,20 @@ import os
 from starlette.applications import Starlette
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse
+from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response
 from starlette.routing import Mount, Route
 
 from .server import (
     SIGNER, CLIENTS, KHIPU, mcp,
     _ctx_client, _ctx_scope, _ctx_sovereign, _ctx_second_approver,
 )
-from .governance import DOCTRINE
+from .governance import (
+    DOCTRINE,
+    DSSE_KEY_ID,
+    IN_TOTO_PAYLOAD_TYPE,
+    IN_TOTO_STATEMENT_TYPE,
+    DsseSigner,
+)
 from .console import CONSOLE_HTML
 
 ALLOWED_ORIGINS = set(
@@ -38,6 +45,22 @@ ALLOWED_ORIGINS = set(
         "https://szlholdings-hatun-mcp.hf.space,https://smithery.ai,http://localhost",
     ).split(",")
 )
+
+PUBLIC_BASE = "https://szlholdings-hatun-mcp.hf.space"
+MCP_MANIFEST_PATH = "/.well-known/mcp"
+MCP_MANIFEST_URI = f"{PUBLIC_BASE}{MCP_MANIFEST_PATH}"
+MCP_MANIFEST_ATTESTATION_PATH = "/.well-known/mcp-manifest-attestation"
+MCP_MANIFEST_ATTESTATION_URI = f"{PUBLIC_BASE}{MCP_MANIFEST_ATTESTATION_PATH}"
+MCP_MANIFEST_PREDICATE_TYPE = (
+    "https://szlholdings.com/attestations/mcp-manifest/v1"
+)
+SOURCE_REPOSITORY = "https://github.com/szl-holdings/hatun-mcp"
+_DISCOVERY_HEADERS = {
+    "Cache-Control": "no-store",
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET",
+    "Access-Control-Allow-Headers": "Content-Type",
+}
 
 # Fixed domain-separation salt + iteration count for the API-key fingerprint KDF.
 # The salt is a public, non-secret constant: it makes the fingerprint deterministic
@@ -207,18 +230,140 @@ def _server_card() -> dict:
     }
 
 
+def _deterministic_json_bytes(value: dict) -> bytes:
+    """Serialize public discovery artifacts into one stable UTF-8 byte form."""
+    return json.dumps(
+        value,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    ).encode("utf-8")
+
+
+def _exact_source_revision(value: str | None) -> str | None:
+    revision = (value or "").strip().lower()
+    if len(revision) == 40 and all(
+        character in "0123456789abcdef" for character in revision
+    ):
+        return revision
+    return None
+
+
+def _build_manifest_attestation(
+    *,
+    manifest_bytes: bytes,
+    signer: DsseSigner,
+    source_revision: str | None,
+) -> dict:
+    """Bind the exact served card bytes to an in-toto Statement v1.
+
+    This function has no request input. The caller caches its result once per
+    process, so the public GET cannot be repurposed as a signing oracle.
+    """
+    digest = hashlib.sha256(manifest_bytes).hexdigest()
+    revision = _exact_source_revision(source_revision)
+    signing_state = "SIGNED" if signer.mode == "ECDSA-P256" else "UNSIGNED"
+    statement = {
+        "_type": IN_TOTO_STATEMENT_TYPE,
+        "subject": [
+            {
+                "name": MCP_MANIFEST_URI,
+                "digest": {"sha256": digest},
+            }
+        ],
+        "predicateType": MCP_MANIFEST_PREDICATE_TYPE,
+        "predicate": {
+            "manifest": {
+                "uri": MCP_MANIFEST_URI,
+                "mediaType": "application/json",
+                "byteLength": len(manifest_bytes),
+            },
+            "producer": {
+                "service": "hatun-mcp",
+                "repository": SOURCE_REPOSITORY,
+                "sourceRevision": {
+                    "state": "OBSERVED" if revision else "UNAVAILABLE",
+                    "value": revision,
+                },
+            },
+            "attestation": {
+                "signingState": signing_state,
+                "algorithm": "ECDSA-P256" if signing_state == "SIGNED" else None,
+                "transparencyLog": "UNAVAILABLE",
+            },
+            "scope": {
+                "integrity": "EXACT_BYTES",
+                "runtimeToolParity": "NOT_ATTESTED",
+                "mcpServerCardSpecification": "DRAFT_EXTENSION",
+            },
+        },
+    }
+    envelope = signer.sign_in_toto(statement)
+    signed = envelope is not None
+    if signed != (signing_state == "SIGNED"):
+        raise RuntimeError("manifest attestation signer state is inconsistent")
+    return {
+        "schemaVersion": "1.0",
+        "manifest": {
+            "uri": MCP_MANIFEST_URI,
+            "mediaType": "application/json",
+            "byteLength": len(manifest_bytes),
+            "digest": {"sha256": digest},
+        },
+        "statement": statement,
+        "dsseEnvelope": envelope,
+        "signing": {
+            "state": signing_state,
+            "signerMode": signer.mode,
+            "keyid": DSSE_KEY_ID if signed else None,
+            "publicKey": f"{PUBLIC_BASE}/pubkey" if signed else None,
+            "transparencyLog": "UNAVAILABLE",
+        },
+        "receiptMinted": False,
+    }
+
+
+# These are immutable process artifacts. Every server-card alias serves the exact
+# bytes hashed below, and the fixed attestation is signed at most once per start.
+_SERVER_CARD_BYTES = _deterministic_json_bytes(_server_card())
+_MANIFEST_ATTESTATION = _build_manifest_attestation(
+    manifest_bytes=_SERVER_CARD_BYTES,
+    signer=SIGNER,
+    source_revision=os.environ.get("SZL_GIT_SHA"),
+)
+_MANIFEST_ATTESTATION_BYTES = _deterministic_json_bytes(_MANIFEST_ATTESTATION)
+
+
 async def server_card(request: Request):
-    return JSONResponse(_server_card())
+    return Response(
+        _SERVER_CARD_BYTES,
+        media_type="application/json",
+        headers=_DISCOVERY_HEADERS,
+    )
 
 
-# Convenience aliases for the server card. The canonical discovery doc lives at
-# /.well-known/mcp/server-card.json (MCP well-known convention); these short,
-# guessable paths are the ones a human pokes at first. They serve the SAME real
-# card (not a redirect to avoid the http-scheme downgrade some proxies apply to
-# 3xx Location headers) so "inspect the server card" resolves no matter which
+# Convenience aliases for the draft server-card discovery extension. This
+# project's canonical document lives at /.well-known/mcp/server-card.json; the
+# short, guessable paths are the ones a human pokes at first. They serve the SAME
+# real card (not a redirect to avoid the http-scheme downgrade some proxies apply
+# to 3xx Location headers) so "inspect the server card" resolves no matter which
 # path the caller tried.
 async def server_card_alias(request: Request):
-    return JSONResponse(_server_card())
+    return Response(
+        _SERVER_CARD_BYTES,
+        media_type="application/json",
+        headers=_DISCOVERY_HEADERS,
+    )
+
+
+async def manifest_attestation(request: Request):
+    """Return the fixed in-toto/DSSE binding for the public MCP card."""
+    return Response(
+        _MANIFEST_ATTESTATION_BYTES,
+        media_type="application/json",
+        headers=_DISCOVERY_HEADERS,
+    )
 
 
 # The agent-connect descriptor: the real, working way to wire an MCP client into
@@ -227,7 +372,7 @@ async def server_card_alias(request: Request):
 # proxy that redirect's Location downgrades to http://, which trips strict
 # clients). Giving clients /mcp/ directly avoids the redirect entirely.
 def _connect_info() -> dict:
-    base = "https://szlholdings-hatun-mcp.hf.space"
+    base = PUBLIC_BASE
     return {
         "service": "hatun-mcp",
         "transport": "streamable-http",
@@ -239,6 +384,7 @@ def _connect_info() -> dict:
             "note": "An SZL API key is required; anonymous calls are declined and receipted.",
         },
         "server_card": f"{base}/.well-known/mcp/server-card.json",
+        "manifest_attestation": MCP_MANIFEST_ATTESTATION_URI,
         "clients": {
             "claude_desktop": {
                 "mcpServers": {
@@ -338,6 +484,7 @@ _INDEX_JSON = {
     "service": "hatun-mcp", "tagline": "the great context protocol",
     "mcp_endpoint": "/mcp/", "sse_endpoint": "/sse/",
     "server_card": "/.well-known/mcp/server-card.json",
+    "manifest_attestation": MCP_MANIFEST_ATTESTATION_PATH,
     "connect": "/connect",
     "healthz": "/healthz", "readyz": "/readyz", "build_info": "/api/build-info", "pubkey": "/pubkey",
     "docs": "https://github.com/szl-holdings/hatun-mcp",
@@ -403,6 +550,7 @@ app = Starlette(
         Route("/.well-known/mcp/server-card.json", server_card),
         Route("/.well-known/mcp", server_card_alias),
         Route("/.well-known/mcp/", server_card_alias),
+        Route(MCP_MANIFEST_ATTESTATION_PATH, manifest_attestation),
         Route("/server-card", server_card_alias),
         Route("/card", server_card_alias),
         Mount("/mcp", app=http_app),

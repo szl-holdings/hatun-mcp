@@ -619,7 +619,34 @@ async def szl_lambda_quorum(action: dict, context: Any = None,
             return None
         # Each organ evaluates the action via its policy/verdict route.
         trace.add("network", f"organ '{organ}': policy_evaluate")
-        res = await ad.call("policy_evaluate", {"action": action, "context": context or {}})
+        try:
+            res = await ad.call(
+                "policy_evaluate", {"action": action, "context": context or {}}
+            )
+        except Exception as exc:  # noqa: BLE001 - one organ cannot abort the bounded quorum walk
+            # Convert transport/library failures into an honest unreachable
+            # contribution.  Do not expose exception text: it may contain a URL,
+            # proxy detail, or credential-bearing transport context.
+            trace.add(
+                "error",
+                f"organ '{organ}': adapter transport failure ({type(exc).__name__})",
+            )
+            res = {
+                "deployed": False,
+                "http_status": None,
+                "endpoint": None,
+                "error": "adapter transport failure",
+                "reason": type(exc).__name__,
+            }
+        if not isinstance(res, dict):
+            trace.add("error", f"organ '{organ}': adapter returned a non-object result")
+            res = {
+                "deployed": False,
+                "http_status": None,
+                "endpoint": None,
+                "error": "adapter returned a non-object result",
+                "reason": "INVALID_ADAPTER_RESPONSE",
+            }
         reachable = bool(res.get("deployed")) and res.get("error") in (None, "")
         verdict = None
         if reachable and isinstance(res.get("data"), dict):
