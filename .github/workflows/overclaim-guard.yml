@@ -17,4 +17,4 @@ permissions:
 
 jobs:
   overclaim:
-    uses: szl-holdings/.github/.github/workflows/reusable-overclaim-guard.yml@main
+    uses: szl-holdings/.github/.github/workflows/reusable-overclaim-guard.yml@464069d945b10e51893fc749f5530b7643f23ad4
