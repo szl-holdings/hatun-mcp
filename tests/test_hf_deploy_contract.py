@@ -39,6 +39,7 @@ def test_deployer_is_pinned_source_bound_and_automatic():
         "prune: true",
         "source-revision-variable: SZL_GIT_SHA",
         "source-revision-probe-path: /api/build-info",
+        '"/.well-known/mcp-manifest-attestation"',
         '"/api/build-info"',
         "HF_TOKEN: ${{ secrets.HF_ORG_TOKEN || secrets.HF_TOKEN }}",
     )
@@ -82,6 +83,25 @@ def test_runtime_exposes_fail_closed_build_identity():
     )
     for marker in required:
         assert marker in source, marker
+
+
+def test_runtime_exposes_exact_byte_manifest_attestation():
+    source = (ROOT / "hatun_mcp/server_http.py").read_text(encoding="utf-8")
+    governance = (ROOT / "hatun_mcp/governance.py").read_text(encoding="utf-8")
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    required_source = (
+        'MCP_MANIFEST_ATTESTATION_PATH = "/.well-known/mcp-manifest-attestation"',
+        'MCP_MANIFEST_PREDICATE_TYPE = (',
+        "hashlib.sha256(manifest_bytes).hexdigest()",
+        "_SERVER_CARD_BYTES = _deterministic_json_bytes(_server_card())",
+        "_MANIFEST_ATTESTATION_BYTES = _deterministic_json_bytes(",
+        "Route(MCP_MANIFEST_ATTESTATION_PATH, manifest_attestation)",
+    )
+    for marker in required_source:
+        assert marker in source, marker
+    assert 'IN_TOTO_PAYLOAD_TYPE = "application/vnd.in-toto+json"' in governance
+    assert "dsseEnvelope=null" in readme
+    assert "DRAFT extension" in readme
 
 
 def test_readme_separates_hatun_readiness_from_upstream_live_evidence():

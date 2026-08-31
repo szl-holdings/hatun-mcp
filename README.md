@@ -179,6 +179,28 @@ receipt chain verifies and a non-placeholder signing key is active; otherwise it
 returns `503` with the failing check named. The public server card advertises only
 the API-key scheme that this server actually implements.
 
+### MCP manifest attestation
+
+`GET /.well-known/mcp-manifest-attestation` returns a cached integrity binding for
+the exact raw bytes served by `GET /.well-known/mcp` (all server-card aliases serve
+those same bytes). It contains a deterministic
+[`https://in-toto.io/Statement/v1`](https://in-toto.io/Statement/v1) with SHA-256
+subject digest and the custom predicate type
+`https://szlholdings.com/attestations/mcp-manifest/v1`. When the existing P-256
+signing key is configured, the statement is carried in a real DSSE envelope whose
+`payloadType` is `application/vnd.in-toto+json`. Without that key, the response is
+explicitly `signing.state=UNSIGNED` with `dsseEnvelope=null`; an empty signature is
+never presented as signed.
+
+The artifact is built once at process start and accepts no caller-supplied signing
+payload. It does not mint a Khipu receipt. Its scope is byte integrity only: it does
+not attest runtime tool parity, upstream availability, or the behavior behind the
+card. The MCP server card and this well-known route are an SZL **DRAFT extension**,
+not a claim of a ratified MCP discovery standard. `keyid` is only a hint; verifiers
+must establish trust in the P-256 public key out of band (the same-origin `/pubkey`
+route is not an independent trust anchor). Transparency-log inclusion remains
+explicitly unavailable.
+
 ## Evaluate the hosted contract
 
 ```bash
@@ -255,6 +277,7 @@ HATUN_MCP_DISABLE_DYNAMIC=true python -m pytest tests/ -q
 # tests/test_quorum.py    — quorum math + threshold edge cases + BLS aggregate
 # tests/test_adapters.py  — mocked organ endpoints, adapter wiring + honest gaps
 # tests/test_governance.py— Khipu chain, Yuyay gate, PURIQ factor (pre-existing)
+# tests/test_http_routes.py — exact-byte card attestation + public HTTP contracts
 ```
 
 ## The Ouroboros loop (doctrine cross-reference)

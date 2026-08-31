@@ -37,6 +37,6 @@ jobs:
       wait-running: 1200
       source-revision-variable: SZL_GIT_SHA
       source-revision-probe-path: /api/build-info
-      smoke-paths: '["/","/healthz","/.well-known/mcp/server-card.json","/api/build-info"]'
+      smoke-paths: '["/","/healthz","/.well-known/mcp/server-card.json","/.well-known/mcp-manifest-attestation","/api/build-info"]'
     secrets:
       HF_TOKEN: ${{ secrets.HF_ORG_TOKEN || secrets.HF_TOKEN }}

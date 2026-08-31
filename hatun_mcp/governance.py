@@ -60,6 +60,9 @@ DOCTRINE = {
 
 # ── DSSE signer (real ECDSA P-256) ──────────────────────────────────────────────
 DSSE_PAYLOAD_TYPE = "application/vnd.szl.hatun-mcp.response+json"
+IN_TOTO_PAYLOAD_TYPE = "application/vnd.in-toto+json"
+IN_TOTO_STATEMENT_TYPE = "https://in-toto.io/Statement/v1"
+DSSE_KEY_ID = "szlholdings-ec-p256"
 
 
 def _pae(payload_type: str, payload: bytes) -> bytes:
@@ -137,9 +140,49 @@ class DsseSigner:
         if self._key is not None:
             sig = self._key.sign(_pae(DSSE_PAYLOAD_TYPE, payload), ec.ECDSA(hashes.SHA256()))
             env["signatures"].append(
-                {"keyid": "szlholdings-ec-p256", "sig": base64.b64encode(sig).decode()}
+                {"keyid": DSSE_KEY_ID, "sig": base64.b64encode(sig).decode()}
             )
         return env
+
+    def sign_in_toto(self, statement: dict) -> Optional[dict]:
+        """Sign one internally constructed in-toto Statement v1.
+
+        The returned object contains only the standard DSSE envelope fields and
+        uses the in-toto payload media type required by in-toto verifiers. An
+        unkeyed process returns ``None`` instead of emitting an invalid empty-
+        signature envelope. Callers must expose that state explicitly as
+        UNSIGNED; they must never promote the receipt signer's PLACEHOLDER mode
+        to a cryptographic attestation.
+        """
+        if (
+            not isinstance(statement, dict)
+            or statement.get("_type") != IN_TOTO_STATEMENT_TYPE
+        ):
+            raise ValueError("sign_in_toto requires an in-toto Statement v1 object")
+        if self._key is None:
+            return None
+
+        payload = json.dumps(
+            statement,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+            allow_nan=False,
+        ).encode("utf-8")
+        signature = self._key.sign(
+            _pae(IN_TOTO_PAYLOAD_TYPE, payload),
+            ec.ECDSA(hashes.SHA256()),
+        )
+        return {
+            "payloadType": IN_TOTO_PAYLOAD_TYPE,
+            "payload": base64.b64encode(payload).decode("ascii"),
+            "signatures": [
+                {
+                    "keyid": DSSE_KEY_ID,
+                    "sig": base64.b64encode(signature).decode("ascii"),
+                }
+            ],
+        }
 
 
 # ── Khipu receipt chain (real append-only sha256 chain) ─────────────────────────

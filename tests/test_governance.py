@@ -1,9 +1,13 @@
 """Tests for the Hatun-MCP governance core + tool pipeline. Real logic, no network needed
 for the governance tests (backends are exercised separately in smoke tests)."""
 import asyncio
+import base64
+import json
 import os
 import sys
 
+import pytest
+from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from cryptography.hazmat.primitives.serialization import (
     Encoding,
@@ -14,8 +18,17 @@ from cryptography.hazmat.primitives.serialization import (
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from hatun_mcp.governance import (  # noqa: E402
-    ClientRegistry, DsseSigner, KhipuChain, hatun_mcp_factor, hukla_check,
-    puriq_utility, yuyay_gate,
+    DSSE_KEY_ID,
+    IN_TOTO_PAYLOAD_TYPE,
+    IN_TOTO_STATEMENT_TYPE,
+    ClientRegistry,
+    DsseSigner,
+    KhipuChain,
+    _pae,
+    hatun_mcp_factor,
+    hukla_check,
+    puriq_utility,
+    yuyay_gate,
 )
 
 
@@ -133,6 +146,62 @@ def test_dsse_rejects_non_p256_ec_key(monkeypatch):
 
     assert signer.mode == "PLACEHOLDER"
     assert signer.sign({"probe": True})["signatures"] == []
+
+
+def _in_toto_statement() -> dict:
+    return {
+        "_type": IN_TOTO_STATEMENT_TYPE,
+        "subject": [
+            {
+                "name": "https://example.test/.well-known/mcp",
+                "digest": {"sha256": "a" * 64},
+            }
+        ],
+        "predicateType": "https://example.test/attestations/mcp-manifest/v1",
+        "predicate": {"integrity": "EXACT_BYTES"},
+    }
+
+
+def test_in_toto_dsse_uses_standard_payload_type_and_real_signature(monkeypatch):
+    key = ec.generate_private_key(ec.SECP256R1())
+    monkeypatch.setenv("HATUN_MCP_SIGNING_KEY", _private_key_pem(key))
+    signer = DsseSigner()
+    statement = _in_toto_statement()
+
+    envelope = signer.sign_in_toto(statement)
+
+    assert envelope is not None
+    assert set(envelope) == {"payloadType", "payload", "signatures"}
+    assert envelope["payloadType"] == IN_TOTO_PAYLOAD_TYPE
+    assert len(envelope["signatures"]) == 1
+    assert envelope["signatures"][0]["keyid"] == DSSE_KEY_ID
+
+    payload = base64.b64decode(envelope["payload"], validate=True)
+    assert json.loads(payload) == statement
+    signature = base64.b64decode(envelope["signatures"][0]["sig"], validate=True)
+    key.public_key().verify(
+        signature,
+        _pae(IN_TOTO_PAYLOAD_TYPE, payload),
+        ec.ECDSA(hashes.SHA256()),
+    )
+
+
+def test_in_toto_dsse_is_explicitly_absent_without_key(monkeypatch):
+    monkeypatch.delenv("HATUN_MCP_SIGNING_KEY", raising=False)
+    monkeypatch.delenv("HATUN_MCP_SIGNING_KEY_PATH", raising=False)
+    signer = DsseSigner()
+
+    assert signer.mode == "PLACEHOLDER"
+    assert signer.sign_in_toto(_in_toto_statement()) is None
+
+
+def test_in_toto_dsse_rejects_non_statement_payload(monkeypatch):
+    monkeypatch.delenv("HATUN_MCP_SIGNING_KEY", raising=False)
+    monkeypatch.delenv("HATUN_MCP_SIGNING_KEY_PATH", raising=False)
+    signer = DsseSigner()
+
+    with pytest.raises(ValueError, match="Statement v1"):
+        signer.sign_in_toto({"_type": "not-an-in-toto-statement"})
 
 
 def test_tool_pipeline_declines_anonymous():
