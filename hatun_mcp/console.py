@@ -96,8 +96,13 @@ header nav a:hover{color:var(--ink)}
   position:absolute; inset:0; width:100%; height:100%;
   opacity:.72; pointer-events:none;
 }
+/* scrim: fade the point-cloud to black over the text column so copy never collides */
+.hero::after{content:""; position:absolute; inset:0; z-index:1; pointer-events:none;
+  background:
+    radial-gradient(120% 100% at 78% 42%, transparent 30%, #000 82%),
+    linear-gradient(to right, #000 0%, rgba(0,0,0,.72) 42%, rgba(0,0,0,.12) 100%);}
 .hero .wrap{
-  position:relative; z-index:2;
+  position:relative; z-index:2; max-width:760px;
   padding-top:clamp(56px,14vw,110px); padding-bottom:clamp(48px,12vw,96px);
 }
 .hero h1{
