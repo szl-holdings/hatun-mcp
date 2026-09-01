@@ -26,6 +26,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response
 from starlette.routing import Mount, Route
 
+from . import server as _server
 from .server import (
     SIGNER, CLIENTS, KHIPU, mcp,
     _ctx_client, _ctx_scope, _ctx_sovereign, _ctx_second_approver,
@@ -38,6 +39,7 @@ from .governance import (
     DsseSigner,
 )
 from .console import CONSOLE_HTML
+from .state import console_state, set_card_tool_names
 
 ALLOWED_ORIGINS = set(
     o.strip() for o in os.environ.get(
@@ -101,10 +103,10 @@ def resolve_api_key(raw_key: str | None) -> tuple[str | None, str]:
 # The browser-facing surface is the HTML console at "/"; it ships inline <script>,
 # inline <style>, and inline style="" attributes, so script-src/style-src keep
 # 'unsafe-inline' (a strict nonce CSP would blank the console). The console fetches
-# this server's own routes (/healthz, /pubkey, the server card) AND one cross-origin
-# live read of the a11oy compute-pool, so connect-src is 'self' + https://a-11-oy.com
-# (verified against the console source: that is the only off-origin fetch; widening
-# it would weaken the policy). JSON/MCP responses ignore CSP, so one policy is safe
+# this server's own routes ONLY (/api/console-state and /pubkey), so connect-src is
+# tightened to 'self' — verified against the console source: it makes no off-origin
+# fetch, and every number it renders comes from this process's own Python endpoint.
+# JSON/MCP responses ignore CSP, so one policy is safe
 # for every route. frame-ancestors allows the legitimate HF embed but nothing else;
 # we never send X-Frame-Options: DENY (it would break that embed). HSTS is honest
 # here — this is a real TLS server.
@@ -114,7 +116,7 @@ _CSP = (
     "style-src 'self' 'unsafe-inline'; "
     "img-src 'self' data:; "
     "font-src 'self'; "
-    "connect-src 'self' https://a-11-oy.com; "
+    "connect-src 'self'; "
     "object-src 'none'; "
     "base-uri 'self'; "
     "form-action 'self'; "
@@ -327,6 +329,12 @@ def _build_manifest_attestation(
 # These are immutable process artifacts. Every server-card alias serves the exact
 # bytes hashed below, and the fixed attestation is signed at most once per start.
 _SERVER_CARD_BYTES = _deterministic_json_bytes(_server_card())
+# Bind the published card's tool names (read back out of the exact served bytes)
+# so /api/console-state can MEASURE parity between the static discovery card and
+# the live runtime registry instead of assuming they agree.
+set_card_tool_names(
+    [tool["name"] for tool in json.loads(_SERVER_CARD_BYTES)["tools"]]
+)
 _MANIFEST_ATTESTATION = _build_manifest_attestation(
     manifest_bytes=_SERVER_CARD_BYTES,
     signer=SIGNER,
@@ -436,6 +444,24 @@ async def build_info(request: Request):
     )
 
 
+async def console_state_route(request: Request):
+    """Real, in-request state for the human console.
+
+    Reads the live FastMCP tool registry, the live Khipu chain, the signer and
+    the injected build revision. Values that cannot be read are returned with an
+    honest label instead of a number — nothing here is seeded or carried over.
+    """
+    payload = console_state(
+        mcp=mcp,
+        khipu=KHIPU,
+        signer=SIGNER,
+        doctrine=DOCTRINE,
+        organ_summary=getattr(_server, "ORGAN_CATALOG_SUMMARY", None),
+        public_base=PUBLIC_BASE,
+    )
+    return JSONResponse(payload, headers={"Cache-Control": "no-store"})
+
+
 async def healthz(request: Request):
     return JSONResponse({"status": "ok", "service": "hatun-mcp",
                          "chain_verified": KHIPU.verify(),
@@ -486,7 +512,8 @@ _INDEX_JSON = {
     "server_card": "/.well-known/mcp/server-card.json",
     "manifest_attestation": MCP_MANIFEST_ATTESTATION_PATH,
     "connect": "/connect",
-    "healthz": "/healthz", "readyz": "/readyz", "build_info": "/api/build-info", "pubkey": "/pubkey",
+    "healthz": "/healthz", "readyz": "/readyz", "build_info": "/api/build-info",
+    "console_state": "/api/console-state", "pubkey": "/pubkey",
     "docs": "https://github.com/szl-holdings/hatun-mcp",
 }
 
@@ -544,6 +571,7 @@ app = Starlette(
         Route("/", index),
         Route("/healthz", healthz),
         Route("/api/build-info", build_info),
+        Route("/api/console-state", console_state_route),
         Route("/readyz", readyz),
         Route("/pubkey", pubkey),
         Route("/connect", connect),

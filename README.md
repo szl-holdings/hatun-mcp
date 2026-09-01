@@ -206,7 +206,17 @@ explicitly unavailable.
 ```bash
 curl -i https://szlholdings-hatun-mcp.hf.space/healthz
 curl -i https://szlholdings-hatun-mcp.hf.space/readyz
+curl -s https://szlholdings-hatun-mcp.hf.space/api/console-state
 ```
+
+`/api/console-state` (`hatun_mcp/state.py`) is the read behind the human console at `/`.
+It is assembled in-request from this process only: the tool catalogue is enumerated from
+the LIVE FastMCP registry (not a hand-maintained list), the receipt depth and head hash
+come from the live Khipu chain, and `card_parity` reports a MEASURED comparison between
+the published server card and that runtime registry. Anything it cannot read is returned
+with an honest label (`UNAVAILABLE`) and no number — there is no seeded snapshot, so the
+console shows `UNAVAILABLE` rather than a stale value when a reading fails. It mints no
+receipt and attests nothing beyond the reading itself.
 
 Record the response status and observation time. Report `healthz=200` as Hatun process liveness
 only. Report `readyz=200` as Hatun's repository-defined local receipt-chain and signer readiness

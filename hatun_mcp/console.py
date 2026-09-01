@@ -1,487 +1,548 @@
 """
 hatun_mcp.console — the human face of hatun-mcp.
 
-Returns a single self-contained HTML document (zero runtime CDN, system fonts,
-no external assets) for browser requests to `/`. API clients (Accept:
-application/json) still receive the original JSON service descriptor — this
-module is ONLY rendered when content-negotiation selects HTML, so MCP/SSE
-clients are never affected.
+Returns a single self-contained HTML document (zero runtime CDN, no external
+assets, no webfont fetch) for browser requests to `/`. API clients (Accept:
+application/json) still receive the JSON service descriptor — this module is
+ONLY rendered when content-negotiation selects HTML, so MCP/SSE clients are
+never affected.
 
-The console is AGENTIC: at load time the browser fetches this server's OWN live
-endpoints (/healthz, /.well-known/mcp/server-card.json, /pubkey) and renders
-them. It also probes the a11oy compute fabric with an AbortController timeout.
-Every panel HONEST-DEGRADES to a clearly-labeled SNAPSHOT (seed values captured
-from a real probe) if a live fetch fails — never blank, never fabricated.
+The console renders the SZL monochrome design system: black canvas, warm
+off-white display type, a single neutral grey ramp, hairline rules, and one
+holographic point-cloud kernel in the hero. No color pop, no decorative
+gradient; hierarchy is carried by weight and spacing. Mobile-first: single
+column below 1000px, clamp() on every size.
+
+DATA: every value on the page is fetched at load from this server's OWN Python
+endpoint `/api/console-state` (hatun_mcp.state), which reads the LIVE FastMCP
+tool registry, the LIVE Khipu chain, the signer and the injected build
+revision in-request. There is no seeded snapshot in this file. If the fetch
+fails, panels display the honest label UNAVAILABLE and no number is shown.
 
 HONESTY doctrine v11:
-  * locked-proven = 8; Λ is Conjecture 1 (advisory, NEVER "proven trust").
+  * Λ is Conjecture 1 — advisory governance, never a theorem, never "proven".
   * Khipu BFT framing is Conjecture 2.
-  * SLSA L1 honest (L2 on roadmap, L3 not claimed).
-  * sovereign:true only on owned metal; the fabric itself is sovereign:false.
-  * NO free-energy / joule claims. NO banned codenames in human copy.
-  * Live numbers are never fabricated — degrade to SNAPSHOT/seed.
+  * SLSA L1 honest (L2 attested on the pushed image; L3 not claimed).
+  * signing state is UNSIGNED unless a real ECDSA P-256 key is in-process.
+  * no energy/joule claims; no consciousness claims; no fabricated numbers.
 
 SPDX-License-Identifier: Apache-2.0
 """
 from __future__ import annotations
 
-# A small, honest snapshot captured from a real probe of the live endpoints on
-# 2026-06-03. Used ONLY as a clearly-labeled fallback if a live fetch fails so
-# the console is never blank and never fabricates current numbers.
-_SNAPSHOT = {
-    "healthz": {
-        "status": "ok", "service": "hatun-mcp", "chain_verified": True,
-        "signer_mode": "PLACEHOLDER", "protocol_revision": "2025-06-18",
-    },
-    "tool_count": 25,
-    "lean": {"declarations": 749, "sorries": 163, "yuyay_axes": 13},
-    "fabric": {
-        "kind": "multi-node-compute-fabric", "sovereign": False,
-        "nodes_total": 6, "nodes_reachable": 5, "gpu_nodes_reachable": 1,
-        "sovereign_gpu_live": True,
-    },
-}
+REPO_URL = "https://github.com/szl-holdings/hatun-mcp"
+SPACE_URL = "https://szlholdings-hatun-mcp.hf.space"
 
-import json as _json
-
-CONSOLE_HTML = """<!doctype html>
+CONSOLE_HTML = r"""<!doctype html>
 <html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="dark">
 <title>hatun-mcp · the great context protocol</title>
-<meta name="description" content="hatun-mcp — SZL Holdings' signed, sovereign Model Context Protocol server. Governed context with provenance, handed to the world's agents.">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='13' fill='none' stroke='%2335e0d8' stroke-width='2'/%3E%3Ccircle cx='16' cy='16' r='4' fill='%237c5cff'/%3E%3C/svg%3E">
+<meta name="description" content="hatun-mcp — SZL Holdings' Model Context Protocol gateway. Governed context with receipts and provenance, handed to the world's agents.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='12.5' fill='none' stroke='%23e8e8ea' stroke-width='1.5'/%3E%3Ccircle cx='16' cy='16' r='3.5' fill='%23f0eee6'/%3E%3C/svg%3E">
 <style>
-/* ── Sovereign: 0 runtime CDN, system fonts only ───────────────────────────── */
+/* ── SZL monochrome design system · no runtime CDN, no webfont fetch ───────── */
 :root{
-  --bg:#070912; --bg2:#0b0f1e; --surface:rgba(20,26,46,.55);
-  --surface-2:rgba(28,36,62,.45); --border:rgba(120,150,210,.16);
-  --border-2:rgba(120,150,210,.30);
-  --text:#e8ecf6; --muted:#9aa6c4; --faint:#67718f;
-  --teal:#35e0d8; --cyan:#46b9ff; --violet:#9a7bff;
-  --good:#48d597; --warn:#f0b24b; --bad:#ff6b8b;
-  --mono:ui-monospace,"SF Mono","Cascadia Code","JetBrains Mono",Menlo,Consolas,monospace;
-  --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-  --r:16px; --maxw:1120px;
+  --bg:#000000; --bg-soft:#0a0a0b; --panel:#0d0d0f;
+  --ink:#ffffff; --cream:#f0eee6;
+  --t1:#e8e8ea; --t2:#9a9a9e; --t3:#5f5f63;
+  --line:#1c1c1f; --line2:#2a2a2e;
+  --head:'Space Grotesk',system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace;
+  --maxw:1120px;
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
 body{
-  font-family:var(--sans);color:var(--text);background:var(--bg);
-  line-height:1.55;-webkit-font-smoothing:antialiased;overflow-x:hidden;
-  background-image:
-    radial-gradient(900px 600px at 12% -8%, rgba(53,224,216,.16), transparent 60%),
-    radial-gradient(820px 560px at 92% 4%, rgba(154,123,255,.16), transparent 60%),
-    radial-gradient(1100px 800px at 50% 118%, rgba(70,185,255,.10), transparent 60%),
-    linear-gradient(180deg,var(--bg),var(--bg2));
-  background-attachment:fixed;
+  background:var(--bg); color:var(--t1); font-family:var(--head);
+  line-height:1.55; -webkit-font-smoothing:antialiased; overflow-x:hidden;
 }
-a{color:var(--cyan);text-decoration:none}
-a:hover{text-decoration:underline}
-.wrap{max-width:var(--maxw);margin:0 auto;
-  padding:0 max(18px,env(safe-area-inset-right)) 0 max(18px,env(safe-area-inset-left))}
+a{color:var(--t1); text-decoration:none; border-bottom:1px solid var(--line2)}
+a:hover{color:var(--ink); border-bottom-color:var(--t2)}
+.wrap{
+  width:100%; max-width:var(--maxw); margin:0 auto;
+  padding-left:max(clamp(18px,5vw,40px),env(safe-area-inset-left));
+  padding-right:max(clamp(18px,5vw,40px),env(safe-area-inset-right));
+}
 .mono{font-family:var(--mono)}
-
-/* ── starfield (pure CSS, no assets) ───────────────────────────────────────── */
-.stars{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.55;
-  background-image:
-    radial-gradient(1px 1px at 20% 30%, #fff, transparent),
-    radial-gradient(1px 1px at 70% 12%, #cfe, transparent),
-    radial-gradient(1px 1px at 40% 70%, #fff, transparent),
-    radial-gradient(1px 1px at 85% 55%, #bdf, transparent),
-    radial-gradient(1px 1px at 12% 85%, #fff, transparent),
-    radial-gradient(1.5px 1.5px at 60% 40%, #fff, transparent);
-  background-repeat:no-repeat;}
+.eyebrow{
+  font-family:var(--mono); font-size:clamp(10px,2.4vw,11px); letter-spacing:.13em;
+  text-transform:uppercase; color:var(--t3);
+}
 
 /* ── top bar ───────────────────────────────────────────────────────────────── */
-header{position:relative;z-index:2;border-bottom:1px solid var(--border);
-  backdrop-filter:blur(10px);background:rgba(7,9,18,.5)}
-.bar{display:flex;align-items:center;gap:14px;padding:14px 0}
-.logo{display:flex;align-items:center;gap:11px;font-weight:700;letter-spacing:.2px}
-.logo .mark{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;
-  background:radial-gradient(circle at 30% 30%,rgba(53,224,216,.4),rgba(154,123,255,.25));
-  border:1px solid var(--border-2);box-shadow:0 0 22px rgba(53,224,216,.28)}
-.logo .mark span{width:9px;height:9px;border-radius:50%;background:var(--violet);
-  box-shadow:0 0 10px var(--violet)}
-.logo b{font-size:16px}
-.logo small{color:var(--faint);font-weight:500;font-size:12px;display:block;margin-top:-2px}
-.bar nav{margin-left:auto;display:flex;gap:18px;font-size:14px;color:var(--muted)}
-.bar nav a{color:var(--muted);display:inline-flex;align-items:center;min-height:44px;padding:0 2px}
-.bar nav a:focus-visible,a:focus-visible,.btn:focus-visible{outline:2px solid var(--teal);outline-offset:3px;border-radius:8px}
-/* mobile: wrap nav into a tidy second row instead of hiding it (links stay reachable) */
-@media(max-width:680px){
-  .bar{flex-wrap:wrap;gap:6px 14px;padding:12px 0 6px}
-  .bar nav{margin-left:0;flex-basis:100%;flex-wrap:wrap;gap:4px 16px;
-    border-top:1px solid var(--border);padding-top:4px;font-size:13.5px}
+header{
+  position:sticky; top:0; z-index:20; background:rgba(0,0,0,.82);
+  backdrop-filter:blur(10px); border-bottom:1px solid var(--line);
+  padding-top:env(safe-area-inset-top);
 }
+header .bar{display:flex; align-items:center; gap:14px; height:clamp(52px,11vw,60px)}
+header .mark{font-weight:600; letter-spacing:-.02em; font-size:clamp(14px,3.6vw,16px); color:var(--ink)}
+header .mark span{color:var(--t3); font-weight:400}
+header nav{margin-left:auto; display:flex; gap:clamp(12px,3.5vw,22px)}
+header nav a{
+  font-family:var(--mono); font-size:11px; letter-spacing:.09em; text-transform:uppercase;
+  color:var(--t2); border-bottom:none;
+}
+header nav a:hover{color:var(--ink)}
+@media (max-width:640px){ header nav a.opt{display:none} }
 
 /* ── hero ──────────────────────────────────────────────────────────────────── */
-.hero{position:relative;z-index:2;padding:64px 0 30px}
-.eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;
-  letter-spacing:.14em;text-transform:uppercase;color:var(--teal);
-  border:1px solid var(--border-2);border-radius:999px;padding:6px 13px;
-  background:var(--surface)}
-.pulse{width:8px;height:8px;border-radius:50%;background:var(--good);
-  box-shadow:0 0 0 0 rgba(72,213,151,.6);animation:pulse 2.2s infinite}
-@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(72,213,151,.5)}70%{box-shadow:0 0 0 9px rgba(72,213,151,0)}100%{box-shadow:0 0 0 0 rgba(72,213,151,0)}}
-h1{font-size:clamp(38px,6.4vw,68px);line-height:1.02;margin:22px 0 10px;
-  font-weight:760;letter-spacing:-.022em}
-h1 .grad{background:linear-gradient(96deg,var(--teal),var(--cyan) 45%,var(--violet));
-  -webkit-background-clip:text;background-clip:text;color:transparent}
-.lede{font-size:clamp(16.5px,2.1vw,20px);color:var(--muted);max-width:660px;margin:0 0 8px}
-.lede b{color:var(--text);font-weight:650}
-.cta{display:flex;gap:12px;flex-wrap:wrap;margin-top:26px}
-.btn{display:inline-flex;align-items:center;gap:9px;padding:12px 19px;border-radius:12px;
-  font-weight:600;font-size:14.5px;border:1px solid var(--border-2);cursor:pointer;
-  background:var(--surface);color:var(--text);transition:.18s;text-decoration:none}
-.btn:hover{border-color:var(--teal);box-shadow:0 0 24px rgba(53,224,216,.2);text-decoration:none}
-.btn.primary{background:linear-gradient(96deg,rgba(53,224,216,.22),rgba(154,123,255,.22));
-  border-color:var(--teal)}
-
-/* ── cards / grid ──────────────────────────────────────────────────────────── */
-section{position:relative;z-index:2;padding:30px 0}
-.h2{font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);
-  margin:0 0 16px;display:flex;align-items:center;gap:10px}
-.h2::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,var(--border),transparent)}
-.grid{display:grid;gap:16px}
-.g3{grid-template-columns:repeat(3,1fr)}
-.g4{grid-template-columns:repeat(4,1fr)}
-.g2{grid-template-columns:repeat(2,1fr)}
-@media(max-width:900px){.g3,.g4,.g2{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:560px){.g3,.g4,.g2{grid-template-columns:1fr}}
-.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);
-  padding:18px;backdrop-filter:blur(14px);position:relative;overflow:hidden}
-.card::before{content:"";position:absolute;inset:0 0 auto 0;height:1px;
-  background:linear-gradient(90deg,transparent,rgba(53,224,216,.5),transparent)}
-.kpi .label{font-size:12px;color:var(--faint);letter-spacing:.05em;text-transform:uppercase}
-.kpi .val{font-family:var(--mono);font-size:30px;font-weight:700;margin-top:6px;
-  font-variant-numeric:tabular-nums;letter-spacing:-.01em}
-.kpi .sub{font-size:12.5px;color:var(--muted);margin-top:4px}
-.val.ok{color:var(--good)} .val.t{color:var(--teal)} .val.v{color:var(--violet)} .val.c{color:var(--cyan)}
-
-/* status chips */
-.chip{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:600;
-  padding:4px 10px;border-radius:999px;border:1px solid var(--border-2)}
-.chip.live{color:var(--good);border-color:rgba(72,213,151,.4);background:rgba(72,213,151,.08)}
-.chip.snap{color:var(--warn);border-color:rgba(240,178,75,.4);background:rgba(240,178,75,.08)}
-.chip.down{color:var(--bad);border-color:rgba(255,107,139,.4);background:rgba(255,107,139,.08)}
-.dot{width:7px;height:7px;border-radius:50%;background:currentColor}
-
-/* tool catalog */
-.tools{display:grid;gap:9px;max-height:560px;overflow:auto;padding-right:4px}
-.tool{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:start;
-  padding:11px 13px;border:1px solid var(--border);border-radius:11px;
-  background:var(--surface-2);transition:.15s}
-.tool:hover{border-color:var(--border-2);background:rgba(40,52,86,.5)}
-.tool .name{font-family:var(--mono);font-size:13px;color:var(--teal);font-weight:600;white-space:nowrap}
-.tool .desc{font-size:13px;color:var(--muted)}
-.tool .tag{font-size:12px;color:var(--violet);border:1px solid rgba(154,123,255,.35);
-  border-radius:6px;padding:1px 7px;margin-left:7px;vertical-align:middle;white-space:nowrap}
-@media(max-width:560px){.tool{grid-template-columns:1fr}.tool .name{white-space:normal}}
-
-/* connect snippet */
-pre{margin:0;font-family:var(--mono);font-size:12.7px;color:#cfe3ff;
-  background:rgba(4,7,16,.7);border:1px solid var(--border);border-radius:12px;
-  padding:15px 16px;overflow:auto;line-height:1.6}
-pre .k{color:var(--violet)} pre .s{color:var(--teal)} pre .c{color:var(--faint)}
-
-/* fabric nodes */
-.node{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;
-  border:1px solid var(--border);background:var(--surface-2);font-size:13px}
-.node .nm{font-family:var(--mono);color:var(--text)}
-.node .kd{color:var(--muted);font-size:12px;margin-left:auto}
-
-.note{font-size:12.5px;color:var(--faint);margin-top:10px}
-.fp{font-family:var(--mono);font-size:12.5px;color:var(--cyan);word-break:break-all}
-
-footer{position:relative;z-index:2;border-top:1px solid var(--border);margin-top:34px;
-  padding:26px 0 40px;color:var(--faint);font-size:13px}
-footer .row{display:flex;gap:8px 18px;flex-wrap:wrap;align-items:center}
-footer a{color:var(--muted);display:inline-flex;align-items:center;min-height:44px;padding:0 2px}
-footer{padding-bottom:max(40px,env(safe-area-inset-bottom))}
-.honest{margin-top:14px;font-size:12px;color:var(--faint);max-width:760px;line-height:1.6}
-.skel{color:var(--faint)}
-@media(prefers-reduced-motion:reduce){
-  .pulse{animation:none}
-  *,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}
+.hero{position:relative; overflow:hidden; border-bottom:1px solid var(--line)}
+#holo{
+  position:absolute; inset:0; width:100%; height:100%;
+  opacity:.72; pointer-events:none;
 }
-/* mobile rhythm: lighter hero/section padding, comfortable lede */
-@media(max-width:680px){
-  .hero{padding:34px 0 22px}
-  section{padding:22px 0}
-  .lede{font-size:16px}
-  .btn{flex:1 1 auto;justify-content:center}
-  pre{font-size:12.5px}
+.hero .wrap{
+  position:relative; z-index:2;
+  padding-top:clamp(56px,14vw,110px); padding-bottom:clamp(48px,12vw,96px);
+}
+.hero h1{
+  font-size:clamp(34px,7vw,72px); font-weight:600; letter-spacing:-.03em;
+  line-height:1.02; margin:14px 0 0; color:var(--cream);
+}
+.hero .lede{
+  font-size:clamp(15px,3.4vw,18px); font-weight:400; color:var(--t2);
+  max-width:620px; margin:18px 0 0;
+}
+.hero .statusline{
+  margin-top:22px; font-family:var(--mono); font-size:clamp(11px,2.7vw,12px);
+  letter-spacing:.06em; color:var(--t2); display:flex; flex-wrap:wrap; gap:8px 16px;
+}
+.hero .statusline b{color:var(--t1); font-weight:500}
+.cta{display:flex; flex-wrap:wrap; gap:10px; margin-top:26px}
+.cta a{
+  font-family:var(--mono); font-size:12px; letter-spacing:.06em; padding:11px 16px;
+  border:1px solid var(--line2); border-radius:10px; color:var(--t1); background:var(--panel);
+  transition:border-color .2s ease, transform .2s ease, color .2s ease;
+}
+.cta a:hover{border-color:var(--t2); color:var(--ink); transform:translateY(-1px)}
+.cta a.solid{background:var(--cream); color:#000; border-color:var(--cream)}
+.cta a.solid:hover{background:var(--ink)}
+
+/* ── kpi strip ─────────────────────────────────────────────────────────────── */
+.kpis{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1px; background:var(--line);
+  border-top:1px solid var(--line); border-bottom:1px solid var(--line)}
+@media (min-width:1000px){ .kpis{grid-template-columns:repeat(4,minmax(0,1fr))} }
+.kpi{background:var(--bg); padding:clamp(16px,4vw,24px)}
+.kpi .v{font-size:clamp(24px,6vw,36px); font-weight:600; letter-spacing:-.02em; color:var(--cream);
+  line-height:1.1; font-variant-numeric:tabular-nums}
+.kpi .s{font-family:var(--mono); font-size:11px; color:var(--t3); margin-top:8px; letter-spacing:.05em}
+
+/* ── sections ──────────────────────────────────────────────────────────────── */
+section{padding-top:clamp(40px,9vw,76px); padding-bottom:clamp(40px,9vw,76px); border-bottom:1px solid var(--line)}
+.h2{font-size:clamp(22px,4vw,34px); font-weight:600; letter-spacing:-.02em; color:var(--t1); margin:10px 0 0}
+.sub{font-size:clamp(14px,3.2vw,16px); color:var(--t2); max-width:640px; margin:12px 0 0}
+.grid{display:grid; grid-template-columns:1fr; gap:clamp(12px,2.6vw,16px); margin-top:clamp(22px,5vw,32px)}
+@media (min-width:1000px){
+  .grid.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .grid.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+
+/* ── THE shared card component (tools, runtime, resources, repos) ──────────── */
+.card{
+  border:1px solid var(--line2); border-radius:14px; background:var(--panel);
+  padding:18px; font-family:var(--head);
+  transition:border-color .2s ease, transform .2s ease, box-shadow .2s ease;
+}
+.card:hover{border-color:var(--t2); transform:translateY(-1px); box-shadow:0 8px 30px -12px #000}
+.card .t{font-size:clamp(15px,3.6vw,18px); font-weight:600; color:var(--ink); margin:8px 0 0;
+  letter-spacing:-.01em; word-break:break-word}
+.card .d{font-size:clamp(13px,3vw,14px); color:var(--t2); margin:8px 0 0}
+.card .metrics{
+  display:flex; flex-wrap:wrap; gap:6px 14px; margin-top:14px;
+  font-family:var(--mono); font-size:11px; color:var(--t2); letter-spacing:.04em;
+  font-variant-numeric:tabular-nums;
+}
+.card .metrics b{color:var(--t1); font-weight:500}
+.chip{
+  display:inline-block; margin-top:12px; padding:3px 8px; border-radius:999px;
+  border:1px solid currentColor; color:var(--t2);
+  font-family:var(--mono); font-size:10px; letter-spacing:.1em; text-transform:uppercase;
+}
+.card .foot{margin-top:12px; font-family:var(--mono); font-size:11px; color:var(--t2)}
+.card .foot a{border-bottom:none; color:var(--t2)}
+.card .foot a:hover{color:var(--ink)}
+
+.loading{font-family:var(--mono); font-size:12px; color:var(--t3); letter-spacing:.06em}
+.count{font-family:var(--mono); font-size:12px; color:var(--t3); letter-spacing:.08em}
+
+/* ── code blocks ───────────────────────────────────────────────────────────── */
+pre{
+  font-family:var(--mono); font-size:clamp(11px,2.7vw,12.5px); line-height:1.7;
+  background:var(--bg-soft); border:1px solid var(--line); border-radius:12px;
+  padding:14px; overflow-x:auto; color:var(--t1); margin:14px 0 0;
+}
+pre .c{color:var(--t3)}
+pre .k{color:var(--t2)}
+
+/* ── footer ────────────────────────────────────────────────────────────────── */
+footer{padding-top:clamp(32px,7vw,52px); padding-bottom:calc(clamp(32px,7vw,52px) + env(safe-area-inset-bottom))}
+footer .row{display:flex; flex-wrap:wrap; gap:10px 20px; font-family:var(--mono); font-size:11px;
+  letter-spacing:.06em; color:var(--t3); align-items:center}
+footer .row a{color:var(--t2); border-bottom:none}
+footer .row a:hover{color:var(--ink)}
+footer .honest{font-size:12px; color:var(--t3); margin-top:18px; max-width:760px; line-height:1.7}
+footer .honest b{color:var(--t2); font-weight:500}
+
+@media (prefers-reduced-motion: reduce){
+  *{transition:none !important; animation:none !important}
 }
 </style>
 </head>
 <body>
-<div class="stars"></div>
 
 <header><div class="wrap bar">
-  <div class="logo">
-    <span class="mark"><span></span></span>
-    <div><b>hatun&#8209;mcp</b><small>the great context protocol</small></div>
-  </div>
+  <div class="mark">hatun&#8209;mcp <span>/ SZL Holdings</span></div>
   <nav>
-    <a href="#status">Status</a>
-    <a href="#tools">Tools</a>
-    <a href="#connect">Connect</a>
-    <a href="#fabric">Fabric</a>
-    <a href="/.well-known/mcp/server-card.json">Server&nbsp;card</a>
+    <a href="#runtime">runtime</a>
+    <a href="#tools">tools</a>
+    <a class="opt" href="#connect">connect</a>
+    <a class="opt" href="/.well-known/mcp/server-card.json">card</a>
   </nav>
 </div></header>
 
-<main>
-<div class="wrap">
-
-  <div class="hero">
-    <span class="eyebrow"><span class="pulse"></span> <span id="hero-status">probing live endpoint…</span></span>
-    <h1>Governed context,<br><span class="grad">signed at the source.</span></h1>
-    <p class="lede"><b>hatun&#8209;mcp</b> is SZL Holdings' sovereign Model Context Protocol server.
-      It hands the world's agents <b>governed context with provenance</b> — every call runs the
-      Yuyay&#8209;13 gate, earns an append&#8209;only <b>Khipu receipt</b>, and is wrapped in a real
-      ECDSA&#8209;P256 <b>DSSE envelope</b>. Not a demo. A real MCP endpoint.</p>
+<div class="hero">
+  <canvas id="holo" aria-hidden="true"></canvas>
+  <div class="wrap">
+    <div class="eyebrow">MODEL CONTEXT PROTOCOL GATEWAY · STREAMABLE HTTP</div>
+    <h1>The great<br>context protocol.</h1>
+    <p class="lede">hatun&#8209;mcp hands governed context to any MCP client. Every call passes a
+      13&#8209;axis gate, mints a hash&#8209;linked Khipu receipt, and returns with its provenance
+      attached. Everything below is read from this process at page load.</p>
+    <div class="statusline">
+      <span>STATE <b id="hero-state">reading…</b></span>
+      <span>PROTOCOL <b id="hero-proto">—</b></span>
+      <span>SIGNING <b id="hero-sign">—</b></span>
+      <span>READ <b id="hero-read">—</b></span>
+    </div>
     <div class="cta">
-      <a class="btn primary" href="#connect">Connect an agent &rarr;</a>
-      <a class="btn" href="/.well-known/mcp/server-card.json">Inspect the server card</a>
-      <a class="btn" href="https://github.com/szl-holdings/hatun-mcp">Source on GitHub</a>
+      <a class="solid" href="#connect">Connect an agent</a>
+      <a href="/.well-known/mcp/server-card.json">Inspect the server card</a>
+      <a href="https://github.com/szl-holdings/hatun-mcp">Source on GitHub</a>
     </div>
   </div>
+</div>
 
-  <!-- LIVE STATUS -->
-  <section id="status">
-    <div class="h2">Live system status <span id="status-src" class="chip snap"><span class="dot"></span>loading</span></div>
-    <div class="grid g4">
-      <div class="card kpi"><div class="label">Service</div><div class="val ok" id="kpi-service">—</div><div class="sub" id="kpi-proto">protocol —</div></div>
-      <div class="card kpi"><div class="label">Khipu chain</div><div class="val t" id="kpi-chain">—</div><div class="sub">append&#8209;only · recompute&#8209;verified</div></div>
-      <div class="card kpi"><div class="label">DSSE signer</div><div class="val v" id="kpi-signer">—</div><div class="sub" id="kpi-signer-sub">ECDSA P&#8209;256</div></div>
-      <div class="card kpi"><div class="label">MCP tools</div><div class="val c" id="kpi-tools">—</div><div class="sub">static · +reachable&#8209;service tools at runtime</div></div>
-    </div>
-    <div class="grid g4" style="margin-top:16px">
-      <div class="card kpi"><div class="label">Lean declarations</div><div class="val t" id="kpi-decl">—</div><div class="sub">Doctrine v11 LOCKED</div></div>
-      <div class="card kpi"><div class="label">Lean sorries</div><div class="val" id="kpi-sorry">—</div><div class="sub">disclosed, not hidden</div></div>
-      <div class="card kpi"><div class="label">Yuyay axes</div><div class="val v" id="kpi-axes">—</div><div class="sub">input&#8209;as&#8209;data gate</div></div>
-      <div class="card kpi"><div class="label">Locked&#8209;proven</div><div class="val ok">8</div><div class="sub">&Lambda; = Conjecture&nbsp;1 (advisory)</div></div>
-    </div>
-    <p class="note">Numbers above are fetched from this server's own <span class="mono">/healthz</span> and
-      <span class="mono">/.well-known/mcp/server-card.json</span> at page load. If a fetch fails the panel falls
-      back to a clearly&#8209;labeled <b>SNAPSHOT</b> (a real probe captured 2026&#8209;06&#8209;03) — never blank, never fabricated.</p>
-  </section>
+<div class="kpis">
+  <div class="kpi"><div class="v" id="kpi-tools">—</div><div class="s">TOOLS IN LIVE REGISTRY</div></div>
+  <div class="kpi"><div class="v" id="kpi-chain">—</div><div class="s">RECEIPT CHAIN (RECOMPUTED)</div></div>
+  <div class="kpi"><div class="v" id="kpi-receipts">—</div><div class="s">RECEIPTS THIS PROCESS</div></div>
+  <div class="kpi"><div class="v" id="kpi-parity">—</div><div class="s">CARD ↔ RUNTIME PARITY</div></div>
+</div>
 
-  <!-- SIGNING KEY -->
-  <section id="key">
-    <div class="h2">Signing key <span id="key-src" class="chip snap"><span class="dot"></span>loading</span></div>
+<main>
+
+<section id="runtime"><div class="wrap">
+  <div class="eyebrow">01 · RUNTIME</div>
+  <div class="h2">What this process can prove right now</div>
+  <p class="sub">Each panel is one reading from the live server. A value that cannot be read is
+    labelled UNAVAILABLE rather than filled in.</p>
+  <div class="grid g3" id="runtime-cards">
+    <div class="card"><div class="loading">reading /api/console-state…</div></div>
+  </div>
+</div></section>
+
+<section id="tools"><div class="wrap">
+  <div class="eyebrow">02 · CAPABILITIES</div>
+  <div class="h2">Tools this server exposes <span class="count" id="tools-count"></span></div>
+  <p class="sub">Enumerated from the live FastMCP tool registry in this process — not from a
+    hand-written list. Parameter counts come from each tool's real input schema.</p>
+  <div class="grid g3" id="tool-cards">
+    <div class="card"><div class="loading">enumerating live tool registry…</div></div>
+  </div>
+</div></section>
+
+<section id="resources"><div class="wrap">
+  <div class="eyebrow">03 · RESOURCES</div>
+  <div class="h2">Readable resources</div>
+  <div class="grid g2" id="resource-cards">
+    <div class="card"><div class="loading">reading resource registry…</div></div>
+  </div>
+</div></section>
+
+<section id="connect"><div class="wrap">
+  <div class="eyebrow">04 · CONNECT</div>
+  <div class="h2">Wire it into your agent</div>
+  <div class="grid g2">
     <div class="card">
-      <div style="font-size:13px;color:var(--muted);margin-bottom:8px">Public DSSE verification key (SHA&#8209;256 fingerprint of the SPKI DER) — fetched live from <span class="mono">/pubkey</span>:</div>
-      <div class="fp" id="key-fp">computing fingerprint…</div>
-      <p class="note" id="key-note">When the founder injects the PEM as a Space secret the signer leaves
-        <b>PLACEHOLDER</b> mode and responses carry verifiable DSSE envelopes. Responses are honestly marked
-        <b>UNSIGNED</b> until then — we never claim a signature we cannot produce.</p>
-    </div>
-  </section>
-
-  <!-- TOOL CATALOG -->
-  <section id="tools">
-    <div class="h2">Live tool catalog <span id="tools-src" class="chip snap"><span class="dot"></span>loading</span></div>
-    <div class="grid g2">
-      <div class="card">
-        <div style="font-size:13px;color:var(--muted);margin-bottom:12px">Read directly from this server's server&#8209;card. <span id="tools-count" class="mono"></span></div>
-        <div class="tools" id="tool-list"><div class="skel">fetching tool catalog…</div></div>
-      </div>
-      <div class="card">
-        <div style="font-size:13px;color:var(--muted);margin-bottom:12px">Resources &amp; governance surface</div>
-        <div class="tools" id="res-list" style="max-height:none"><div class="skel">…</div></div>
-      </div>
-    </div>
-  </section>
-
-  <!-- CONNECT -->
-  <section id="connect">
-    <div class="h2">Wire it into your agent</div>
-    <div class="grid g2">
-      <div class="card">
-        <div style="font-size:13px;color:var(--muted);margin-bottom:10px">Streamable HTTP (Claude Desktop / Cursor / any MCP client)</div>
-        <pre><span class="c">// claude_desktop_config.json / mcp.json</span>
+      <div class="eyebrow">CLIENT CONFIG · CLAUDE DESKTOP / CURSOR</div>
+      <pre><span class="c">// claude_desktop_config.json / mcp.json</span>
 {
   <span class="k">"mcpServers"</span>: {
     <span class="k">"hatun"</span>: {
-      <span class="k">"url"</span>: <span class="s">"https://szlholdings-hatun-mcp.hf.space/mcp/"</span>,
+      <span class="k">"url"</span>: "https://szlholdings-hatun-mcp.hf.space/mcp/",
       <span class="k">"headers"</span>: {
-        <span class="k">"Authorization"</span>: <span class="s">"Bearer szl_..."</span>
+        <span class="k">"Authorization"</span>: "Bearer szl_..."
       }
     }
   }
 }</pre>
-      </div>
-      <div class="card">
-        <div style="font-size:13px;color:var(--muted);margin-bottom:10px">Endpoints &amp; legacy SSE transport</div>
-<pre><span class="c"># Streamable HTTP (preferred)</span>
-POST <span class="s">https://szlholdings-hatun-mcp.hf.space/mcp/</span>
-
-<span class="c"># Legacy SSE transport</span>
-GET  <span class="s">https://szlholdings-hatun-mcp.hf.space/sse/</span>
-
-<span class="c"># Machine descriptors (no auth)</span>
-GET  <span class="s">/.well-known/mcp/server-card.json</span>
-GET  <span class="s">/connect</span>
-GET  <span class="s">/healthz</span>
-GET  <span class="s">/pubkey</span>
-
-<span class="c"># Anonymous calls are declined &amp; receipted —</span>
-<span class="c"># bring an SZL API key (Authorization: Bearer szl_...).</span></pre>
-      </div>
     </div>
-  </section>
+    <div class="card">
+      <div class="eyebrow">ENDPOINTS · NO AUTH ON DESCRIPTORS</div>
+      <pre><span class="c"># transport</span>
+POST /mcp/          <span class="c">streamable http</span>
+GET  /sse/          <span class="c">legacy sse</span>
 
-  <!-- FABRIC -->
-  <section id="fabric">
-    <div class="h2">Place in the a11oy mesh <span id="fabric-src" class="chip snap"><span class="dot"></span>loading</span></div>
-    <div class="grid g2">
-      <div class="card">
-        <div style="font-size:13px;color:var(--muted);margin-bottom:12px">hatun&#8209;mcp is the agent&#8209;facing gateway; the
-          <b>a11oy</b> compute fabric is where governed work actually runs. Probed live with an
-          AbortController timeout — honest fallback to SNAPSHOT if unreachable cross&#8209;origin.</div>
-        <div class="grid" id="fabric-kpis" style="grid-template-columns:repeat(2,1fr);gap:10px">
-          <div class="card kpi" style="padding:13px"><div class="label">Nodes reachable</div><div class="val t" id="fab-reach">—</div><div class="sub">of <span id="fab-total">—</span> total this probe</div></div>
-          <div class="card kpi" style="padding:13px"><div class="label">Sovereign GPU</div><div class="val ok" id="fab-gpu">—</div><div class="sub">owned metal · sovereign:true</div></div>
-        </div>
-        <p class="note">Fabric&#8209;level <span class="mono">sovereign:false</span> by design — hosted&#8209;inference
-          fallbacks are <b>not</b> owned compute and are labeled as such. Only the founder's own RTX + box report
-          <span class="mono">sovereign:true</span>. No energy/joule claims are made anywhere.</p>
-      </div>
-      <div class="card">
-        <div style="font-size:13px;color:var(--muted);margin-bottom:12px">Fabric nodes (live or SNAPSHOT)</div>
-        <div class="tools" id="node-list" style="max-height:none"><div class="skel">probing a11oy fabric…</div></div>
-      </div>
+<span class="c"># descriptors</span>
+GET  /.well-known/mcp/server-card.json
+GET  /.well-known/mcp-manifest-attestation
+GET  /connect
+GET  /api/console-state   <span class="c">this page's data</span>
+GET  /api/build-info
+GET  /healthz  /readyz  /pubkey
+
+<span class="c"># anonymous calls are declined and receipted —</span>
+<span class="c"># bring an SZL API key.</span></pre>
     </div>
-  </section>
+  </div>
+</div></section>
 
-</div>
 </main>
 
 <footer><div class="wrap">
   <div class="row">
-    <span>&copy; SZL Holdings · hatun&#8209;mcp v1.0.0</span>
+    <span>© SZL Holdings · hatun&#8209;mcp</span>
     <a href="https://github.com/szl-holdings/hatun-mcp">GitHub</a>
     <a href="/.well-known/mcp/server-card.json">Server card</a>
+    <a href="/api/console-state">Console state</a>
     <a href="/healthz">/healthz</a>
     <a href="/pubkey">/pubkey</a>
   </div>
-  <p class="honest"><b>Honesty doctrine v11 (749 / 14 / 163).</b>
-    Locked&#8209;proven = 8. &Lambda; is <b>Conjecture&nbsp;1</b> — advisory governance, never "proven trust".
-    Khipu&nbsp;BFT framing is Conjecture&nbsp;2. SLSA <b>L1 honest</b> (L2 verified&#8209;provenance on roadmap; L3 not claimed).
-    <span class="mono">sovereign:true</span> only on owned hardware. No free&#8209;energy claims. Live numbers are
-    fetched at load and degrade to a labeled SNAPSHOT on failure — nothing on this page is fabricated.</p>
-  <p class="honest mono" style="opacity:.7">Signed&#8209;off&#8209;by: Stephen P. Lutar Jr. &lt;stephenlutar2@gmail.com&gt;</p>
+  <p class="honest mono">offline&#8209;checkable · no trust in SZL — <span id="foot-label">state UNAVAILABLE until read</span></p>
+  <p class="honest"><b>Doctrine v11.</b> Locked numbers <span class="mono" id="foot-locked">—</span>.
+    &Lambda; is <b>Conjecture&nbsp;1 · not a theorem</b> — advisory governance, and it stays open.
+    Khipu BFT framing is Conjecture&nbsp;2. SLSA <b>L1 honest</b> (L2 attested on the pushed image;
+    L3 not claimed). Responses are <b>UNSIGNED</b> unless a real ECDSA&nbsp;P&#8209;256 key is loaded
+    in this process. No energy or joule claims are made anywhere on this surface. Every number on
+    this page is read in&#8209;request from <span class="mono">/api/console-state</span>; where a
+    reading fails the panel says UNAVAILABLE and shows no number.</p>
+  <p class="honest mono">Signed&#8209;off&#8209;by: Stephen P. Lutar Jr. &lt;stephenlutar2@gmail.com&gt;</p>
 </div></footer>
 
-<script id="snapshot" type="application/json">__SNAPSHOT_JSON__</script>
 <script>
+/* ---- monochrome holographic point-cloud "proof kernel" (SZL design system) ---- */
+(function(){
+  var cv=document.getElementById('holo'); if(!cv||!cv.getContext) return;
+  var ctx=cv.getContext('2d'); if(!ctx) return;
+  var W,H,DPR=Math.min(window.devicePixelRatio||1,2),CX,CY,S;
+  function rs(){W=cv.width=cv.clientWidth*DPR;H=cv.height=(cv.clientHeight||600)*DPR;CX=W*0.5;CY=H*0.5;S=Math.min(W,H)*0.32;}
+  rs();addEventListener('resize',rs);
+  var reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var N=reduce?420:900, pts=[];
+  for(var i=0;i<N;i++){
+    var y=1-(i/(N-1))*2, rr=Math.sqrt(1-y*y), th=i*2.399963;
+    pts.push([Math.cos(th)*rr,y,Math.sin(th)*rr]);
+  }
+  var t=0;
+  function frame(){
+    ctx.clearRect(0,0,W,H);
+    if(!reduce)t+=0.0032;
+    var cy=Math.cos(t),sy=Math.sin(t),cx=Math.cos(t*0.5),sx=Math.sin(t*0.5);
+    var proj=[],i,j;
+    for(i=0;i<pts.length;i++){
+      var x=pts[i][0],yy=pts[i][1],z=pts[i][2];
+      var x1=x*cy - z*sy, z1=x*sy + z*cy;
+      var y2=yy*cx - z1*sx, z2=yy*sx + z1*cx;
+      var d=2.6/(2.6+z2);
+      proj.push([CX+x1*S*d, CY+y2*S*d, z2, d]);
+    }
+    ctx.lineWidth=0.6*DPR;
+    for(i=0;i<proj.length;i+=7){
+      var a=proj[i];
+      for(j=i+1;j<Math.min(i+9,proj.length);j++){
+        var b=proj[j];var dx=a[0]-b[0],dy=a[1]-b[1];
+        if(dx*dx+dy*dy<(46*DPR)*(46*DPR)){
+          ctx.strokeStyle='rgba(255,255,255,'+(0.05*a[3])+')';
+          ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.stroke();
+        }
+      }
+    }
+    for(i=0;i<proj.length;i++){
+      var px=proj[i][0],py=proj[i][1],pz=proj[i][2],pd=proj[i][3];
+      var bright=0.28+0.72*((pz+1)/2);
+      var r=(0.7+1.3*pd)*DPR;
+      ctx.fillStyle='rgba(255,255,255,'+(0.15+0.6*bright).toFixed(3)+')';
+      ctx.beginPath();ctx.arc(px,py,r,0,7);ctx.fill();
+    }
+    var g=ctx.createRadialGradient(CX,CY,0,CX,CY,S*1.4);
+    g.addColorStop(0,'rgba(240,238,230,0.06)');g.addColorStop(1,'rgba(240,238,230,0)');
+    ctx.fillStyle=g;ctx.beginPath();ctx.arc(CX,CY,S*1.4,0,7);ctx.fill();
+    if(reduce) return;
+    requestAnimationFrame(frame);
+  }
+  frame();
+})();
+</script>
+
+<script>
+/* ---- live data: ONE read of this server's own Python endpoint ----------------
+   Deliberately a SEPARATE <script> element from the hero canvas: a rendering
+   failure in the decorative kernel must never stop the real data from loading. */
 (function(){
   "use strict";
-  var SNAP = {};
-  try { SNAP = JSON.parse(document.getElementById("snapshot").textContent); } catch(e){ SNAP = {}; }
-
+  var UNAVAILABLE = "UNAVAILABLE";
   function $(id){ return document.getElementById(id); }
   function txt(id,v){ var e=$(id); if(e) e.textContent=v; }
-  function chip(id,mode,label){
-    var e=$(id); if(!e) return;
-    e.className = "chip " + mode;
-    e.innerHTML = '<span class="dot"></span>' + label;
-  }
   function esc(s){ return String(s).replace(/[&<>"]/g,function(c){
     return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
+  function num(v){ return (v===null||v===undefined) ? UNAVAILABLE : String(v); }
 
-  // fetch with timeout via AbortController; honest boolean live/fallback
   function getJSON(url, ms){
     var ctl = new AbortController();
-    var t = setTimeout(function(){ ctl.abort(); }, ms||4000);
+    var timer = setTimeout(function(){ ctl.abort(); }, ms||5000);
     return fetch(url, {signal:ctl.signal, headers:{accept:"application/json"}})
       .then(function(r){ if(!r.ok) throw new Error("http "+r.status); return r.json(); })
-      .finally(function(){ clearTimeout(t); });
+      .finally(function(){ clearTimeout(timer); });
   }
   function getText(url, ms){
     var ctl = new AbortController();
-    var t = setTimeout(function(){ ctl.abort(); }, ms||4000);
+    var timer = setTimeout(function(){ ctl.abort(); }, ms||5000);
     return fetch(url, {signal:ctl.signal})
       .then(function(r){ if(!r.ok) throw new Error("http "+r.status); return r.text(); })
-      .finally(function(){ clearTimeout(t); });
+      .finally(function(){ clearTimeout(timer); });
   }
 
-  // ── 1. health + server card (same origin → reliable) ──────────────────────
-  function renderHealth(h, live){
-    txt("kpi-service", (h.status||"?").toUpperCase());
-    txt("kpi-proto", "protocol " + (h.protocol_revision||"—"));
-    txt("kpi-chain", h.chain_verified ? "VERIFIED" : "UNVERIFIED");
-    txt("kpi-signer", h.signer_mode || "—");
-    txt("kpi-signer-sub", h.signer_mode === "PLACEHOLDER"
-      ? "no key in process — responses UNSIGNED (honest)"
-      : "ECDSA P-256 · live signer");
-    var mode = live ? "live":"snap", lbl = live ? "LIVE":"SNAPSHOT";
-    chip("status-src", mode, lbl);
-    txt("hero-status", live ? ("LIVE · " + (h.status||"ok").toUpperCase() + " · " + (h.protocol_revision||""))
-                            : "SNAPSHOT · last known good");
+  /* the ONE shared card component — every card on this page is built here */
+  function card(o){
+    var el = document.createElement("article");
+    el.className = "card";
+    var html = '<div class="eyebrow">'+esc(o.eyebrow||"")+'</div>'+
+               '<div class="t">'+esc(o.title||UNAVAILABLE)+'</div>';
+    if(o.desc) html += '<div class="d">'+esc(o.desc)+'</div>';
+    if(o.metrics && o.metrics.length){
+      html += '<div class="metrics">'+o.metrics.map(function(m){
+        return '<span>'+esc(m[0])+' <b>'+esc(m[1])+'</b></span>'; }).join("")+'</div>';
+    }
+    if(o.label) html += '<div class="chip">'+esc(o.label)+'</div>';
+    if(o.foot) html += '<div class="foot">'+o.foot+'</div>';
+    el.innerHTML = html;
+    return el;
   }
-  function renderCard(card, live){
-    var tools = (card.tools)||[];
-    txt("kpi-tools", tools.length || SNAP.tool_count || "—");
-    txt("tools-count", "(" + (tools.length||0) + " tools)");
-    var lk = (card.governance && card.governance.doctrine_locked) || {};
-    txt("kpi-decl", lk.lean_declarations || (SNAP.lean&&SNAP.lean.declarations) || "—");
-    txt("kpi-sorry", lk.lean_sorries_total || (SNAP.lean&&SNAP.lean.sorries) || "—");
-    txt("kpi-axes", lk.yuyay_axes || (SNAP.lean&&SNAP.lean.yuyay_axes) || "—");
-
-    // tool catalog
-    var host = $("tool-list"); host.innerHTML="";
-    if(!tools.length){ host.innerHTML='<div class="skel">no tools advertised</div>'; }
-    tools.forEach(function(t){
-      var alias = /alias of/.test(t.description||"") ? '<span class="tag">alias</span>' : "";
-      var gate  = /2-person gate|state-changing/.test(t.description||"") ? '<span class="tag">2-person gate</span>' : "";
-      var honestNote = /honest/.test(t.description||"") ? '<span class="tag">honest&#8209;disclosed</span>' : "";
-      var d = document.createElement("div"); d.className="tool";
-      d.innerHTML = '<div class="name">'+esc(t.name)+'</div>'+
-                    '<div class="desc">'+esc(t.description||"")+alias+gate+honestNote+'</div>';
-      host.appendChild(d);
-    });
-
-    // resources + governance
-    var rhost = $("res-list"); rhost.innerHTML="";
-    ((card.resources)||[]).forEach(function(r){
-      var d=document.createElement("div"); d.className="tool";
-      d.innerHTML='<div class="name">'+esc(r.uri)+'</div><div class="desc">'+esc(r.description||"")+'</div>';
-      rhost.appendChild(d);
-    });
-    var g = card.governance||{};
-    var gd=document.createElement("div"); gd.className="tool";
-    gd.innerHTML='<div class="name">governance</div><div class="desc">protocol '+esc(g.protocol_revision||"—")+
-      ' · signer '+esc(g.signer_mode||"—")+' · Yuyay-13 gate · Khipu receipts · DSSE</div>';
-    rhost.appendChild(gd);
-
-    var mode = live ? "live":"snap", lbl = live ? "LIVE":"SNAPSHOT";
-    chip("tools-src", mode, lbl);
+  function fill(hostId, cards){
+    var host = $(hostId); if(!host) return;
+    host.innerHTML = "";
+    if(!cards.length){
+      host.appendChild(card({eyebrow:"NO READING", title:UNAVAILABLE,
+        desc:"This registry could not be read in this request.", label:UNAVAILABLE}));
+      return;
+    }
+    cards.forEach(function(c){ host.appendChild(c); });
   }
 
-  getJSON("/healthz", 4000)
-    .then(function(h){ renderHealth(h, true); })
-    .catch(function(){ renderHealth(SNAP.healthz||{}, false); });
+  function shortHash(h){
+    if(!h) return UNAVAILABLE;
+    if(/^0{64}$/.test(h)) return "GENESIS";
+    return h.slice(0,12) + "…" + h.slice(-6);
+  }
 
-  getJSON("/.well-known/mcp/server-card.json", 5000)
-    .then(function(c){ renderCard(c, true); })
-    .catch(function(){
-      renderCard({tools:[], resources:[], governance:{
-        protocol_revision:(SNAP.healthz&&SNAP.healthz.protocol_revision),
-        signer_mode:(SNAP.healthz&&SNAP.healthz.signer_mode),
-        doctrine_locked:{lean_declarations:(SNAP.lean&&SNAP.lean.declarations),
-          lean_sorries_total:(SNAP.lean&&SNAP.lean.sorries), yuyay_axes:(SNAP.lean&&SNAP.lean.yuyay_axes)}
-      }}, false);
-    });
+  function renderUnavailable(){
+    ["hero-state","hero-proto","hero-sign","hero-read"].forEach(function(id){ txt(id, UNAVAILABLE); });
+    ["kpi-tools","kpi-chain","kpi-receipts","kpi-parity"].forEach(function(id){ txt(id, UNAVAILABLE); });
+    txt("foot-label", "state UNAVAILABLE — /api/console-state did not answer this request");
+    txt("foot-locked", UNAVAILABLE);
+    fill("runtime-cards", []);
+    fill("tool-cards", []);
+    fill("resource-cards", []);
+  }
 
-  // ── 2. pubkey → SHA-256 fingerprint via SubtleCrypto (no CDN) ──────────────
+  function render(s){
+    var rt = s.runtime||{}, sg = s.signing||{}, kh = s.khipu||{},
+        bd = s.build||{}, hl = s.health||{}, tl = s.tools||{},
+        rs = s.resources||{}, pa = s.card_parity||{}, og = s.organs||{},
+        dc = s.doctrine||{};
+
+    /* hero + kpi strip */
+    txt("hero-state", (hl.status||UNAVAILABLE).toUpperCase()+" · "+(hl.readiness||UNAVAILABLE));
+    txt("hero-proto", rt.protocol_revision||UNAVAILABLE);
+    txt("hero-sign", sg.state||UNAVAILABLE);
+    txt("hero-read", s.read||UNAVAILABLE);
+    txt("kpi-tools", num(tl.count));
+    txt("kpi-chain", kh.chain||UNAVAILABLE);
+    txt("kpi-receipts", num(kh.receipts_this_process));
+    txt("kpi-parity", pa.state||UNAVAILABLE);
+    txt("foot-label", "read "+(s.generated_at||UNAVAILABLE)+" · signing "+(sg.state||UNAVAILABLE)+
+        " · chain "+(kh.chain||UNAVAILABLE));
+    txt("foot-locked", num(dc.lean_declarations)+" declarations / "+num(dc.lean_axioms_unique)+
+        " unique axioms / "+num(dc.lean_sorries_total)+" sorries · "+num(dc.yuyay_axes)+" Yuyay axes");
+
+    /* runtime cards — same shared component as every tool card */
+    var runtime = [
+      card({eyebrow:"RUNTIME · TRANSPORT", title:rt.transport||UNAVAILABLE,
+        desc:"MCP transport served by this process, with the legacy SSE mount alongside it.",
+        metrics:[["protocol", rt.protocol_revision||UNAVAILABLE],
+                 ["python", rt.python||UNAVAILABLE],
+                 ["uptime s", num(rt.uptime_seconds)]],
+        label:"MEASURED"}),
+      card({eyebrow:"GOVERNANCE · KHIPU CHAIN", title:kh.chain||UNAVAILABLE,
+        desc:"Append-only receipt chain, recomputed from genesis on every read of this endpoint.",
+        metrics:[["receipts", num(kh.receipts_this_process)],
+                 ["head", shortHash(kh.head_hash)]],
+        label:kh.link||UNAVAILABLE}),
+      card({eyebrow:"ATTESTATION · DSSE SIGNER", title:sg.state||UNAVAILABLE,
+        desc:sg.state==="SIGNED"
+          ? "A real ECDSA P-256 key is loaded in this process; responses carry a DSSE envelope."
+          : "No signing key is loaded in this process, so responses are returned UNSIGNED.",
+        metrics:[["signer", sg.signer_mode||UNAVAILABLE],
+                 ["algorithm", sg.algorithm||UNAVAILABLE],
+                 ["transparency log", sg.transparency_log||UNAVAILABLE]],
+        label:sg.state||UNAVAILABLE,
+        foot:'<a href="/pubkey">/pubkey</a> · <span id="key-fp">fingerprint reading…</span>'}),
+      card({eyebrow:"PROVENANCE · SOURCE REVISION", title:bd.state||UNAVAILABLE,
+        desc:"The exact Git revision the deployer injected into this container.",
+        metrics:[["revision", bd.revision ? bd.revision.slice(0,12) : UNAVAILABLE]],
+        label:bd.state||UNAVAILABLE,
+        foot:'<a href="/api/build-info">/api/build-info</a>'}),
+      card({eyebrow:"DISCOVERY · CARD ↔ RUNTIME", title:pa.state||UNAVAILABLE,
+        desc:"Measured comparison between the published server card and the live tool registry.",
+        metrics:[["card", num(pa.card_tool_count)],
+                 ["runtime", num(pa.runtime_tool_count)],
+                 ["card only", String((pa.only_in_card||[]).length)],
+                 ["runtime only", String((pa.only_in_runtime||[]).length)]],
+        label:pa.state===UNAVAILABLE?UNAVAILABLE:"MEASURED",
+        foot:'<a href="/.well-known/mcp/server-card.json">server card</a>'}),
+      card({eyebrow:"FEDERATION · ORGAN REGISTRATION", title:og.state||UNAVAILABLE,
+        desc:og.state==="DISABLED"
+          ? "Dynamic organ-tool registration is switched off in this process, so only the static registry is served."
+          : "Organ catalogues fetched at boot; unreachable organs register no tools and say so.",
+        metrics:(og.organs&&og.organs.length)
+          ? og.organs.map(function(o){ return [o.organ, num(o.tools_registered)]; })
+          : [["organs", (og.organs&&og.organs.length)||0]],
+        label:og.state===UNAVAILABLE?UNAVAILABLE:og.state,
+        foot:og.detail ? esc(og.detail) : ""})
+    ];
+    fill("runtime-cards", runtime);
+
+    /* tool cards — one shared card per REAL registered tool */
+    var items = tl.items||[];
+    txt("tools-count", tl.state==="MEASURED" ? "· "+items.length+" measured" : "· "+UNAVAILABLE);
+    fill("tool-cards", items.map(function(t){
+      return card({
+        eyebrow:"TOOL · "+String(t.family||"").toUpperCase()+(t.is_async?" · ASYNC":""),
+        title:t.name,
+        desc:t.description||"",
+        metrics:[["params", num(t.parameters_total)],
+                 ["required", num(t.parameters_required)]],
+        label:"MEASURED · LIVE REGISTRY"
+      });
+    }));
+
+    /* resource cards */
+    fill("resource-cards", (rs.items||[]).map(function(r){
+      return card({eyebrow:"RESOURCE", title:r.uri, desc:r.description||"",
+        label:"MEASURED · LIVE REGISTRY"});
+    }));
+  }
+
+  getJSON("/api/console-state", 6000).then(render).catch(renderUnavailable);
+
+  /* pubkey fingerprint — computed in the browser from the served PEM */
   function pemToDer(pem){
-    var b64 = pem.replace(/-----[^-]+-----/g,"").replace(/\\s+/g,"");
+    var b64 = pem.replace(/-----[^-]+-----/g,"").replace(/\s+/g,"");
     var bin = atob(b64), arr = new Uint8Array(bin.length);
     for(var i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i);
     return arr.buffer;
@@ -490,84 +551,19 @@ GET  <span class="s">/pubkey</span>
     return Array.prototype.map.call(new Uint8Array(buf),function(b){
       return b.toString(16).padStart(2,"0"); }).join("");
   }
-  getText("/pubkey", 4000).then(function(pem){
-    if(/PLACEHOLDER/.test(pem) || pem.indexOf("PUBLIC KEY")===-1){
-      $("key-fp").textContent = "PLACEHOLDER — no signing key in this process (honest)";
-      chip("key-src","snap","PLACEHOLDER"); return;
-    }
-    if(window.crypto && crypto.subtle){
-      return crypto.subtle.digest("SHA-256", pemToDer(pem)).then(function(d){
-        var h = hex(d), grouped = h.match(/.{1,4}/g).join(" ");
-        $("key-fp").textContent = "SHA256(SPKI) " + grouped;
-        chip("key-src","live","LIVE");
-      });
-    } else {
-      $("key-fp").textContent = pem.split("\\n").filter(Boolean).slice(1,-1).join("").slice(0,48)+"…";
-      chip("key-src","live","LIVE");
-    }
-  }).catch(function(){
-    $("key-fp").textContent = "SNAPSHOT — pubkey unreachable; verify via /pubkey";
-    chip("key-src","snap","SNAPSHOT");
-  });
-
-  // ── 3. a11oy fabric (cross-origin; AbortController + honest fallback) ──────
-  function renderFabric(f, live){
-    txt("fab-reach", f.nodes_reachable!=null ? f.nodes_reachable : "—");
-    txt("fab-total", f.nodes_total!=null ? f.nodes_total : "—");
-    txt("fab-gpu", f.sovereign_gpu_live ? "LIVE" : (f.gpu_nodes_reachable||0)+" node(s)");
-    chip("fabric-src", live?"live":"snap", live?"LIVE":"SNAPSHOT");
-    var host=$("node-list"); host.innerHTML="";
-    var nodes = f.nodes;
-    if(!nodes){ // snapshot has no node detail
-      [["hetzner-box-cpu","sovereign · cpu"],["rtx-betterwithage","sovereign · GPU"],
-       ["chaski","tailnet GPU"],["groq","hosted fallback"],["nvidia-nim","hosted fallback"],
-       ["hf-router","hosted fallback"]].forEach(function(n){
-        var d=document.createElement("div"); d.className="node";
-        d.innerHTML='<span class="dot" style="color:var(--faint)"></span><span class="nm">'+esc(n[0])+
-          '</span><span class="kd">'+esc(n[1])+'</span>'; host.appendChild(d);
-      }); return;
-    }
-    nodes.forEach(function(n){
-      var col = n.reachable ? (n.sovereign?"var(--good)":"var(--cyan)") : "var(--bad)";
-      var kind = (n.sovereign?"sovereign · ":"") + (n.kind||"");
-      var d=document.createElement("div"); d.className="node";
-      d.innerHTML='<span class="dot" style="color:'+col+'"></span><span class="nm">'+esc(n.name)+
-        '</span><span class="kd">'+esc(kind)+(n.reachable?"":" · unreachable")+'</span>';
-      host.appendChild(d);
-    });
-  }
-  getJSON("https://a-11-oy.com/api/a11oy/v1/compute-pool", 4500)
-    .then(function(f){
-      var c = f.counts||{};
-      renderFabric({nodes_reachable:c.nodes_reachable, nodes_total:c.nodes_total,
-        gpu_nodes_reachable:c.gpu_nodes_reachable, sovereign_gpu_live:c.sovereign_gpu_live,
-        nodes:f.nodes}, true);
-    })
-    .catch(function(){ renderFabric(SNAP.fabric||{}, false); });
-
-  // ── 4. global watchdog: belt-and-suspenders against a perpetual spinner ────
-  // Every panel above already resolves in both its .then and .catch within an
-  // AbortController timeout, so a hung fetch cannot stall it. This watchdog is a
-  // final guarantee: if any chip is somehow still showing "loading" or any host
-  // still shows its skeleton after the longest fetch budget elapses, force the
-  // honest SNAPSHOT fallback so nothing is ever stuck "loading" forever.
+  function setFp(v){ var e=$("key-fp"); if(e) e.textContent=v; }
   setTimeout(function(){
-    ["status-src","key-src","tools-src","fabric-src"].forEach(function(id){
-      var e=$(id); if(e && /loading/i.test(e.textContent)) chip(id,"snap","SNAPSHOT");
-    });
-    var hs=$("hero-status"); if(hs && /probing/i.test(hs.textContent)){ renderHealth(SNAP.healthz||{}, false); }
-    var tl=$("tool-list"); if(tl && /fetching/i.test(tl.textContent)){
-      renderCard({tools:[], resources:[], governance:{}}, false);
-    }
-    var kf=$("key-fp"); if(kf && /computing/i.test(kf.textContent)){
-      kf.textContent="SNAPSHOT \u2014 pubkey unreachable; verify via /pubkey"; chip("key-src","snap","SNAPSHOT");
-    }
-    var nl=$("node-list"); if(nl && /probing/i.test(nl.textContent)){ renderFabric(SNAP.fabric||{}, false); }
-  }, 9000);
+    getText("/pubkey", 5000).then(function(pem){
+      if(pem.indexOf("PUBLIC KEY") === -1){ setFp("no key in process — UNSIGNED"); return; }
+      if(window.crypto && crypto.subtle){
+        return crypto.subtle.digest("SHA-256", pemToDer(pem)).then(function(d){
+          setFp("SHA256(SPKI) " + hex(d).slice(0,24) + "…");
+        });
+      }
+      setFp("key served · fingerprint " + UNAVAILABLE + " in this browser");
+    }).catch(function(){ setFp("fingerprint " + UNAVAILABLE); });
+  }, 250);
 })();
 </script>
 </body>
 </html>"""
-
-# Inject the snapshot JSON (kept out of the template literal so braces don't clash).
-CONSOLE_HTML = CONSOLE_HTML.replace("__SNAPSHOT_JSON__", _json.dumps(_SNAPSHOT))

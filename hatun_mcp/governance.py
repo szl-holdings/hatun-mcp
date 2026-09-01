@@ -353,6 +353,16 @@ class KhipuChain:
         with self._lock:
             return [r.to_dict() for r in self._receipts[-n:]]
 
+    def depth(self) -> int:
+        """Number of receipts appended in THIS process (real count, never seeded)."""
+        with self._lock:
+            return len(self._receipts)
+
+    def head_hash(self) -> str:
+        """Current chain head. Equals GENESIS while no receipt has been minted."""
+        with self._lock:
+            return self._last_hash
+
 
 # ── Yuyay-13 gate (13-axis conjunctive AND) ─────────────────────────────────────
 YUYAY_AXES = [
