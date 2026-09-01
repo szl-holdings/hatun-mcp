@@ -127,6 +127,21 @@ def test_dockerfile_deploy_set_contains_build_identity_code_and_card():
     assert "COPY README.md" in dockerfile
 
 
+def test_dockerfile_copies_every_package_module():
+    # The image uses per-file COPY (no directory copies), so a new module that is
+    # not listed here imports fine in CI and then fails at container start. Lock
+    # the deploy set to the actual package contents instead.
+    dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+    package = ROOT / "hatun_mcp"
+    missing = [
+        str(path.relative_to(ROOT)).replace("\\", "/")
+        for path in sorted(package.rglob("*.py"))
+        if "__pycache__" not in path.parts
+        and f"COPY {str(path.relative_to(ROOT))} " not in dockerfile
+    ]
+    assert not missing, f"module(s) absent from the Dockerfile deploy set: {missing}"
+
+
 def test_source_contract_runs_for_runtime_dependency_changes():
     workflow = (ROOT / ".github/workflows/hf-deploy-contract.yml").read_text(
         encoding="utf-8"
