@@ -10,7 +10,9 @@ name: Deploy to HuggingFace Space
 # The restart is intentional. Hugging Face accepted the exact source at
 # 5acdcfd324cb1f1551fa11d58d2b82d2ed3f1547, but a later public read returned
 # the generic application-not-found surface. Publication without a bounded
-# restart cannot be treated as a durable runtime transition.
+# restart cannot be treated as a durable runtime transition. The pinned
+# controller also retries transient post-restart route swaps for 180 seconds
+# without accepting a mismatched source revision.
 
 on:
   push:
@@ -32,7 +34,7 @@ concurrency:
 
 jobs:
   deploy:
-    uses: szl-holdings/.github/.github/workflows/reusable-hf-deploy.yml@3dde396da0b2c17722e8b78e9da34057801dce5d
+    uses: szl-holdings/.github/.github/workflows/reusable-hf-deploy.yml@5a4c781502417fd0c4162514b2972a5852ae9fab
     with:
       hf-repo: SZLHOLDINGS/hatun-mcp
       ref: ${{ github.sha }}
