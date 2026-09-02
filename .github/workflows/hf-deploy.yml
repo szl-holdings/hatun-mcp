@@ -11,8 +11,8 @@ name: Deploy to HuggingFace Space
 # 5acdcfd324cb1f1551fa11d58d2b82d2ed3f1547, but a later public read returned
 # the generic application-not-found surface. Publication without a bounded
 # restart cannot be treated as a durable runtime transition. The pinned
-# controller also retries transient post-restart route swaps for 180 seconds
-# without accepting a mismatched source revision.
+# controller retries transient post-restart route swaps for 180 seconds while
+# preserving the canonical application URL and requiring the exact source SHA.
 
 on:
   push:
@@ -34,7 +34,7 @@ concurrency:
 
 jobs:
   deploy:
-    uses: szl-holdings/.github/.github/workflows/reusable-hf-deploy.yml@5a4c781502417fd0c4162514b2972a5852ae9fab
+    uses: szl-holdings/.github/.github/workflows/reusable-hf-deploy.yml@86c4e95fdceedfb1e7e226ad3c8f5f844bd2aae4
     with:
       hf-repo: SZLHOLDINGS/hatun-mcp
       ref: ${{ github.sha }}
