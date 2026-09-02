@@ -3,9 +3,14 @@ name: Deploy to HuggingFace Space
 
 # Permanent source-derived deployment authority. Every protected-main change to
 # the Space build set is published through the exact pinned organization
-# controller, bound to its full Git SHA, smoke-tested, and independently read
-# back from /api/build-info. No hand-maintained upload allowlist or stale manual
-# deployment lane remains.
+# controller, bound to its full Git SHA, restarted, smoke-tested, and
+# independently read back from /api/build-info. No hand-maintained upload
+# allowlist or stale manual deployment lane remains.
+#
+# The restart is intentional. Hugging Face accepted the exact source at
+# 5acdcfd324cb1f1551fa11d58d2b82d2ed3f1547, but a later public read returned
+# the generic application-not-found surface. Publication without a bounded
+# restart cannot be treated as a durable runtime transition.
 
 on:
   push:
@@ -27,14 +32,16 @@ concurrency:
 
 jobs:
   deploy:
-    uses: szl-holdings/.github/.github/workflows/reusable-hf-deploy.yml@5d339cf22e394635285f2c5fccb14d9ebb4f7455
+    uses: szl-holdings/.github/.github/workflows/reusable-hf-deploy.yml@3dde396da0b2c17722e8b78e9da34057801dce5d
     with:
       hf-repo: SZLHOLDINGS/hatun-mcp
       ref: ${{ github.sha }}
       dockerfile-path: Dockerfile
       include-readme: true
       prune: true
+      restart-space: true
       wait-running: 1200
+      require-default-branch-tip: true
       source-revision-variable: SZL_GIT_SHA
       source-revision-probe-path: /api/build-info
       smoke-paths: '["/","/healthz","/.well-known/mcp/server-card.json","/.well-known/mcp-manifest-attestation","/api/build-info"]'
