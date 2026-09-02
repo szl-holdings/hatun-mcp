@@ -5,7 +5,8 @@ import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PIN = "5d339cf22e394635285f2c5fccb14d9ebb4f7455"
+DEPLOY_PIN = "3dde396da0b2c17722e8b78e9da34057801dce5d"
+DRIFT_PIN = "5d339cf22e394635285f2c5fccb14d9ebb4f7455"
 
 
 def test_space_card_is_source_controlled_and_complete():
@@ -28,15 +29,18 @@ def test_space_card_is_source_controlled_and_complete():
     assert len(short_description) <= 60
 
 
-def test_deployer_is_pinned_source_bound_and_automatic():
+def test_deployer_is_pinned_source_bound_restarted_and_automatic():
     workflow = (ROOT / ".github/workflows/hf-deploy.yml").read_text(encoding="utf-8")
     required = (
         "branches: [main]",
-        f"reusable-hf-deploy.yml@{PIN}",
+        f"reusable-hf-deploy.yml@{DEPLOY_PIN}",
         "hf-repo: SZLHOLDINGS/hatun-mcp",
         "ref: ${{ github.sha }}",
         "include-readme: true",
         "prune: true",
+        "restart-space: true",
+        "wait-running: 1200",
+        "require-default-branch-tip: true",
         "source-revision-variable: SZL_GIT_SHA",
         "source-revision-probe-path: /api/build-info",
         '"/.well-known/mcp-manifest-attestation"',
@@ -45,9 +49,20 @@ def test_deployer_is_pinned_source_bound_and_automatic():
     )
     for marker in required:
         assert marker in workflow, marker
+    assert workflow.count("restart-space: true") == 1
+    assert workflow.count("require-default-branch-tip: true") == 1
+    assert "restart-space: false" not in workflow
+    assert "require-default-branch-tip: false" not in workflow
     assert "workflow_dispatch: {}" in workflow
     assert "secrets: inherit" not in workflow
     assert "@main" not in workflow
+
+
+def test_health_reachability_does_not_replace_exact_source_identity():
+    workflow = (ROOT / ".github/workflows/hf-deploy.yml").read_text(encoding="utf-8")
+    assert "source-revision-probe-path: /api/build-info" in workflow
+    assert "source-revision-probe-path: /healthz" not in workflow
+    assert 'smoke-paths: '["/","/healthz","/.well-known/mcp/server-card.json","/.well-known/mcp-manifest-attestation","/api/build-info"]'' in workflow
 
 
 def test_drift_is_sequenced_after_deploy_and_has_no_waivers():
@@ -58,7 +73,7 @@ def test_drift_is_sequenced_after_deploy_and_has_no_waivers():
         "workflow_run:",
         "Deploy to HuggingFace Space",
         "github.event.workflow_run.conclusion == 'success'",
-        f"reusable-hf-module-drift-check.yml@{PIN}",
+        f"reusable-hf-module-drift-check.yml@{DRIFT_PIN}",
         "hf-repo: SZLHOLDINGS/hatun-mcp",
         "mode: direct",
     )
