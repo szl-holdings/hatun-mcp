@@ -62,7 +62,7 @@ def test_health_reachability_does_not_replace_exact_source_identity():
     workflow = (ROOT / ".github/workflows/hf-deploy.yml").read_text(encoding="utf-8")
     assert "source-revision-probe-path: /api/build-info" in workflow
     assert "source-revision-probe-path: /healthz" not in workflow
-    assert 'smoke-paths: '["/","/healthz","/.well-known/mcp/server-card.json","/.well-known/mcp-manifest-attestation","/api/build-info"]'' in workflow
+    assert "smoke-paths: '[\"/\",\"/healthz\",\"/.well-known/mcp/server-card.json\",\"/.well-known/mcp-manifest-attestation\",\"/api/build-info\"]'" in workflow
 
 
 def test_drift_is_sequenced_after_deploy_and_has_no_waivers():
