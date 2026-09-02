@@ -19,6 +19,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+from pathlib import Path
 
 from starlette.applications import Starlette
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -39,6 +40,13 @@ from .governance import (
     DsseSigner,
 )
 from .console import CONSOLE_HTML
+
+_HOLO_DIR = Path(__file__).resolve().parent / "static"
+_HOLO_CSS = (_HOLO_DIR / "szl-holo-v2.css").read_text(encoding="utf-8")
+_HOLO_JS = (_HOLO_DIR / "szl-holo-v2.js").read_text(encoding="utf-8")
+_HOLO_STYLE_TAG = '<link rel="stylesheet" href="/assets/szl-holo-v2.css" data-szl-holo-asset="style-v2" />'
+_HOLO_SCRIPT_TAG = '<script src="/assets/szl-holo-v2.js" defer data-szl-holo-asset="script-v2"></script>'
+CONSOLE_HOLO_HTML = CONSOLE_HTML.replace("</head>", f"  {_HOLO_STYLE_TAG}\n</head>", 1).replace("</body>", f"  {_HOLO_SCRIPT_TAG}\n</body>", 1)
 from .state import console_state, set_card_tool_names
 
 ALLOWED_ORIGINS = set(
@@ -535,10 +543,18 @@ def _prefers_html(request: Request) -> bool:
     return "text/html" in accept
 
 
+async def holo_css(_: Request) -> PlainTextResponse:
+    return PlainTextResponse(_HOLO_CSS, media_type="text/css", headers={"Cache-Control": "public, max-age=31536000, immutable"})
+
+
+async def holo_js(_: Request) -> PlainTextResponse:
+    return PlainTextResponse(_HOLO_JS, media_type="application/javascript", headers={"Cache-Control": "public, max-age=31536000, immutable"})
+
+
 async def index(request: Request):
     if _prefers_html(request):
         # no-store so the agentic live fetches always reflect current state.
-        return HTMLResponse(CONSOLE_HTML, headers={"Cache-Control": "no-store"})
+        return HTMLResponse(CONSOLE_HOLO_HTML, headers={"Cache-Control": "no-store"})
     return JSONResponse(_INDEX_JSON)
 
 
@@ -569,6 +585,8 @@ async def lifespan(app):
 app = Starlette(
     routes=[
         Route("/", index),
+        Route("/assets/szl-holo-v2.css", holo_css),
+        Route("/assets/szl-holo-v2.js", holo_js),
         Route("/healthz", healthz),
         Route("/api/build-info", build_info),
         Route("/api/console-state", console_state_route),

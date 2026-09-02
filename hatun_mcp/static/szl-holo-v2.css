@@ -1,0 +1,720 @@
+/*
+ * A11oy Holo-Constellation v2.0.0
+ * SZL-original visual material and interaction system.
+ * No external assets, tracking, storage, network fetches, or copied design code.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+:root {
+  --szl-holo-bg: #050806;
+  --szl-holo-bg-deep: #020403;
+  --szl-holo-surface: #0c1513;
+  --szl-holo-surface-2: #14201d;
+  --szl-holo-ink: #f3fff8;
+  --szl-holo-muted: #9fb7ad;
+  --szl-holo-accent: #b8ff45;
+  --szl-holo-accent-2: #31e6d1;
+  --szl-holo-danger: #ff625b;
+  --szl-holo-warning: #e2bb6d;
+  --szl-holo-success: #76d8aa;
+  --szl-holo-line: color-mix(in srgb, var(--szl-holo-accent) 20%, transparent);
+  --szl-holo-line-soft: color-mix(in srgb, var(--szl-holo-ink) 10%, transparent);
+  --szl-holo-glow: color-mix(in srgb, var(--szl-holo-accent) 16%, transparent);
+  --szl-holo-glow-2: color-mix(in srgb, var(--szl-holo-accent-2) 12%, transparent);
+  --szl-holo-shadow: 0 24px 84px rgb(0 0 0 / 0.42);
+  --szl-holo-radius-sm: 10px;
+  --szl-holo-radius-md: 18px;
+  --szl-holo-radius-lg: 30px;
+  --szl-holo-radius-xl: 44px;
+  --szl-holo-space-1: clamp(.45rem, .35rem + .3vw, .7rem);
+  --szl-holo-space-2: clamp(.8rem, .65rem + .5vw, 1.2rem);
+  --szl-holo-space-3: clamp(1.2rem, .95rem + .8vw, 1.9rem);
+  --szl-holo-space-4: clamp(1.8rem, 1.25rem + 1.7vw, 3.4rem);
+  --szl-holo-space-5: clamp(2.8rem, 2rem + 3vw, 6rem);
+  --szl-holo-pointer-x: 50%;
+  --szl-holo-pointer-y: 22%;
+  --szl-holo-scroll: 0;
+  --szl-holo-tilt-x: 0deg;
+  --szl-holo-tilt-y: 0deg;
+  --szl-holo-rail-height: 58px;
+  --szl-holo-z-ambient: -2;
+  --szl-holo-z-rail: 2147483000;
+  color-scheme: dark;
+  accent-color: var(--szl-holo-accent);
+}
+
+html[data-szl-holo="v2"] {
+  min-height: 100%;
+  overflow-x: clip;
+  background: var(--szl-holo-bg-deep);
+  scrollbar-color: color-mix(in srgb, var(--szl-holo-accent) 42%, transparent) var(--szl-holo-bg-deep);
+  scroll-padding-top: calc(var(--szl-holo-rail-height) + 18px);
+}
+
+html[data-szl-holo="v2"] body {
+  min-height: 100%;
+  overflow-x: clip;
+  color: var(--szl-holo-ink);
+  background: transparent;
+}
+
+html[data-szl-holo="v2"] body::before {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--szl-holo-z-ambient) - 1);
+  pointer-events: none;
+  content: "";
+  background:
+    radial-gradient(circle at var(--szl-holo-pointer-x) var(--szl-holo-pointer-y), var(--szl-holo-glow), transparent 24rem),
+    radial-gradient(circle at 90% 8%, var(--szl-holo-glow-2), transparent 30rem),
+    linear-gradient(158deg, var(--szl-holo-bg), color-mix(in srgb, var(--szl-holo-bg) 84%, var(--szl-holo-surface)) 58%, var(--szl-holo-bg-deep));
+}
+
+/* Lightweight optical texture. It is decorative and does not represent telemetry. */
+html[data-szl-holo="v2"] body::after {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--szl-holo-z-ambient) - 1);
+  pointer-events: none;
+  content: "";
+  opacity: .14;
+  background-image:
+    repeating-linear-gradient(0deg, transparent 0 3px, rgb(255 255 255 / .018) 4px),
+    repeating-linear-gradient(90deg, transparent 0 5px, rgb(255 255 255 / .012) 6px);
+  mix-blend-mode: soft-light;
+}
+
+#szl-holo-ambient {
+  position: fixed;
+  inset: 0;
+  z-index: var(--szl-holo-z-ambient);
+  overflow: hidden;
+  pointer-events: none;
+  contain: strict;
+  opacity: .82;
+}
+
+#szl-holo-ambient::before,
+#szl-holo-ambient::after {
+  position: absolute;
+  inset: -18%;
+  content: "";
+  transform-origin: center;
+  will-change: transform;
+}
+
+/* Command constellation: orbital paths over a tactical field. */
+html[data-szl-holo-motif="command-constellation"] #szl-holo-ambient::before {
+  background:
+    radial-gradient(circle at center, var(--szl-holo-accent) 0 1.5px, transparent 2.5px),
+    linear-gradient(var(--szl-holo-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--szl-holo-line) 1px, transparent 1px);
+  background-size: 112px 112px, 56px 56px, 56px 56px;
+  mask-image: radial-gradient(ellipse at 63% 29%, #000 0 18%, transparent 70%);
+  transform: perspective(720px) rotateX(58deg) translate3d(0, 22%, 0) scale(1.12);
+}
+
+html[data-szl-holo-motif="command-constellation"] #szl-holo-ambient::after {
+  inset: 4% -10% -28% 34%;
+  border: 1px solid var(--szl-holo-line);
+  border-radius: 50%;
+  background:
+    repeating-radial-gradient(ellipse, transparent 0 74px, var(--szl-holo-line) 75px 76px),
+    conic-gradient(from 218deg, transparent 0 72%, var(--szl-holo-glow) 74% 75.5%, transparent 77%);
+  transform: rotate(-9deg) scaleY(.58);
+  animation: szl-holo-orbit 38s linear infinite;
+}
+
+/* Observability: living signals and anomaly ribbons. */
+html[data-szl-holo-motif="signal-aurora"] #szl-holo-ambient::before {
+  inset: -46% -15%;
+  border-radius: 50%;
+  background: conic-gradient(from 76deg, transparent, var(--szl-holo-glow), transparent 25%, color-mix(in srgb, var(--szl-holo-accent-2) 18%, transparent), transparent 62%);
+  filter: blur(44px) saturate(125%);
+  animation: szl-holo-aurora 22s ease-in-out infinite alternate;
+}
+
+html[data-szl-holo-motif="signal-aurora"] #szl-holo-ambient::after {
+  background:
+    repeating-linear-gradient(90deg, transparent 0 43px, var(--szl-holo-line) 44px, transparent 45px 82px),
+    linear-gradient(170deg, transparent 38%, var(--szl-holo-glow-2) 39% 40%, transparent 41% 58%, var(--szl-holo-glow) 59% 60%, transparent 61%);
+  mask-image: linear-gradient(transparent, #000 28% 78%, transparent 92%);
+  transform: skewY(-7deg) translateY(calc(var(--szl-holo-scroll) * -2px));
+}
+
+/* Maritime: bathymetry, route wake, and radar. */
+html[data-szl-holo-motif="bathymetric-radar"] #szl-holo-ambient::before {
+  inset: 5% auto auto 52%;
+  width: min(78vw, 980px);
+  aspect-ratio: 1;
+  border: 1px solid var(--szl-holo-line);
+  border-radius: 50%;
+  background:
+    repeating-radial-gradient(circle, transparent 0 59px, var(--szl-holo-line) 60px 61px),
+    conic-gradient(from 12deg, color-mix(in srgb, var(--szl-holo-accent) 22%, transparent), transparent 16%);
+  animation: szl-holo-radar 18s linear infinite;
+}
+
+html[data-szl-holo-motif="bathymetric-radar"] #szl-holo-ambient::after {
+  background: repeating-radial-gradient(ellipse at 18% 82%, transparent 0 30px, var(--szl-holo-line) 31px 32px);
+  transform: rotate(-8deg) scale(1.28);
+  opacity: .34;
+}
+
+/* Real estate: topography and parcel geometry. */
+html[data-szl-holo-motif="topographic-parcels"] #szl-holo-ambient::before {
+  background:
+    repeating-radial-gradient(ellipse at 18% 58%, transparent 0 31px, var(--szl-holo-line) 32px 33px),
+    repeating-radial-gradient(ellipse at 84% 34%, transparent 0 49px, color-mix(in srgb, var(--szl-holo-accent-2) 18%, transparent) 50px 51px);
+  transform: rotate(-7deg) scale(1.18) translateY(calc(var(--szl-holo-scroll) * -1px));
+}
+
+html[data-szl-holo-motif="topographic-parcels"] #szl-holo-ambient::after {
+  background-image:
+    linear-gradient(28deg, transparent 48%, var(--szl-holo-line) 49% 50%, transparent 51%),
+    linear-gradient(118deg, transparent 48%, var(--szl-holo-line) 49% 50%, transparent 51%);
+  background-size: 180px 110px;
+  opacity: .26;
+}
+
+/* Security: threat lattice and shield lock. */
+html[data-szl-holo-motif="threat-lattice"] #szl-holo-ambient::before {
+  background:
+    linear-gradient(32deg, transparent 47%, var(--szl-holo-line) 48% 49%, transparent 50%),
+    linear-gradient(148deg, transparent 47%, color-mix(in srgb, var(--szl-holo-accent-2) 18%, transparent) 48% 49%, transparent 50%);
+  background-size: 84px 84px;
+  transform: skewX(-8deg) scale(1.12);
+  mask-image: radial-gradient(circle at 72% 28%, #000, transparent 62%);
+}
+
+html[data-szl-holo-motif="threat-lattice"] #szl-holo-ambient::after {
+  inset: 16% 6% auto auto;
+  width: clamp(150px, 22vw, 320px);
+  aspect-ratio: 1;
+  border: 1px solid var(--szl-holo-accent);
+  clip-path: polygon(50% 0, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%);
+  box-shadow: inset 0 0 70px var(--szl-holo-glow), 0 0 90px var(--szl-holo-glow);
+  opacity: .34;
+  animation: szl-holo-breathe 4.8s ease-in-out infinite alternate;
+}
+
+/* Legal: case facets and deadline lanes. */
+html[data-szl-holo-motif="case-facets"] #szl-holo-ambient::before {
+  background:
+    repeating-linear-gradient(0deg, transparent 0 51px, var(--szl-holo-line) 52px),
+    repeating-linear-gradient(90deg, transparent 0 219px, color-mix(in srgb, var(--szl-holo-accent-2) 17%, transparent) 220px 221px);
+  transform: rotate(-2deg);
+  mask-image: linear-gradient(90deg, transparent 2%, #000 20% 91%, transparent);
+}
+
+html[data-szl-holo-motif="case-facets"] #szl-holo-ambient::after {
+  background-image: radial-gradient(circle, var(--szl-holo-accent) 0 3px, transparent 4px);
+  background-size: 220px 52px;
+  opacity: .22;
+}
+
+/* Advisory: editorial orbits. */
+html[data-szl-holo-motif="editorial-orbit"] #szl-holo-ambient::before {
+  inset: -20% auto auto 44%;
+  width: min(82vw, 1040px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: repeating-radial-gradient(circle, transparent 0 74px, var(--szl-holo-line) 75px 76px);
+  transform: rotate(12deg) scaleY(.55);
+}
+
+html[data-szl-holo-motif="editorial-orbit"] #szl-holo-ambient::after {
+  background: linear-gradient(115deg, transparent 38%, var(--szl-holo-glow) 39% 41%, transparent 42% 62%, var(--szl-holo-glow-2) 63% 64%, transparent 65%);
+}
+
+/* Integration: connected node field. */
+html[data-szl-holo-motif="connection-field"] #szl-holo-ambient::before {
+  background:
+    radial-gradient(circle, var(--szl-holo-accent) 0 2px, transparent 3px),
+    linear-gradient(30deg, transparent 49%, var(--szl-holo-line) 50%, transparent 51%),
+    linear-gradient(150deg, transparent 49%, var(--szl-holo-line) 50%, transparent 51%);
+  background-size: 96px 96px;
+  mask-image: radial-gradient(circle at 55% 40%, #000, transparent 72%);
+  transform: translate3d(calc(var(--szl-holo-scroll) * .4px), calc(var(--szl-holo-scroll) * -.25px), 0);
+}
+
+/* Factory: build lanes and artifact promotion. */
+html[data-szl-holo-motif="assembly-circuit"] #szl-holo-ambient::before {
+  background:
+    radial-gradient(circle, var(--szl-holo-accent) 0 2px, transparent 3px),
+    linear-gradient(90deg, var(--szl-holo-line) 1px, transparent 1px),
+    linear-gradient(var(--szl-holo-line) 1px, transparent 1px);
+  background-size: 72px 72px;
+  clip-path: polygon(0 8%, 76% 8%, 76% 28%, 100% 28%, 100% 92%, 22% 92%, 22% 69%, 0 69%);
+  opacity: .42;
+}
+
+html[data-szl-holo-motif="assembly-circuit"] #szl-holo-ambient::after {
+  inset: 30% 12% auto auto;
+  width: clamp(180px, 22vw, 360px);
+  height: clamp(100px, 13vw, 210px);
+  border: 1px solid var(--szl-holo-line);
+  border-radius: var(--szl-holo-radius-lg);
+  box-shadow: inset 0 0 55px var(--szl-holo-glow), 0 0 55px var(--szl-holo-glow);
+}
+
+/* Research: recursive computational rings. */
+html[data-szl-holo-motif="recursive-ring"] #szl-holo-ambient::before {
+  inset: -24% -12%;
+  border-radius: 50%;
+  background: repeating-conic-gradient(from 0deg, var(--szl-holo-line) 0 1deg, transparent 1deg 13deg);
+  mask-image: repeating-radial-gradient(circle, #000 0 1px, transparent 2px 54px);
+  animation: szl-holo-recurse 42s linear infinite;
+}
+
+html[data-szl-holo-motif="recursive-ring"] #szl-holo-ambient::after {
+  inset: 18% auto auto 58%;
+  width: min(38vw, 460px);
+  aspect-ratio: 1;
+  border: 1px solid var(--szl-holo-accent);
+  border-radius: 50%;
+  box-shadow: inset 0 0 90px var(--szl-holo-glow), 0 0 90px var(--szl-holo-glow);
+  opacity: .38;
+}
+
+/* KHIPU: woven evidence traces. */
+html[data-szl-holo-motif="woven-proof"] #szl-holo-ambient::before {
+  background:
+    repeating-linear-gradient(28deg, transparent 0 25px, var(--szl-holo-line) 26px 27px),
+    repeating-linear-gradient(-28deg, transparent 0 31px, var(--szl-holo-glow-2) 32px 33px);
+  transform: scale(1.08);
+}
+
+html[data-szl-holo-motif="woven-proof"] #szl-holo-ambient::after {
+  background-image: radial-gradient(circle, var(--szl-holo-accent) 0 2px, transparent 3px);
+  background-size: 128px 96px;
+  opacity: .23;
+}
+
+/* Agents: governed swarm converging on a decision. */
+html[data-szl-holo-motif="agent-swarm"] #szl-holo-ambient::before {
+  background-image:
+    radial-gradient(circle at center, var(--szl-holo-accent) 0 2px, transparent 3px),
+    radial-gradient(circle at center, var(--szl-holo-accent-2) 0 1px, transparent 2px);
+  background-position: 0 0, 31px 27px;
+  background-size: 72px 68px, 89px 83px;
+  mask-image: radial-gradient(circle at 60% 42%, #000, transparent 68%);
+  animation: szl-holo-swarm 24s ease-in-out infinite alternate;
+}
+
+html[data-szl-holo-motif="agent-swarm"] #szl-holo-ambient::after {
+  background:
+    linear-gradient(25deg, transparent 49.6%, var(--szl-holo-line) 50%, transparent 50.4%),
+    linear-gradient(155deg, transparent 49.6%, var(--szl-holo-line) 50%, transparent 50.4%);
+  background-size: 140px 90px;
+  opacity: .2;
+}
+
+/* Proof: restrained evidence-vault geometry. */
+html[data-szl-holo-motif="evidence-vault"] #szl-holo-ambient::before {
+  background:
+    repeating-linear-gradient(0deg, transparent 0 35px, var(--szl-holo-line-soft) 36px),
+    linear-gradient(90deg, transparent 0 13%, var(--szl-holo-line) 13.1%, transparent 13.3% 76%, var(--szl-holo-line) 76.1%, transparent 76.3%);
+  mask-image: linear-gradient(90deg, transparent, #000 14% 86%, transparent);
+}
+
+html[data-szl-holo-motif="evidence-vault"] #szl-holo-ambient::after {
+  background-image: radial-gradient(circle, var(--szl-holo-accent) 0 2px, transparent 3px);
+  background-size: 144px 72px;
+  opacity: .18;
+}
+
+/* Shared top rail. */
+.szl-holo-rail {
+  position: sticky;
+  top: 0;
+  z-index: var(--szl-holo-z-rail);
+  min-height: var(--szl-holo-rail-height);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--szl-holo-space-2);
+  padding: 8px max(12px, env(safe-area-inset-left)) 8px max(12px, env(safe-area-inset-right));
+  border-bottom: 1px solid var(--szl-holo-line);
+  color: var(--szl-holo-ink);
+  background: color-mix(in srgb, var(--szl-holo-bg) 86%, transparent);
+  box-shadow: 0 14px 44px rgb(0 0 0 / .24);
+  backdrop-filter: blur(20px) saturate(135%);
+  -webkit-backdrop-filter: blur(20px) saturate(135%);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.szl-holo-rail *,
+.szl-holo-rail *::before,
+.szl-holo-rail *::after { box-sizing: border-box; }
+
+.szl-holo-identity {
+  min-width: 0;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.szl-holo-mark {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  border: 1px solid color-mix(in srgb, var(--szl-holo-accent) 62%, white 10%);
+  border-radius: 9px;
+  background:
+    radial-gradient(circle at 26% 24%, var(--szl-holo-accent), transparent 34%),
+    linear-gradient(145deg, color-mix(in srgb, var(--szl-holo-accent-2) 72%, transparent), transparent 72%);
+  box-shadow: 0 0 28px var(--szl-holo-glow);
+  transform: rotate(8deg);
+}
+
+.szl-holo-mark::after {
+  position: absolute;
+  inset: 5px;
+  border: 1px solid color-mix(in srgb, var(--szl-holo-ink) 36%, transparent);
+  border-radius: 5px;
+  content: "";
+  transform: rotate(-18deg);
+}
+
+.szl-holo-copy {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.szl-holo-eyebrow {
+  overflow: hidden;
+  color: var(--szl-holo-muted);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .19em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.szl-holo-label {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 760;
+  letter-spacing: -.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.szl-holo-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.szl-holo-link,
+.szl-holo-menu {
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 11px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: var(--szl-holo-muted);
+  background: transparent;
+  font: 660 11px/1.2 Inter, ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: .045em;
+  text-decoration: none;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.szl-holo-link:hover,
+.szl-holo-link:focus-visible,
+.szl-holo-link[aria-current="page"],
+.szl-holo-menu:hover,
+.szl-holo-menu:focus-visible {
+  border-color: color-mix(in srgb, var(--szl-holo-accent) 38%, transparent);
+  color: var(--szl-holo-ink);
+  background: color-mix(in srgb, var(--szl-holo-accent) 9%, transparent);
+  outline: none;
+}
+
+.szl-holo-menu { display: none; }
+
+/* Reusable opt-in materials. */
+.szl-holo-panel,
+[data-szl-holo-panel] {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--szl-holo-line-soft);
+  border-radius: var(--szl-holo-radius-md);
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--szl-holo-surface-2) 60%, transparent), transparent 44%),
+    color-mix(in srgb, var(--szl-holo-surface) 86%, transparent);
+  box-shadow: var(--szl-holo-shadow);
+  backdrop-filter: blur(18px) saturate(125%);
+  -webkit-backdrop-filter: blur(18px) saturate(125%);
+  transform-style: preserve-3d;
+}
+
+.szl-holo-panel::before,
+[data-szl-holo-panel]::before {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  content: "";
+  background: radial-gradient(circle at var(--szl-holo-pointer-x) var(--szl-holo-pointer-y), color-mix(in srgb, var(--szl-holo-accent) 13%, transparent), transparent 22rem);
+  opacity: .65;
+}
+
+.szl-holo-panel::after,
+[data-szl-holo-panel]::after {
+  position: absolute;
+  inset: -1px;
+  pointer-events: none;
+  content: "";
+  border-radius: inherit;
+  background: linear-gradient(118deg, transparent 12%, color-mix(in srgb, var(--szl-holo-ink) 9%, transparent) 38%, transparent 62%);
+  transform: translateX(-110%);
+  animation: szl-holo-specular 11s ease-in-out infinite;
+}
+
+.szl-holo-kicker,
+[data-szl-holo-kicker] {
+  color: var(--szl-holo-accent);
+  font-size: .72rem;
+  font-weight: 780;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+}
+
+.szl-holo-title,
+[data-szl-holo-title] {
+  color: var(--szl-holo-ink);
+  background: linear-gradient(112deg, var(--szl-holo-ink), var(--szl-holo-accent) 58%, var(--szl-holo-accent-2));
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-wrap: balance;
+}
+
+.szl-holo-muted { color: var(--szl-holo-muted); }
+.szl-holo-rule { border-color: var(--szl-holo-line); }
+
+.szl-holo-chip {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 10px;
+  border: 1px solid var(--szl-holo-line-soft);
+  border-radius: 999px;
+  color: var(--szl-holo-muted);
+  background: color-mix(in srgb, var(--szl-holo-surface) 78%, transparent);
+  font: 650 11px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.szl-holo-chip::before {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--szl-holo-accent);
+  box-shadow: 0 0 14px var(--szl-holo-accent);
+  content: "";
+}
+
+.szl-holo-evidence-ribbon {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--szl-holo-space-2);
+  padding: 10px 12px;
+  border-block: 1px solid var(--szl-holo-line-soft);
+  color: var(--szl-holo-muted);
+  font: 600 11px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.szl-holo-evidence-ribbon strong { color: var(--szl-holo-ink); }
+
+.szl-holo-progress {
+  position: fixed;
+  inset: 0 auto auto 0;
+  z-index: calc(var(--szl-holo-z-rail) + 1);
+  width: calc(var(--szl-holo-scroll) * 1%);
+  height: 2px;
+  pointer-events: none;
+  background: linear-gradient(90deg, var(--szl-holo-accent), var(--szl-holo-accent-2));
+  box-shadow: 0 0 18px var(--szl-holo-glow);
+}
+
+.szl-holo-skip {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: calc(var(--szl-holo-z-rail) + 3);
+  padding: 11px 14px;
+  border: 2px solid var(--szl-holo-accent);
+  border-radius: var(--szl-holo-radius-sm);
+  color: var(--szl-holo-bg);
+  background: var(--szl-holo-accent);
+  font: 760 14px/1.2 ui-sans-serif, system-ui, sans-serif;
+  text-decoration: none;
+  transform: translateY(-160%);
+  transition: transform .16s ease;
+}
+
+.szl-holo-skip:focus { transform: translateY(0); }
+
+html[data-szl-holo="v2"] :where(a, button, input, textarea, select, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--szl-holo-accent) !important;
+  outline-offset: 3px !important;
+}
+
+@keyframes szl-holo-orbit {
+  to { transform: rotate(351deg) scaleY(.58); }
+}
+
+@keyframes szl-holo-aurora {
+  from { transform: translate3d(-5%, -3%, 0) rotate(-8deg) scale(1); }
+  to { transform: translate3d(7%, 6%, 0) rotate(11deg) scale(1.08); }
+}
+
+@keyframes szl-holo-radar {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes szl-holo-recurse {
+  to { transform: rotate(-360deg); }
+}
+
+@keyframes szl-holo-swarm {
+  from { transform: translate3d(-1.5%, -1%, 0) scale(1); }
+  to { transform: translate3d(1.5%, 1%, 0) scale(1.04); }
+}
+
+@keyframes szl-holo-breathe {
+  from { opacity: .22; transform: scale(.96); }
+  to { opacity: .42; transform: scale(1.03); }
+}
+
+@keyframes szl-holo-specular {
+  0%, 68%, 100% { transform: translateX(-115%); }
+  82% { transform: translateX(115%); }
+}
+
+@media (max-width: 760px) {
+  :root { --szl-holo-rail-height: 56px; }
+  #szl-holo-ambient { opacity: .62; }
+  .szl-holo-menu { display: inline-flex; }
+  .szl-holo-nav {
+    position: absolute;
+    top: calc(100% + 7px);
+    right: max(8px, env(safe-area-inset-right));
+    min-width: min(240px, calc(100vw - 16px));
+    display: none;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 3px;
+    padding: 8px;
+    border: 1px solid var(--szl-holo-line);
+    border-radius: var(--szl-holo-radius-md);
+    background: color-mix(in srgb, var(--szl-holo-bg) 96%, white 2%);
+    box-shadow: var(--szl-holo-shadow);
+  }
+  .szl-holo-nav[data-open="true"] { display: flex; }
+  .szl-holo-link { justify-content: flex-start; padding-inline: 14px; }
+  .szl-holo-eyebrow { display: none; }
+  .szl-holo-panel::after,
+  [data-szl-holo-panel]::after { display: none; }
+}
+
+@media (max-width: 390px) {
+  .szl-holo-label { max-width: 48vw; }
+  .szl-holo-mark { width: 25px; height: 25px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-szl-holo="v2"] { scroll-behavior: auto; }
+  #szl-holo-ambient::before,
+  #szl-holo-ambient::after,
+  .szl-holo-panel::after,
+  [data-szl-holo-panel]::after,
+  .szl-holo-skip,
+  .szl-holo-mark {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
+  .szl-holo-progress { box-shadow: none; }
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --szl-holo-line: color-mix(in srgb, var(--szl-holo-accent) 58%, transparent);
+    --szl-holo-line-soft: color-mix(in srgb, var(--szl-holo-ink) 34%, transparent);
+  }
+  #szl-holo-ambient { opacity: .32; }
+  .szl-holo-panel,
+  [data-szl-holo-panel] {
+    border-width: 2px;
+    background: var(--szl-holo-surface);
+    backdrop-filter: none;
+  }
+}
+
+@media (forced-colors: active) {
+  :root { color-scheme: light dark; }
+  #szl-holo-ambient,
+  .szl-holo-progress { display: none; }
+  .szl-holo-rail,
+  .szl-holo-panel,
+  [data-szl-holo-panel],
+  .szl-holo-link,
+  .szl-holo-menu,
+  .szl-holo-chip {
+    border: 1px solid CanvasText;
+    color: CanvasText;
+    background: Canvas;
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+  .szl-holo-title,
+  [data-szl-holo-title] {
+    color: CanvasText;
+    background: none;
+    -webkit-text-fill-color: currentColor;
+  }
+  .szl-holo-mark { border-color: CanvasText; background: CanvasText; box-shadow: none; }
+  .szl-holo-skip { color: Canvas; background: CanvasText; border-color: CanvasText; }
+}
+
+@supports not (color: color-mix(in srgb, black 50%, white)) {
+  .szl-holo-rail,
+  .szl-holo-panel,
+  [data-szl-holo-panel] { background: var(--szl-holo-surface); }
+  .szl-holo-link[aria-current="page"] { border-color: var(--szl-holo-accent); }
+}
+
+@media print {
+  #szl-holo-ambient,
+  .szl-holo-rail,
+  .szl-holo-progress,
+  .szl-holo-skip { display: none !important; }
+  html[data-szl-holo="v2"],
+  html[data-szl-holo="v2"] body {
+    color: #000 !important;
+    background: #fff !important;
+  }
+  .szl-holo-panel,
+  [data-szl-holo-panel] {
+    border: 1px solid #444;
+    color: #000;
+    background: #fff;
+    box-shadow: none;
+  }
+}
