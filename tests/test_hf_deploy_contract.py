@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-DEPLOY_PIN = "3dde396da0b2c17722e8b78e9da34057801dce5d"
+DEPLOY_PIN = "5a4c781502417fd0c4162514b2972a5852ae9fab"
 DRIFT_PIN = "5d339cf22e394635285f2c5fccb14d9ebb4f7455"
 
 
