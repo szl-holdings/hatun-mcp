@@ -96,22 +96,22 @@ header nav a:hover{color:var(--ink)}
   position:absolute; inset:0; width:100%; height:100%;
   opacity:.72; pointer-events:none;
 }
-/* scrim: fade the point-cloud to black over the text column so copy never collides */
+/* scrim: keep the telemetry field faint behind copy so text stays legible */
 .hero::after{content:""; position:absolute; inset:0; z-index:1; pointer-events:none;
   background:
-    radial-gradient(120% 100% at 78% 42%, transparent 30%, #000 82%),
-    linear-gradient(to right, #000 0%, rgba(0,0,0,.72) 42%, rgba(0,0,0,.12) 100%);}
+    linear-gradient(to bottom, #000 0%, rgba(0,0,0,.42) 40%, rgba(0,0,0,.72) 100%),
+    linear-gradient(to right, #000 0%, rgba(0,0,0,.55) 55%, rgba(0,0,0,.2) 100%);}
 .hero .wrap{
   position:relative; z-index:2; max-width:760px;
   padding-top:clamp(56px,14vw,110px); padding-bottom:clamp(48px,12vw,96px);
 }
 .hero h1{
   font-size:clamp(34px,7vw,72px); font-weight:600; letter-spacing:-.03em;
-  line-height:1.02; margin:14px 0 0; color:var(--cream);
+  line-height:1.02; margin:14px 0 0; color:var(--cream); text-wrap:balance;
 }
 .hero .lede{
   font-size:clamp(15px,3.4vw,18px); font-weight:400; color:var(--t2);
-  max-width:620px; margin:18px 0 0;
+  max-width:64ch; margin:18px 0 0; text-wrap:pretty; line-height:1.6;
 }
 .hero .statusline{
   margin-top:22px; font-family:var(--mono); font-size:clamp(11px,2.7vw,12px);
@@ -330,53 +330,48 @@ GET  /healthz  /readyz  /pubkey
 </div></footer>
 
 <script>
-/* ---- monochrome holographic point-cloud "proof kernel" (SZL design system) ---- */
+/* ---- monochrome OBSERVABILITY signal field (hatun identity: New Relic + Datadog) ----
+   Distinct from the other SZL surfaces: not a point-cloud sphere but a stack of
+   live telemetry traces scrolling like a metrics stream. Decorative only. */
 (function(){
   var cv=document.getElementById('holo'); if(!cv||!cv.getContext) return;
   var ctx=cv.getContext('2d'); if(!ctx) return;
-  var W,H,DPR=Math.min(window.devicePixelRatio||1,2),CX,CY,S;
-  function rs(){W=cv.width=cv.clientWidth*DPR;H=cv.height=(cv.clientHeight||600)*DPR;CX=W*0.5;CY=H*0.5;S=Math.min(W,H)*0.32;}
+  var W,H,DPR=Math.min(window.devicePixelRatio||1,2);
+  function rs(){W=cv.width=cv.clientWidth*DPR;H=cv.height=(cv.clientHeight||600)*DPR;}
   rs();addEventListener('resize',rs);
   var reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
-  var N=reduce?420:900, pts=[];
-  for(var i=0;i<N;i++){
-    var y=1-(i/(N-1))*2, rr=Math.sqrt(1-y*y), th=i*2.399963;
-    pts.push([Math.cos(th)*rr,y,Math.sin(th)*rr]);
+  var LANES=reduce?4:7, COLS=140, lanes=[];
+  function seedLane(k){
+    var vals=[],ph=Math.random()*6.28,fr=0.6+Math.random()*1.8,jit=0.3+Math.random()*0.7;
+    for(var i=0;i<COLS;i++){vals.push(0.5+0.35*Math.sin(ph+i*0.12*fr)+ (Math.random()-0.5)*0.14*jit);}
+    return {vals:vals,ph:ph,fr:fr,jit:jit,bright:0.10+0.62*(k/(LANES-1))};
   }
+  for(var k=0;k<LANES;k++) lanes.push(seedLane(k));
   var t=0;
   function frame(){
     ctx.clearRect(0,0,W,H);
-    if(!reduce)t+=0.0032;
-    var cy=Math.cos(t),sy=Math.sin(t),cx=Math.cos(t*0.5),sx=Math.sin(t*0.5);
-    var proj=[],i,j;
-    for(i=0;i<pts.length;i++){
-      var x=pts[i][0],yy=pts[i][1],z=pts[i][2];
-      var x1=x*cy - z*sy, z1=x*sy + z*cy;
-      var y2=yy*cx - z1*sx, z2=yy*sx + z1*cx;
-      var d=2.6/(2.6+z2);
-      proj.push([CX+x1*S*d, CY+y2*S*d, z2, d]);
-    }
-    ctx.lineWidth=0.6*DPR;
-    for(i=0;i<proj.length;i+=7){
-      var a=proj[i];
-      for(j=i+1;j<Math.min(i+9,proj.length);j++){
-        var b=proj[j];var dx=a[0]-b[0],dy=a[1]-b[1];
-        if(dx*dx+dy*dy<(46*DPR)*(46*DPR)){
-          ctx.strokeStyle='rgba(255,255,255,'+(0.05*a[3])+')';
-          ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.stroke();
-        }
+    if(!reduce)t+=1;
+    var laneH=H/LANES;
+    for(var k=0;k<LANES;k++){
+      var L=lanes[k]; 
+      if(!reduce){ L.vals.push(0.5+0.35*Math.sin(L.ph+t*0.03*L.fr)+(Math.random()-0.5)*0.14*L.jit); L.vals.shift(); }
+      var baseY=laneH*(k+0.5), amp=laneH*0.34;
+      // faint baseline grid tick
+      ctx.strokeStyle='rgba(255,255,255,0.04)';ctx.lineWidth=1*DPR;
+      ctx.beginPath();ctx.moveTo(0,baseY);ctx.lineTo(W,baseY);ctx.stroke();
+      // the trace
+      ctx.strokeStyle='rgba(255,255,255,'+L.bright.toFixed(3)+')';ctx.lineWidth=1.4*DPR;
+      ctx.beginPath();
+      for(var i=0;i<L.vals.length;i++){
+        var x=(i/(L.vals.length-1))*W, y=baseY-(L.vals[i]-0.5)*2*amp;
+        if(i===0)ctx.moveTo(x,y); else ctx.lineTo(x,y);
       }
+      ctx.stroke();
+      // leading-edge dot (the 'live' cursor)
+      var lv=L.vals[L.vals.length-1], ly=baseY-(lv-0.5)*2*amp;
+      ctx.fillStyle='rgba(255,255,255,'+Math.min(1,L.bright+0.3).toFixed(3)+')';
+      ctx.beginPath();ctx.arc(W-2*DPR,ly,2.2*DPR,0,7);ctx.fill();
     }
-    for(i=0;i<proj.length;i++){
-      var px=proj[i][0],py=proj[i][1],pz=proj[i][2],pd=proj[i][3];
-      var bright=0.28+0.72*((pz+1)/2);
-      var r=(0.7+1.3*pd)*DPR;
-      ctx.fillStyle='rgba(255,255,255,'+(0.15+0.6*bright).toFixed(3)+')';
-      ctx.beginPath();ctx.arc(px,py,r,0,7);ctx.fill();
-    }
-    var g=ctx.createRadialGradient(CX,CY,0,CX,CY,S*1.4);
-    g.addColorStop(0,'rgba(240,238,230,0.06)');g.addColorStop(1,'rgba(240,238,230,0)');
-    ctx.fillStyle=g;ctx.beginPath();ctx.arc(CX,CY,S*1.4,0,7);ctx.fill();
     if(reduce) return;
     requestAnimationFrame(frame);
   }
