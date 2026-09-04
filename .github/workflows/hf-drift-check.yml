@@ -62,8 +62,8 @@ jobs:
           grep -Fq 'Hatun Gateway' hatun-wires.html
           grep -Fq '/api/a11oy/v1/mesh/state' hatun-wires.html
           grep -Fq 'https://github.com/szl-holdings/hatun-mcp' hatun-wires.html
-          test "$(grep -Fo 'data-szl-holo-asset=\"style-v2\"' hatun-wires.html | wc -l)" -eq 1
-          test "$(grep -Fo 'data-szl-holo-asset=\"script-v2\"' hatun-wires.html | wc -l)" -eq 1
+          test "$(grep -Fo 'data-szl-holo-asset="style-v2"' hatun-wires.html | wc -l)" -eq 1
+          test "$(grep -Fo 'data-szl-holo-asset="script-v2"' hatun-wires.html | wc -l)" -eq 1
 
       - name: Upload the credential-free witness
         if: always()
