@@ -1,7 +1,7 @@
 # Copyright 2026 SZL Holdings — SPDX-License-Identifier: Apache-2.0
 name: Hatun Canonical Product Surface Witness
 
-# The standalone SZLHOLDINGS/hatun-mcp publisher was intentionally retired at
+# The standalone Hatun Hugging Face Space publisher was intentionally retired at
 # protected-main commit 5a3c340a1115ad0654350b77ac545ff537e3382c.
 # This historical workflow path is retained for continuity, but it now performs
 # a credential-free, read-only witness of the canonical Hatun product surface at
