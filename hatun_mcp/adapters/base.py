@@ -40,6 +40,8 @@ GOVERNANCE_CRITICAL = {
     "companion": {"act"},
     "llm": set(),
     "killinchu": {"evaluate"},
+    "second_brain": set(),
+    "anatomy": set(),
 }
 
 # The three previously-codenamed organ backends (sentra/rosie/amaru) were PURGED
