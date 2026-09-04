@@ -57,8 +57,8 @@ def test_canonical_product_witness_is_read_only_and_has_no_hf_writer():
         "Hatun Gateway",
         "/api/a11oy/v1/mesh/state",
         "https://github.com/szl-holdings/hatun-mcp",
-        'data-szl-holo-asset=\\"style-v2\\"',
-        'data-szl-holo-asset=\\"script-v2\\"',
+        'data-szl-holo-asset="style-v2"',
+        'data-szl-holo-asset="script-v2"',
         "permissions:\n  contents: read",
         "persist-credentials: false",
     )
