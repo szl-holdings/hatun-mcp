@@ -1,36 +1,75 @@
 # Copyright 2026 SZL Holdings — SPDX-License-Identifier: Apache-2.0
-name: HF Module Drift Check
+name: Hatun Canonical Product Surface Witness
 
-# Strict post-deployment parity. The default-branch sweep runs only after the
-# governed Space deployer succeeds, eliminating the old race where drift checked
-# stale live bytes before publication completed. Scheduled/manual checks remain
-# read-only and fail on any source/live divergence.
+# The standalone SZLHOLDINGS/hatun-mcp publisher was intentionally retired at
+# protected-main commit 5a3c340a1115ad0654350b77ac545ff537e3382c.
+# This historical workflow path is retained for continuity, but it now performs
+# a credential-free, read-only witness of the canonical Hatun product surface at
+# a-11-oy.com/wires. It never writes GitHub, Hugging Face, DNS, or runtime state.
 
 on:
-  workflow_run:
-    workflows:
-      - Deploy to HuggingFace Space
-    types:
-      - completed
   schedule:
     - cron: "37 6 * * 1"
   workflow_dispatch: {}
+  repository_dispatch:
+    types: [hatun-product-deployed]
 
 permissions:
   contents: read
 
 concurrency:
-  group: hf-drift-${{ github.event_name }}-${{ github.ref }}
+  group: hatun-canonical-product-witness
   cancel-in-progress: true
 
 jobs:
-  hf-drift:
-    if: >-
-      github.event_name != 'workflow_run' ||
-      github.event.workflow_run.conclusion == 'success'
-    uses: szl-holdings/.github/.github/workflows/reusable-hf-module-drift-check.yml@5d339cf22e394635285f2c5fccb14d9ebb4f7455
-    with:
-      hf-repo: SZLHOLDINGS/hatun-mcp
-      ref: main
-      mode: direct
-      dockerfile-path: Dockerfile
+  witness:
+    name: Verify the public Hatun identity, source, and mesh binding
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact source contract
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Enforce the retired-publisher boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -e .github/workflows/hf-deploy.yml
+          grep -Fq '5a3c340a1115ad0654350b77ac545ff537e3382c' docs/HATUN_SURFACE_CONTRACT.md
+          grep -Fq 'https://a-11-oy.com/wires' docs/HATUN_SURFACE_CONTRACT.md
+
+      - name: Fetch the canonical public Hatun surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location \
+            --retry 5 --retry-delay 3 --retry-all-errors \
+            --connect-timeout 10 --max-time 45 \
+            -H 'Accept: text/html' \
+            -H 'Cache-Control: no-cache' \
+            -A 'szl-hatun-canonical-witness/1.0' \
+            https://a-11-oy.com/wires \
+            --output hatun-wires.html
+          test -s hatun-wires.html
+
+      - name: Verify identity, live contract, source, and one family binding
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'Hatun Gateway' hatun-wires.html
+          grep -Fq '/api/a11oy/v1/mesh/state' hatun-wires.html
+          grep -Fq 'https://github.com/szl-holdings/hatun-mcp' hatun-wires.html
+          test "$(grep -Fo 'data-szl-holo-asset=\"style-v2\"' hatun-wires.html | wc -l)" -eq 1
+          test "$(grep -Fo 'data-szl-holo-asset=\"script-v2\"' hatun-wires.html | wc -l)" -eq 1
+
+      - name: Upload the credential-free witness
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: hatun-canonical-product-witness-${{ github.run_id }}-${{ github.run_attempt }}
+          path: hatun-wires.html
+          if-no-files-found: warn
+          retention-days: 30
