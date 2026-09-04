@@ -1,0 +1,13 @@
+{
+  "schema":"szl.estate.binding/v1",
+  "organ":"hatun",
+  "role":"policy-veto-and-admission-organ",
+  "canonical_contract":"https://github.com/szl-holdings/.github/blob/main/estate/alignment.v1.json",
+  "public_front_door":"https://a-11-oy.com",
+  "authority":"veto-only-not-autonomous-action",
+  "inherits":["szl-formulas","anatomy","szl-receipt","szl-frontier"],
+  "default_effect":"deny",
+  "approval_cannot_lift_hard_deny":true,
+  "lambda_status":"Conjecture 1",
+  "production_requires":"policy-proof-and-receipt"
+}
