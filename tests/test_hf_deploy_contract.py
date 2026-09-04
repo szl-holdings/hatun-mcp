@@ -1,15 +1,14 @@
-"""Source-level contract for the governed Hatun-MCP Hugging Face deployment."""
+"""Source-level contract for Hatun's consolidated public architecture."""
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-DEPLOY_PIN = "86c4e95fdceedfb1e7e226ad3c8f5f844bd2aae4"
-DRIFT_PIN = "5d339cf22e394635285f2c5fccb14d9ebb4f7455"
+RETIRE_COMMIT = "5a3c340a1115ad0654350b77ac545ff537e3382c"
+CANONICAL_PRODUCT = "https://a-11-oy.com/wires"
 
 
-def test_space_card_is_source_controlled_and_complete():
+def test_source_card_is_controlled_and_complete():
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     assert readme.startswith("---\n")
     header = readme.split("---\n", 2)[1]
@@ -29,70 +28,54 @@ def test_space_card_is_source_controlled_and_complete():
     assert len(short_description) <= 60
 
 
-def test_deployer_is_pinned_source_bound_and_automatic():
-    workflow = (ROOT / ".github/workflows/hf-deploy.yml").read_text(encoding="utf-8")
-    required = (
-        "branches: [main]",
-        '      - .github/workflows/hf-deploy.yml',
-        f"reusable-hf-deploy.yml@{DEPLOY_PIN}",
-        "hf-repo: SZLHOLDINGS/hatun-mcp",
-        "ref: ${{ github.sha }}",
-        "include-readme: true",
-        "prune: true",
-        "restart-space: true",
-        "wait-running: 1200",
-        "require-default-branch-tip: true",
-        "source-revision-variable: SZL_GIT_SHA",
-        "source-revision-probe-path: /api/build-info",
-        '"/.well-known/mcp-manifest-attestation"',
-        '"/api/build-info"',
-        "HF_TOKEN: ${{ secrets.HF_ORG_TOKEN || secrets.HF_TOKEN }}",
+def test_standalone_hf_publisher_is_intentionally_retired():
+    assert not (ROOT / ".github/workflows/hf-deploy.yml").exists()
+    contract = (ROOT / "docs/HATUN_SURFACE_CONTRACT.md").read_text(
+        encoding="utf-8"
     )
-    for marker in required:
-        assert workflow.count(marker) == 1, marker
-    assert "workflow_dispatch: {}" in workflow
-    assert "secrets: inherit" not in workflow
-    assert "@main" not in workflow
-    assert "restart-space: false" not in workflow
-    assert "require-default-branch-tip: false" not in workflow
-    assert "wait-running: 0" not in workflow
-
-
-def test_deployer_does_not_confuse_health_with_source_identity():
-    workflow = (ROOT / ".github/workflows/hf-deploy.yml").read_text(encoding="utf-8")
-    assert "source-revision-probe-path: /api/build-info" in workflow
-    assert "source-revision-probe-path: /healthz" not in workflow
-    smoke = workflow.split("smoke-paths:", 1)[1].splitlines()[0]
-    for route in (
-        '"/"',
-        '"/healthz"',
-        '"/.well-known/mcp/server-card.json"',
-        '"/.well-known/mcp-manifest-attestation"',
-        '"/api/build-info"',
+    for marker in (
+        RETIRE_COMMIT,
+        CANONICAL_PRODUCT,
+        "szl-holdings/hatun-mcp",
+        "Do not recreate `.github/workflows/hf-deploy.yml`",
+        "decorative lines are not telemetry",
+        "Λ remains Conjecture 1",
     ):
-        assert route in smoke, route
+        assert marker in contract, marker
 
 
-def test_drift_is_sequenced_after_deploy_and_has_no_waivers():
+def test_canonical_product_witness_is_read_only_and_has_no_hf_writer():
     workflow = (ROOT / ".github/workflows/hf-drift-check.yml").read_text(
         encoding="utf-8"
     )
     required = (
-        "workflow_run:",
-        "Deploy to HuggingFace Space",
-        "github.event.workflow_run.conclusion == 'success'",
-        f"reusable-hf-module-drift-check.yml@{DRIFT_PIN}",
-        "hf-repo: SZLHOLDINGS/hatun-mcp",
-        "mode: direct",
+        "name: Hatun Canonical Product Surface Witness",
+        "workflow_dispatch: {}",
+        "types: [hatun-product-deployed]",
+        RETIRE_COMMIT,
+        CANONICAL_PRODUCT,
+        "Hatun Gateway",
+        "/api/a11oy/v1/mesh/state",
+        "https://github.com/szl-holdings/hatun-mcp",
+        'data-szl-holo-asset=\\"style-v2\\"',
+        'data-szl-holo-asset=\\"script-v2\\"',
+        "permissions:\n  contents: read",
+        "persist-credentials: false",
     )
     for marker in required:
         assert marker in workflow, marker
-    assert "@main" not in workflow
-
-    allowlist = json.loads(
-        (ROOT / ".github/hf-module-drift-allow.json").read_text(encoding="utf-8")
-    )
-    assert allowlist["accepted_divergences"] == {}
+    for forbidden in (
+        "HF_TOKEN",
+        "HF_ORG_TOKEN",
+        "HF_WRITE_TOKEN",
+        "SZLHOLDINGS/hatun-mcp",
+        "reusable-hf-deploy",
+        "reusable-hf-module-drift-check",
+        "workflow_run:",
+        "contents: write",
+        "secrets: inherit",
+    ):
+        assert forbidden not in workflow, forbidden
 
 
 def test_runtime_exposes_fail_closed_build_identity():
@@ -144,16 +127,17 @@ def test_readme_separates_hatun_readiness_from_upstream_live_evidence():
         assert marker in normalized, marker
 
 
-def test_dockerfile_deploy_set_contains_build_identity_code_and_card():
+def test_dockerfile_deploy_set_contains_runtime_console_and_card():
     dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
     assert "COPY hatun_mcp/server_http.py" in dockerfile
+    assert "COPY hatun_mcp/console.py" in dockerfile
+    assert "COPY hatun_mcp/console_v2.py" in dockerfile
     assert "COPY README.md" in dockerfile
 
 
 def test_dockerfile_copies_every_package_module():
     # The image uses per-file COPY (no directory copies), so a new module that is
-    # not listed here imports fine in CI and then fails at container start. Lock
-    # the deploy set to the actual package contents instead.
+    # not listed here imports fine in unit tests and then fails at container start.
     dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
     package = ROOT / "hatun_mcp"
     missing = [
@@ -165,13 +149,19 @@ def test_dockerfile_copies_every_package_module():
     assert not missing, f"module(s) absent from the Dockerfile deploy set: {missing}"
 
 
-def test_source_contract_runs_for_runtime_dependency_changes():
+def test_consolidated_contract_runs_for_runtime_and_surface_changes():
     workflow = (ROOT / ".github/workflows/hf-deploy-contract.yml").read_text(
         encoding="utf-8"
     )
+    assert "name: Hatun Consolidated Surface Contract" in workflow
+    assert "Verify source runtime, retired publisher, and canonical product route" in workflow
     for path in (
         "requirements.txt",
         "hatun_mcp/server.py",
+        "hatun_mcp/console_v2.py",
+        "docs/HATUN_SURFACE_CONTRACT.md",
         "tests/test_dependency_contract.py",
+        ".github/workflows/hf-drift-check.yml",
     ):
         assert workflow.count(f"- {path}") == 2, path
+    assert ".github/workflows/hf-deploy.yml" not in workflow
