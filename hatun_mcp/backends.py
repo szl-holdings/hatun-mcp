@@ -34,6 +34,7 @@ BASES = {
     "companion": os.environ.get("SZL_COMPANION_URL", _A11OY),
     "lean": os.environ.get("SZL_LEAN_URL", "https://szlholdings-lean-kernel.hf.space"),
     "anatomy": os.environ.get("SZL_ANATOMY_URL", "https://szlholdings-anatomy-3d.hf.space"),
+    "second_brain": os.environ.get("SZL_SECOND_BRAIN_URL", "https://szlholdings-szl-second-brain.hf.space"),
 }
 
 DEFAULT_TIMEOUT = float(os.environ.get("HATUN_MCP_BACKEND_TIMEOUT", "5.0"))

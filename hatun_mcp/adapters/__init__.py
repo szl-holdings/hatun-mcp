@@ -28,6 +28,8 @@ from .llm import LlmAdapter
 from .immune import ImmuneAdapter
 from .killinchu import KillinchuAdapter
 from .companion import CompanionAdapter
+from .second_brain import SecondBrainAdapter
+from .anatomy import AnatomyAdapter
 
 ALL_ADAPTERS = {
     "a11oy": A11oyAdapter,
@@ -35,6 +37,8 @@ ALL_ADAPTERS = {
     "immune": ImmuneAdapter,
     "killinchu": KillinchuAdapter,
     "companion": CompanionAdapter,
+    "second_brain": SecondBrainAdapter,
+    "anatomy": AnatomyAdapter,
 }
 
 
@@ -54,6 +58,8 @@ __all__ = [
     "ImmuneAdapter",
     "KillinchuAdapter",
     "CompanionAdapter",
+    "SecondBrainAdapter",
+    "AnatomyAdapter",
     "ALL_ADAPTERS",
     "build_adapters",
 ]
