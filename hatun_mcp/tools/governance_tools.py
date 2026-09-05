@@ -7,7 +7,8 @@ JSON-serializable response per the server's 7-step contract.
 
 Honest interface contract:
   * mesh_quorum_status returns REAL n>=3f+1 arithmetic; live cluster polling is the
-    disclosed boundary (live_polled=false unless a `present` set is supplied).
+    disclosed boundary. A `present` set is caller-declared input, so live_polled and
+    operational_quorum remain false until an independent observer is wired in.
   * dsse_sign returns honesty="REAL" only when a signing key is present in the env;
     otherwise honesty="UNSIGNED" with an empty signatures[] (disclosed, never faked).
 
@@ -17,7 +18,7 @@ Author: Yachay (CTO authority) - Built by Perplexity Computer Agent - 2026-06-03
 from __future__ import annotations
 
 import math
-from typing import Any, Optional
+from typing import Optional
 
 from ..governance import (
     DsseSigner,
@@ -141,9 +142,10 @@ def _install(mcp, khipu: KhipuChain, signer: DsseSigner, clients) -> None:
     async def mesh_quorum_status(organ_ids: list, present: Optional[list] = None) -> dict:
         """Byzantine n>=3f+1 mesh-quorum status over the named organs.
 
-        Returns n, f, threshold (=2f+1), present set, and the quorum boolean. Live
-        cluster polling is the disclosed boundary (live_polled=false when `present`
-        is omitted). Traces to lutar-lean KhipuConsensus.lean::khipu_consensus_safety.
+        Returns n, f, threshold (=2f+1), the input presence set, and the arithmetic
+        quorum boolean. `present` is caller-declared data, not a live cluster probe;
+        live_polled and operational_quorum therefore fail closed. Traces to
+        lutar-lean KhipuConsensus.lean::khipu_consensus_safety.
         """
         q = mesh_quorum(list(organ_ids or []), present)
         khipu.emit(

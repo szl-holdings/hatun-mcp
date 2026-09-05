@@ -7,7 +7,7 @@ operator:
 
 Pipeline (honest, no mocks):
     1. Yuyay-13 gate on the input            (governance.yuyay_gate)
-    2. Mesh quorum over the named organs     (Byzantine n >= 3f+1)
+    2. Mesh quorum arithmetic over named organs (Byzantine n >= 3f+1)
     3. HUKLLA tripwire check                 (governance.hukla_check)
     4. Khipu append (one link)               (governance.KhipuChain.emit)
     5. DSSE-sign the receipt                 (governance.DsseSigner)
@@ -47,28 +47,45 @@ def mesh_quorum(organ_ids: list[str], present: Optional[list[str]] = None) -> di
     """Byzantine quorum: with n organs the system tolerates f = floor((n-1)/3)
     faults and needs a threshold of 2f+1 present to reach quorum (n >= 3f+1).
 
-    REAL quorum arithmetic. Live cluster polling is the disclosed boundary: when no
-    `present` list is supplied we treat all organs as present (in-proc default), and
-    mark `live_polled=False` so the caller never mistakes this for a cluster probe.
+    This function performs REAL quorum arithmetic but no network or process liveness
+    I/O. A supplied ``present`` list is caller-declared input, never evidence of an
+    independent cluster poll. When it is omitted, all organs are used as an explicit
+    in-process default. ``quorum`` therefore remains the backward-compatible
+    arithmetic result, while ``operational_quorum`` fails closed until an independent
+    observer is wired in.
     """
     organs = list(dict.fromkeys(organ_ids or DEFAULT_ORGANS))  # de-dup, keep order
     n = len(organs)
     f = max(0, (n - 1) // 3)
     threshold = 2 * f + 1
-    live_polled = present is not None
-    present_set = list(present) if present is not None else list(organs)
-    present_count = len([o for o in present_set if o in organs])
+    caller_declared = present is not None
+    present_set = list(present) if caller_declared else list(organs)
+    # Unknown or repeated caller values remain visible in ``present`` for API
+    # compatibility, but cannot inflate the arithmetic result.
+    counted_present = list(dict.fromkeys(o for o in present_set if o in organs))
+    present_count = len(counted_present)
+    arithmetic_quorum = present_count >= threshold and n >= (3 * f + 1)
+    presence_source = "CALLER_DECLARED" if caller_declared else "IN_PROCESS_DEFAULT"
     return {
         "n": n,
         "f": f,
         "threshold": threshold,
         "present": present_set,
+        "counted_present": counted_present,
         "present_count": present_count,
-        "quorum": present_count >= threshold and n >= (3 * f + 1),
-        "live_polled": live_polled,
+        "quorum": arithmetic_quorum,
+        "arithmetic_quorum": arithmetic_quorum,
+        "operational_quorum": False,
+        "quorum_scope": f"{presence_source}_ARITHMETIC",
+        "presence_source": presence_source,
+        "caller_declared": caller_declared,
+        "independently_witnessed": False,
+        "live_polled": False,
         "note": (
-            "Byzantine n>=3f+1; threshold=2f+1. live_polled=false means present set "
-            "defaulted to all organs (in-proc), not a real cluster probe."
+            "Byzantine n>=3f+1; threshold=2f+1. quorum is arithmetic over "
+            f"{presence_source.lower()} input. This function performs no liveness "
+            "I/O, so live_polled, independently_witnessed, and operational_quorum "
+            "remain false."
         ),
     }
 
@@ -117,7 +134,7 @@ def puriq_master(
     yz = yuyay_gate(gate_text)
     verdict = yuyay_verdict(yz.min_axis_value, yz.passed)
 
-    # 2. Mesh quorum over organs (real arithmetic).
+    # 2. Mesh quorum over organs (real arithmetic; no independent liveness I/O).
     present = context.get("present_organs")
     quorum = mesh_quorum(organs or DEFAULT_ORGANS, present)
 
@@ -143,7 +160,7 @@ def puriq_master(
     )
 
     # 6. Khipu append (one link) + DSSE-sign.
-    status = "success" if yz.passed and quorum["quorum"] else "declined"
+    status = "success" if yz.passed and quorum["operational_quorum"] else "declined"
     receipt = khipu.emit(
         tool="puriq_master",
         client_id=str(context.get("client_id", "puriq")),
