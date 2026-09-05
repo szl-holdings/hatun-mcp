@@ -49,11 +49,48 @@ def test_mesh_quorum_byzantine_arithmetic():
     # n=4 -> f = floor(3/3)=1, threshold = 2*1+1 = 3 (classic n>=3f+1 with f=1)
     q = mesh_quorum(["a", "b", "c", "d"])
     assert q["n"] == 4 and q["f"] == 1 and q["threshold"] == 3
-    assert q["quorum"] is True  # all 4 present by default
+    assert q["quorum"] is True  # arithmetic over the in-process default
+    assert q["arithmetic_quorum"] is True
+    assert q["operational_quorum"] is False
+    assert q["presence_source"] == "IN_PROCESS_DEFAULT"
+    assert q["live_polled"] is False
     # only 2 present -> below threshold 3 -> no quorum
     q2 = mesh_quorum(["a", "b", "c", "d"], present=["a", "b"])
     assert q2["present_count"] == 2 and q2["quorum"] is False
-    assert q2["live_polled"] is True
+    assert q2["presence_source"] == "CALLER_DECLARED"
+    assert q2["caller_declared"] is True
+    assert q2["independently_witnessed"] is False
+    assert q2["live_polled"] is False
+
+
+def test_caller_declared_quorum_is_never_reported_as_live_or_operational():
+    q = mesh_quorum(["a", "b", "c", "d"], present=["a", "b", "c"])
+    assert q["quorum"] is True
+    assert q["quorum_scope"] == "CALLER_DECLARED_ARITHMETIC"
+    assert q["operational_quorum"] is False
+    assert q["independently_witnessed"] is False
+    assert q["live_polled"] is False
+
+
+def test_duplicate_and_unknown_presence_values_cannot_inflate_quorum():
+    q = mesh_quorum(["a", "b", "c", "d"], present=["a", "a", "unknown"])
+    assert q["present"] == ["a", "a", "unknown"]
+    assert q["counted_present"] == ["a"]
+    assert q["present_count"] == 1
+    assert q["quorum"] is False
+
+
+def test_puriq_master_declines_without_independent_quorum_observation():
+    out = puriq_master(
+        "identify this drone from its RF signature",
+        {"present_organs": ["a", "b", "c"]},
+        organs=["a", "b", "c", "d"],
+        khipu=KhipuChain(),
+        signer=DsseSigner(),
+    )
+    assert out["quorum"]["quorum"] is True
+    assert out["quorum"]["operational_quorum"] is False
+    assert out["receipts"][0]["status"] == "declined"
 
 
 def test_yuyay_verdict_bands():
