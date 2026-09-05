@@ -39,6 +39,8 @@ COPY hatun_mcp/adapters/immune.py      /app/hatun_mcp/adapters/immune.py
 COPY hatun_mcp/adapters/companion.py   /app/hatun_mcp/adapters/companion.py
 COPY hatun_mcp/adapters/killinchu.py   /app/hatun_mcp/adapters/killinchu.py
 COPY hatun_mcp/adapters/llm.py         /app/hatun_mcp/adapters/llm.py
+COPY hatun_mcp/adapters/anatomy.py     /app/hatun_mcp/adapters/anatomy.py
+COPY hatun_mcp/adapters/second_brain.py /app/hatun_mcp/adapters/second_brain.py
 COPY README.md                    /app/README.md
 
 # The DSSE signing key is injected at runtime as a Space secret

@@ -144,7 +144,7 @@ def test_dockerfile_copies_every_package_module():
         str(path.relative_to(ROOT)).replace("\\", "/")
         for path in sorted(package.rglob("*.py"))
         if "__pycache__" not in path.parts
-        and f"COPY {str(path.relative_to(ROOT))} " not in dockerfile
+        and f"COPY {path.relative_to(ROOT).as_posix()} " not in dockerfile
     ]
     assert not missing, f"module(s) absent from the Dockerfile deploy set: {missing}"
 
