@@ -13,12 +13,21 @@ Run: python tests/proof_inmemory.py
 """
 import asyncio
 import json
+import os
 import sys
+from pathlib import Path
+
+# This proof verifies the static local catalog. It must neither probe live organ
+# catalogs nor forward its test receipts to an operator-configured remote sink.
+os.environ["HATUN_MCP_DISABLE_DYNAMIC"] = "true"
+os.environ.pop("SZL_RECEIPT_SINK", None)
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from mcp.shared.memory import create_connected_server_and_client_session as connect
 
 # import the real server module; set a demo authenticated context for local proof
 from hatun_mcp import server as S
+from hatun_mcp.server_http import _server_card
 
 S._set_test_context(client_id="szl_proof_demo", scope="admin")
 
@@ -68,9 +77,16 @@ async def main():
         print("  decline reason:", p3.get("gate_transparency", {}).get("reason"))
         print("  receipted continuum_hash:", p3["khipu_receipt"]["continuum_hash"])
 
-        # 25 static tools (19 szl_* + 6 governance). This in-memory proof runs with
-        # dynamic service registration disabled, so the count is exactly 25.
-        assert len(names) == 25, f"expected 25 tools, got {len(names)}"
+        # Match the static runtime catalog to its published discovery contract,
+        # instead of keeping an independent count that drifts on each new tool.
+        card_names = [tool["name"] for tool in _server_card()["tools"]]
+        assert len(names) == len(set(names)), "duplicate runtime tool names"
+        assert len(card_names) == len(set(card_names)), "duplicate server-card tool names"
+        assert set(names) == set(card_names), {
+            "runtime_only": sorted(set(names) - set(card_names)),
+            "card_only": sorted(set(card_names) - set(names)),
+        }
+        assert "szl_github_estate_snapshot" in names
         assert payload["status"] == "success"
         assert abs(payload["data"]["value"] - 0.7) < 1e-9, payload["data"]
         assert p2["status"] == "success" and p2["khipu_receipt"]["chain_verified"]
