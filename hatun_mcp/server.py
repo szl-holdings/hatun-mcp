@@ -127,6 +127,7 @@ async def governed(
     state_changing: bool = False,
     latency_budget: Optional[float] = None,
     narrative_axes: bool = False,
+    evidence_contract: bool = False,
     backend_coro=None,
 ):
     """Run one tool through the full PURIQ pipeline. Returns the response dict that
@@ -198,8 +199,28 @@ async def governed(
     try:
         if backend_coro is not None:
             backend = await backend_coro
+        if evidence_contract:
+            # Bind only validated observation bytes into the receipt. A backend
+            # bug must not sign a stale digest or turn missing data into success.
+            snapshot = backend["data"]
+            unsigned_body = {key: value for key, value in snapshot.items() if key != "evidence"}
+            digest = B._github_canonical_digest(unsigned_body)
+            if (
+                snapshot["schema"] != B.GITHUB_ESTATE_SCHEMA
+                or digest != snapshot["evidence"]["digest"]
+                or digest != backend["evidence_digest_sha256"]
+                or snapshot["state"] != backend["evidence_state"]
+                or backend["evidence_schema"] != B.GITHUB_ESTATE_SCHEMA
+                or snapshot["state"] not in {"COMPLETE", "INCOMPLETE", "UNAVAILABLE"}
+                or (snapshot["state"] == "COMPLETE") != (backend.get("error") is None)
+            ):
+                raise ValueError("invalid evidence contract")
     except Exception as e:  # defensive; backends already swallow transport errors
-        err = f"{type(e).__name__}: {e}"
+        if evidence_contract:
+            err = "EVIDENCE_CONTRACT_ERROR"
+            backend = None  # Discard unvalidated data and exception text.
+        else:
+            err = f"{type(e).__name__}: {e}"
 
     latency = time.time() - t0
     chain_ok = KHIPU.verify()
@@ -211,6 +232,8 @@ async def governed(
     status = "success"
     if err is not None:
         status = "failure"
+    elif evidence_contract:
+        status = "success" if backend["evidence_state"] == "COMPLETE" else "failure"
     elif backend is not None and isinstance(backend, dict) and backend.get("error"):
         status = "failure" if not backend.get("deployed", True) else "success"
         # a non-deployed backend is an honest 'not-live' success-with-disclosure, not a crash
@@ -242,7 +265,13 @@ def _summ(backend: Any) -> Any:
     if backend is None:
         return None
     if isinstance(backend, dict):
-        return {k: backend.get(k) for k in ("deployed", "http_status", "endpoint", "error", "reason")}
+        summary = {key: backend.get(key) for key in (
+            "deployed", "http_status", "endpoint", "error", "reason"
+        )}
+        for key in ("evidence_state", "evidence_schema", "evidence_digest_sha256"):
+            if key in backend:
+                summary[key] = backend[key]
+        return summary
     return str(backend)[:500]
 
 
@@ -392,6 +421,41 @@ async def szl_a11oy_operator_reason(question: str, context: Any = None) -> dict:
         gate_text=str(question)[:8000], needs_scope="read",
         backend_coro=B.companion_ask(question, context),
     )
+
+
+@mcp.tool()
+async def szl_github_estate_snapshot() -> dict:
+    """Observe the fixed public szl-holdings GitHub estate with bounded GETs.
+
+    Returns structural repository and open-PR/check evidence plus a canonical
+    SHA-256 digest.  It never accepts a URL, organization, token, cursor or
+    mutation.  Private repositories, default-branch head SHAs, deployments,
+    model training and runtime health are explicitly outside this v1 scope.
+    Missing pages, rate limits or malformed evidence produce INCOMPLETE or
+    UNAVAILABLE. Signing availability is reported separately by the envelope.
+    """
+    return await governed(
+        tool="szl_github_estate_snapshot",
+        operation_id="github.estate.snapshot",
+        gate_text="fixed public read-only GitHub estate snapshot for szl-holdings",
+        needs_scope="read",
+        latency_budget=B.GITHUB_ESTATE_TIMEOUT_S,
+        evidence_contract=True,
+        backend_coro=B.github_estate_snapshot(signer_mode=SIGNER.mode),
+    )
+
+
+# FastMCP v1 normally ignores extra arguments. Enforce this tool's parameterless
+# contract in its Pydantic argument validator as well as its discovery schema.
+# Keep this scoped to the observer; existing tool argument behavior is unchanged.
+_estate_tool = mcp._tool_manager.get_tool("szl_github_estate_snapshot")
+_estate_args = _estate_tool.fn_metadata.arg_model
+_estate_args.model_config = {
+    **_estate_args.model_config, "extra": "forbid", "hide_input_in_errors": True,
+}
+_estate_args.model_rebuild(force=True)
+_estate_tool.parameters = _estate_args.model_json_schema(by_alias=True)
+
 
 @mcp.tool()
 async def szl_khipu_verify(receipt_hash: str, merkle_proof: Optional[list] = None,

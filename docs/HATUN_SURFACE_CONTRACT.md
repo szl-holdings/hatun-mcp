@@ -44,3 +44,23 @@ workflow continuity, but it no longer performs Hugging Face module drift. It is
 a credential-free, read-only witness of the canonical A11oy Hatun product route.
 It checks the public route for the Hatun identity, the live mesh endpoint,
 source-repository attribution, and the single local Holo asset bindings.
+
+## Public GitHub estate observer
+
+The source catalog adds `szl_github_estate_snapshot`, a parameterless, bounded
+public-organization observer. It inventories public GitHub repository metadata
+and open-PR check-run evidence with source citations and canonical digest
+binding. It does not search private repositories, mutate repositories or PRs,
+dispatch workflows, or publish models/Spaces. The provider client is fixed to
+GitHub and never inherits authentication or proxy configuration.
+
+`COMPLETE` describes coverage of this limited, non-atomic observation, not
+passing CI, protected merge eligibility, signed deployment, model quality, or
+whole-estate readiness. Missing or unknown checks remain `UNKNOWN`; truncated
+or unavailable evidence is disclosed. The observer's digest is covered by the
+existing governance receipt; signatures exist only if the envelope actually
+contains them. Optional operator receipt forwarding remains unchanged.
+
+A source test or server-card entry does not make this tool live on A11oy's
+public product route or on any remote MCP server. Deployment admission and an
+exact-source runtime `tools/list` / `tools/call` witness remain separate steps.

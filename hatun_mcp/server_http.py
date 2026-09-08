@@ -7,7 +7,7 @@ Wraps the FastMCP app in a Starlette application that:
   * validates the Origin header (DNS-rebinding defense; MCP transport requirement).
   * honors X-Sovereign-Mode and X-Second-Approver headers (Frontier #4, 2-person gate).
   * serves the draft server-card discovery extension so registries can enumerate
-    the 25 static tools even behind the auth wall.
+    the 26 static tools even behind the auth wall.
   * binds the exact card bytes to a cached in-toto Statement v1 / DSSE artifact.
   * serves /healthz, /readyz, and /pubkey (DSSE verification key).
 
@@ -187,6 +187,7 @@ def _server_card() -> dict:
         ("szl_a11oy_sentinel_scan", "a11oy Sentinel immune scan (twin of szl_immune_scan)"),
         ("szl_companion_reason", "a11oy companion reasoning (grounded; refuses to fabricate)"),
         ("szl_a11oy_operator_reason", "a11oy Operator reasoning (twin of szl_companion_reason)"),
+        ("szl_github_estate_snapshot", "Bounded, fixed-target, public-only GitHub estate evidence snapshot"),
         ("szl_khipu_verify", "Verify a Khipu receipt hash + merkle proof"),
         ("szl_lean_verify", "Verify a Lean theorem on lutar-lean kernel"),
         ("szl_puriq_evaluate", "Compute PURIQ P(x,t) + factor breakdown"),
@@ -207,9 +208,18 @@ def _server_card() -> dict:
         ("governance_pacbayes_bound", "Published PAC-Bayes (McAllester) generalization bound (F7), real closed-form"),
     ]
     for name, desc in card_tools:
+        input_schema = {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": False,
+        } if name == "szl_github_estate_snapshot" else {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": True,
+        }
         tools.append({
             "name": name, "description": desc,
-            "inputSchema": {"type": "object", "properties": {}, "additionalProperties": True},
+            "inputSchema": input_schema,
         })
     return {
         "serverInfo": {"name": "hatun-mcp", "version": "1.0.0",

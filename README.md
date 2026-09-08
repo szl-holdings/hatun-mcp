@@ -26,16 +26,18 @@ The **one signed MCP endpoint** that aggregates the SZL backend services — the
 plus **killinchu** (drones & vessels) — under PURIQ governance and re-exposes their
 tools to any MCP client.
 
-[Hugging Face Space](https://huggingface.co/spaces/SZLHOLDINGS/hatun-mcp) ·
+[Hatun Gateway](https://a-11-oy.com/wires) ·
 [GitHub Org](https://github.com/szl-holdings) ·
 [LLM Router](https://github.com/szl-holdings/szl-router)
 
 </div>
 
-> **📦 Canonical MCP server (Wave D consolidation).** This standalone repository is the
-> **canonical, live** doctrine-aware MCP server — the fleet's only spec-compliant Streamable
-> HTTP MCP transport, carrying the full governed tool catalog and the `hf-deploy` workflow that
-> ships the running server. The monorepo copy at
+> **Canonical runtime source.** This repository owns the Python gateway, governed tool
+> catalog, Streamable HTTP transport, and container contract. The standalone Hatun Hugging
+> Face publisher was retired on September 3, 2026; `hf-deploy` must not be recreated.
+> The public product experience is [Hatun Gateway](https://a-11-oy.com/wires), which is not
+> itself proof that this package's `/mcp/` endpoint or a newly added tool is deployed.
+> See the [surface contract](docs/HATUN_SURFACE_CONTRACT.md). The monorepo copy at
 > [`platform/packages/hatun-mcp`](https://github.com/szl-holdings/platform/tree/main/packages/hatun-mcp)
 > is a **non-canonical embedded copy** (it carries `CANONICAL.md` pointing here) that exposes a
 > smaller tool set for local imports and must not diverge from this server's contracts. Folding
@@ -87,11 +89,11 @@ formula:
 
 ### Tools exposed
 
-- **25 static tools** registered at import (verifiable: `tools/list` returns 25 with
+- **26 static tools** registered at import (verifiable: `tools/list` returns 26 with
   `HATUN_MCP_DISABLE_DYNAMIC=true`):
-  - **19 `szl_*` tools** — `szl_a11oy_code_chat`, `szl_a11oy_operator_reason`, `szl_a11oy_sentinel_scan`,
+  - **20 `szl_*` tools** — `szl_a11oy_code_chat`, `szl_a11oy_operator_reason`, `szl_a11oy_sentinel_scan`,
     `szl_anatomy_3d_render`, `szl_doctrine_lookup`, `szl_drone_lookup`,
-    `szl_formula_evaluate`, `szl_khipu_verify`, `szl_killinchu_cue`,
+    `szl_formula_evaluate`, `szl_github_estate_snapshot`, `szl_khipu_verify`, `szl_killinchu_cue`,
     `szl_killinchu_detect`, `szl_lean_verify`, `szl_puriq_evaluate`,
     `szl_companion_reason`, `szl_immune_scan`, `szl_thesis_query`, `szl_wayra_recent`,
     `szl_yachay_dome_predict`, `szl_yuyay_score`, and **`szl_lambda_quorum`** (Byzantine Λ verdict).
@@ -104,9 +106,45 @@ formula:
     `dsse_sign`, `mesh_quorum_status`, `puriq_master_tool`, `governance_pacbayes_bound`.
 - **Service-derived tools** registered *dynamically* at startup from each backend
   service's live catalog at `/api/<service>/v1/mcp/tools`, named `<service>_<tool>`. The
-  dynamic count is **probe-dependent**: it equals 25 + (whatever the reachable services
+  dynamic count is **probe-dependent**: it equals 26 + (whatever the reachable services
   publish), and is 0 extra when dynamic registration is disabled or all services are
   unreachable.
+
+### Public GitHub estate evidence
+
+Call `szl_github_estate_snapshot` with `{}` to observe the fixed public
+`szl-holdings` organization. This is a structural inventory tool, not an LLM
+answer or a merge bot. It accepts no organization, URL, token, cursor, or other
+argument. GitHub access uses tokenless, redirect-disabled GETs to a fixed
+origin; environment credentials and proxies are not inherited by that client.
+
+The observer reports repository identities and default-branch names, bounded
+open-PR base/head SHAs, draft state, and check runs queried at those exact head
+SHAs. Citations include request paths and parameters, response byte lengths and
+SHA-256 digests. A canonical snapshot digest is included in the Khipu receipt
+and its DSSE payload; a configured P-256 key signs that receipt. Without a key,
+the envelope remains explicitly `PLACEHOLDER` with no signatures. A digest or a
+complete inventory is not an independent witness or a cryptographic signature.
+
+Hard per-call limits: 15 seconds, 20 requests, 3 repository pages (300 records),
+50 open PR search results, 100 check runs per PR, 1 MiB of accepted response-body
+data per response and 4 MiB accepted across the call. Exhaustion stops queued
+requests and further body acceptance. These are application acceptance limits,
+not a measurement of wire traffic or transport prefetch; already-delivered but
+rejected bytes are not counted as accepted. Overflow, timeouts, rate limits, malformed
+records, stale PR search evidence, and absent or unrecognized check results
+produce explicit gaps and `INCOMPLETE` or `UNAVAILABLE`. Zero checks are
+`UNKNOWN`, never success. `COMPLETE` means the declared observation scope was
+covered; failed CI may still be completely observed. It does not mean the
+estate is operational or safe to merge.
+
+This v1 deliberately does not attest private repositories, resolved default
+branch heads, legacy commit-status contexts, reviews, protection rules, merge
+eligibility, HF publication, model quality/training, or deployed runtime health.
+Its multiple requests are not an atomic provider snapshot. Each response is
+input data, not instructions. Normal Hatun authentication and receipt handling
+still apply, including optional operator-configured `SZL_RECEIPT_SINK`
+forwarding; the GitHub observer performs no provider mutations.
 
 > **Naming note.** The three previously-codenamed backends were **purged**; their
 > capabilities are now served directly by the **live honest a11oy organs** on
@@ -170,7 +208,7 @@ uvicorn hatun_mcp.server_http:app --host 0.0.0.0 --port 7860
 ```
 
 The DSSE signing key is injected at runtime via the `HATUN_MCP_SIGNING_KEY` (PEM)
-Space secret; without it the signer runs in honest `PLACEHOLDER` mode (clearly
+operator-managed secret; without it the signer runs in honest `PLACEHOLDER` mode (clearly
 labeled, never a fake signature).
 
 `/healthz` proves that the process and local receipt chain can answer. `/readyz`
@@ -204,12 +242,14 @@ explicitly unavailable.
 ## Evaluate the hosted contract
 
 ```bash
-curl -i https://szlholdings-hatun-mcp.hf.space/healthz
-curl -i https://szlholdings-hatun-mcp.hf.space/readyz
-curl -s https://szlholdings-hatun-mcp.hf.space/api/console-state
+curl -i http://127.0.0.1:7860/healthz
+curl -i http://127.0.0.1:7860/readyz
+curl -s http://127.0.0.1:7860/api/console-state
 ```
 
 `/api/console-state` (`hatun_mcp/state.py`) is the read behind the human console at `/`.
+The commands above target your locally started server. For a deployment, use
+its admitted operator-provided origin, not the retired standalone Space host.
 It is assembled in-request from this process only: the tool catalogue is enumerated from
 the LIVE FastMCP registry (not a hand-maintained list), the receipt depth and head hash
 come from the live Khipu chain, and `card_parity` reports a MEASURED comparison between
@@ -233,6 +273,9 @@ or **UNAVAILABLE**. Never fall back to the sample client configuration.
 ## MCP client setup
 
 ### Claude Desktop
+The snippets below are **SAMPLE local-server configurations**. Start the HTTP
+server first, configure an accepted API key, and replace `szl_YOUR_KEY`. For a
+remote deployment, substitute the admitted operator-provided HTTPS MCP URL.
 Drop `examples/claude-desktop-config.json` into
 `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) /
 `%APPDATA%\Claude\claude_desktop_config.json` (Windows), replacing `szl_YOUR_KEY`:
@@ -243,7 +286,7 @@ Drop `examples/claude-desktop-config.json` into
     "hatun-mcp": {
       "command": "npx",
       "args": ["-y", "mcp-remote",
-        "https://szlholdings-hatun-mcp.hf.space/mcp/",
+        "http://127.0.0.1:7860/mcp/",
         "--header", "Authorization: Bearer szl_YOUR_KEY"]
     }
   }
@@ -254,7 +297,7 @@ Drop `examples/claude-desktop-config.json` into
 ```toml
 [mcp_servers.hatun-mcp]
 command = "npx"
-args = ["-y", "mcp-remote", "https://szlholdings-hatun-mcp.hf.space/mcp/",
+args = ["-y", "mcp-remote", "http://127.0.0.1:7860/mcp/",
         "--header", "Authorization: Bearer szl_YOUR_KEY"]
 ```
 
@@ -268,7 +311,7 @@ args = ["-y", "mcp-remote", "https://szlholdings-hatun-mcp.hf.space/mcp/",
           "type": "stdio",
           "command": "npx",
           "args": ["-y", "mcp-remote",
-            "https://szlholdings-hatun-mcp.hf.space/mcp/",
+            "http://127.0.0.1:7860/mcp/",
             "--header", "Authorization: Bearer szl_YOUR_KEY"]
         }
       }
@@ -284,11 +327,23 @@ args = ["-y", "mcp-remote", "https://szlholdings-hatun-mcp.hf.space/mcp/",
 ```bash
 HATUN_MCP_DISABLE_DYNAMIC=true python -m pytest tests/ -q
 # tests/test_server.py    — list tools, call a tool, assert response shape
+# tests/test_github_estate_snapshot.py — bounded public GitHub observer, mocked provider
 # tests/test_quorum.py    — quorum math + threshold edge cases + BLS aggregate
 # tests/test_adapters.py  — mocked organ endpoints, adapter wiring + honest gaps
 # tests/test_governance.py— Khipu chain, Yuyay gate, PURIQ factor (pre-existing)
 # tests/test_http_routes.py — exact-byte card attestation + public HTTP contracts
 ```
+
+The server tests also import the estate regression class so the existing
+explicit-file hosted CI gate exercises it. They verify real in-memory MCP
+discovery/calls, argument rejection, canonical digest binding, and an ephemeral
+P-256 signature. Provider responses in these tests are **SIMULATED**; passing
+them does not publish the new tool or establish current GitHub/HF health.
+
+`python tests/proof_inmemory.py` exercises the real in-memory MCP protocol and
+checks exact static runtime/server-card name parity. The proof disables dynamic
+catalog probing and receipt-sink forwarding in its own process. CI also runs it
+from an unrelated working directory to verify the documented direct command.
 
 ## The Ouroboros loop (doctrine cross-reference)
 
