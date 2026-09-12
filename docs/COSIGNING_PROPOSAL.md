@@ -49,7 +49,7 @@ Extend the existing DSSE envelope with a second signature slot:
       "sig": "<base64 ECDSA-P256 signature from originating runtime>"
     },
     {
-      "keyid": "hatun-mcp-gate-key-2026",
+      "keyid": "<public policy-gate key identifier>",
       "sig": "<base64 ECDSA-P256 signature from policy gate, independent key>"
     }
   ]
