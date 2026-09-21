@@ -4,7 +4,7 @@
 mcp>=1.30.0,<2        # FastMCP remains under mcp.server in the supported 1.x SDK
 httpx>=0.28.1         # already current (0.28.1)
 starlette>=1.6.0        # was >=0.37; latest 1.2.1 — SECURITY: major bump
-uvicorn[standard]>=0.52.4  # already current (0.48.0)
+uvicorn[standard]>=0.53.0  # already current (0.48.0)
 cryptography>=50.0.1      # was >=42; latest 48.0.0
 py_ecc>=8.0.0           # BLS12-381 aggregate signatures (real curve; honest Merkle fallback if absent)
 pytest>=9.1.1           # test suite (test_server, test_quorum, test_adapters, test_governance)
