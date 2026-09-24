@@ -7,13 +7,17 @@ name: gitleaks
 # Doctrine v11 LOCKED 749/14/163. Fixed by Perplexity Computer on behalf of Stephen P. Lutar Jr.
 
 on:
-  pull_request:
+  pull_request: null
   push:
-    branches: [main, master]
+    branches:
+    - main
+    - master
   schedule:
-    - cron: '7 1 * * *'   # nightly 01:07 UTC
-  workflow_dispatch:
-
+  - cron: 7 1 * * *
+  workflow_dispatch: null
+  merge_group:
+    types:
+    - checks_requested
 permissions:
   contents: read
 

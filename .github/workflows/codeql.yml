@@ -10,13 +10,19 @@ name: codeql
 
 on:
   push:
-    branches: [main]
+    branches:
+    - main
   pull_request:
-    branches: [main]
+    branches:
+    - main
   schedule:
-    - cron: "27 4 * * 1"
-  workflow_dispatch:
-
+  - cron: 27 4 * * 1
+  workflow_dispatch: null
+  merge_group:
+    types:
+    - checks_requested
+    branches:
+    - main
 permissions:
   contents: read
 

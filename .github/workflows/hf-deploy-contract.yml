@@ -2,47 +2,53 @@ name: Hatun Consolidated Surface Contract
 
 on:
   pull_request:
-    branches: [main]
+    branches:
+    - main
     paths:
-      - README.md
-      - Dockerfile
-      - requirements.txt
-      - hatun_mcp/console.py
-      - hatun_mcp/console_v2.py
-      - hatun_mcp/server.py
-      - hatun_mcp/server_http.py
-      - docs/HATUN_SURFACE_CONTRACT.md
-      - tests/test_console_state.py
-      - tests/test_dependency_contract.py
-      - tests/test_http_routes.py
-      - tests/test_hf_deploy_contract.py
-      - .github/workflows/hf-drift-check.yml
-      - .github/workflows/hf-deploy-contract.yml
+    - README.md
+    - Dockerfile
+    - requirements.txt
+    - hatun_mcp/console.py
+    - hatun_mcp/console_v2.py
+    - hatun_mcp/server.py
+    - hatun_mcp/server_http.py
+    - docs/HATUN_SURFACE_CONTRACT.md
+    - tests/test_console_state.py
+    - tests/test_dependency_contract.py
+    - tests/test_http_routes.py
+    - tests/test_hf_deploy_contract.py
+    - .github/workflows/hf-drift-check.yml
+    - .github/workflows/hf-deploy-contract.yml
   push:
-    branches: [main]
+    branches:
+    - main
     paths:
-      - README.md
-      - Dockerfile
-      - requirements.txt
-      - hatun_mcp/console.py
-      - hatun_mcp/console_v2.py
-      - hatun_mcp/server.py
-      - hatun_mcp/server_http.py
-      - docs/HATUN_SURFACE_CONTRACT.md
-      - tests/test_console_state.py
-      - tests/test_dependency_contract.py
-      - tests/test_http_routes.py
-      - tests/test_hf_deploy_contract.py
-      - .github/workflows/hf-drift-check.yml
-      - .github/workflows/hf-deploy-contract.yml
+    - README.md
+    - Dockerfile
+    - requirements.txt
+    - hatun_mcp/console.py
+    - hatun_mcp/console_v2.py
+    - hatun_mcp/server.py
+    - hatun_mcp/server_http.py
+    - docs/HATUN_SURFACE_CONTRACT.md
+    - tests/test_console_state.py
+    - tests/test_dependency_contract.py
+    - tests/test_http_routes.py
+    - tests/test_hf_deploy_contract.py
+    - .github/workflows/hf-drift-check.yml
+    - .github/workflows/hf-deploy-contract.yml
   workflow_dispatch: {}
-
+  merge_group:
+    types:
+    - checks_requested
+    branches:
+    - main
 permissions:
   contents: read
 
 concurrency:
   group: hatun-consolidated-surface-contract-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name != 'merge_group' }}
 
 jobs:
   verify:
