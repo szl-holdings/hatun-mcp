@@ -1,0 +1,31 @@
+{
+  "schema": "szl.model_admit_contract/v1",
+  "doctrine": "v11 LOCKED",
+  "lambda": "Conjecture 1",
+  "locked_8": ["F1", "F4", "F7", "F11", "F12", "F18", "F19", "F22"],
+  "trust_ceiling": 0.97,
+  "policy_tau": 0.8,
+  "frontier_default_tau": 0.7,
+  "admit": "geometric_mean",
+  "witness_only": "arithmetic_mean",
+  "hidden_weak": [0.95, 0.95, 0.95, 0.4],
+  "hidden_weak_lock": {"gm": 0.7653, "am": 0.8125, "admit": false, "dang": true},
+  "labels": ["VERIFIED", "MISMATCH", "UNSIGNED-LOCAL", "UNAVAILABLE", "BLOCKED", "ADMITTED", "CONJECTURE", "MEASURED"],
+  "typesafe": {
+    "provider": "typesafe.systemone",
+    "model": "jev-latest",
+    "primitives": ["choice", "noul", "score"],
+    "citation_lattice": ["supports", "contradicts", "says_nothing"],
+    "composite_scoring": "weighted_sum_in_code",
+    "admit_function": "weighted_geometric_mean",
+    "jev_can_allow": false,
+    "jev_can_grant_live": false,
+    "jev_can_close_conjecture_1": false,
+    "missing_key": "UNAVAILABLE"
+  },
+  "production_authorized": false,
+  "http_200_is_live": false,
+  "product": "https://a-11-oy.com",
+  "proof": "https://a11oy.net",
+  "verify": "https://a-11-oy.com/verify"
+}
