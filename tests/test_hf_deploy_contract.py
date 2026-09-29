@@ -44,6 +44,46 @@ def test_standalone_hf_publisher_is_intentionally_retired():
         assert marker in contract, marker
 
 
+HUB_WRITE_MARKERS = (
+    "upload_folder(",
+    "upload_file(",
+    "create_commit(",
+    "create_repo(",
+    "delete_repo(",
+    "HfApi(",
+    "huggingface-cli upload",
+    "hf upload ",
+    "reusable-hf-deploy",
+)
+SCANNED_SUFFIXES = {".py", ".sh", ".ps1", ".js", ".mjs", ".ts", ".yml", ".yaml", ".toml", ""}
+
+
+def _tracked_non_test_files():
+    for path in sorted(ROOT.rglob("*")):
+        relative = path.relative_to(ROOT)
+        parts = relative.parts
+        if not path.is_file() or parts[0] in {".git", "tests"}:
+            continue
+        if "__pycache__" in parts or path.suffix not in SCANNED_SUFFIXES:
+            continue
+        yield relative.as_posix(), path
+
+
+def test_no_local_or_workflow_hub_writer_remains():
+    # The retired Space had two write paths: hf-deploy.yml (removed 2026-09-03)
+    # and the founder-token push_to_hf.py (removed 2026-09-29). Neither may return.
+    assert not (ROOT / "push_to_hf.py").exists()
+    offenders = []
+    for relative, path in _tracked_non_test_files():
+        text = path.read_text(encoding="utf-8", errors="replace")
+        offenders.extend(
+            f"{relative}: {marker}" for marker in HUB_WRITE_MARKERS if marker in text
+        )
+    assert not offenders, offenders
+    contract = (ROOT / "docs/HATUN_SURFACE_CONTRACT.md").read_text(encoding="utf-8")
+    assert "The local `push_to_hf.py` uploader" in " ".join(contract.split())
+
+
 def test_canonical_product_witness_is_read_only_and_has_no_hf_writer():
     workflow = (ROOT / ".github/workflows/hf-drift-check.yml").read_text(
         encoding="utf-8"
