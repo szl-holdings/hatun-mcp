@@ -17,6 +17,13 @@ September 3, 2026 by protected-main commit
 `.github/workflows/hf-deploy.yml` is intentional. It prevents the retired Space
 from being recreated by an automatic writer.
 
+The local `push_to_hf.py` uploader (a founder-token `upload_folder` to the same
+retired Space) was a second write path left behind by that retirement. It was
+removed on September 29, 2026. No tracked non-test file may call a Hugging Face
+write API; `tests/test_hf_deploy_contract.py` enforces this. Re-creating a Hub
+writer requires the same explicit product-architecture decision as invariant 1,
+and then a committed workflow, never a local script.
+
 The canonical user-facing Hatun experience is the product route at
 `a-11-oy.com/wires`. That route is source-owned by `szl-holdings/a11oy`, reads
 A11oy's live mesh contract, links back to this repository, and fails closed when
