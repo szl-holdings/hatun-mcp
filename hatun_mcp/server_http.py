@@ -39,7 +39,7 @@ from .governance import (
     DsseSigner,
 )
 from .console import CONSOLE_HTML
-from .state import console_state, set_card_tool_names
+from .state import console_state, observed_signer_mode, set_card_tool_names
 
 ALLOWED_ORIGINS = set(
     o.strip() for o in os.environ.get(
@@ -486,8 +486,13 @@ async def readyz(request: Request):
     remain alive while the receipt chain is invalid or the real signing key is
     absent; callers must not infer signed-tool readiness from ``/healthz``.
     """
-    chain_verified = KHIPU.verify()
-    signer_ready = SIGNER.mode != "PLACEHOLDER"
+    try:
+        chain_verified = KHIPU.verify() is True
+        chain_state = "VERIFIED" if chain_verified else "FAILED"
+    except Exception:
+        chain_verified, chain_state = False, "UNAVAILABLE"
+    signer_mode = observed_signer_mode(SIGNER)
+    signer_ready = signer_mode == "ECDSA-P256"
     ready = chain_verified and signer_ready
     return JSONResponse(
         {
@@ -495,10 +500,10 @@ async def readyz(request: Request):
             "service": "hatun-mcp",
             "ready": ready,
             "checks": {
-                "receipt_chain": "VERIFIED" if chain_verified else "FAILED",
+                "receipt_chain": chain_state,
                 "signer": "CONFIGURED" if signer_ready else "UNAVAILABLE",
             },
-            "signer_mode": SIGNER.mode,
+            "signer_mode": signer_mode,
             "protocol_revision": DOCTRINE["protocol_revision"],
         },
         status_code=200 if ready else 503,

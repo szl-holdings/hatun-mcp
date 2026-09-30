@@ -167,6 +167,17 @@ def _organ_registration(summary: Any) -> dict:
     return {"state": "MEASURED", "detail": None, "organs": organs}
 
 
+def observed_signer_mode(signer: Any) -> str:
+    """Read only known local modes; this does not attest key ownership."""
+    try:
+        mode = getattr(signer, "mode", UNAVAILABLE)
+        if type(mode) is str and mode in ("ECDSA-P256", "PLACEHOLDER"):
+            return mode
+    except Exception:
+        pass
+    return UNAVAILABLE
+
+
 def console_state(*, mcp: Any, khipu: Any, signer: Any, doctrine: dict,
                   organ_summary: Any = None, public_base: str = "") -> dict:
     """Assemble the console payload from live process state only."""
@@ -176,17 +187,16 @@ def console_state(*, mcp: Any, khipu: Any, signer: Any, doctrine: dict,
     build_state, revision = _observed_revision()
 
     try:
-        chain_verified = bool(khipu.verify())
+        chain_verified = khipu.verify() is True
         chain_state = "VERIFIED" if chain_verified else "FAILED"
         depth = khipu.depth()
         head = khipu.head_hash()
     except Exception:
         chain_verified, chain_state, depth, head = False, UNAVAILABLE, None, None
 
-    signer_mode = getattr(signer, "mode", UNAVAILABLE)
+    signer_mode = observed_signer_mode(signer)
     signed = signer_mode == "ECDSA-P256"
-    signer_ready = signer_mode != "PLACEHOLDER"
-    ready = bool(chain_verified and signer_ready)
+    ready = chain_verified and signed
 
     families: dict[str, int] = {}
     for row in tools:

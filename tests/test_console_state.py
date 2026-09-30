@@ -18,6 +18,8 @@ from starlette.testclient import TestClient  # noqa: E402
 from hatun_mcp import server_http, state  # noqa: E402
 from hatun_mcp.console import CONSOLE_HTML  # noqa: E402
 from hatun_mcp.server import KHIPU, mcp  # noqa: E402
+# The hosted gate enumerates this file; include the isolated generic regressions.
+from test_generic_validation import GenericValidationTests  # noqa: E402,F401
 
 BASE = "https://szlholdings-hatun-mcp.hf.space"
 client = TestClient(server_http.app, base_url=BASE)

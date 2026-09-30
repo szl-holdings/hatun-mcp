@@ -134,7 +134,7 @@ async def run_bounded_loop(
       * ``"budget_exhausted"`` — the hard step budget was reached before all items
         were processed (disclosed, not forced; remaining items are NOT dropped
         silently — the miss is recorded in the trace).
-      * ``"error"``            — a step raised; the error is recorded and the loop
+      * ``"error"``            - a step or convergence predicate raised; the loop
         stops (honest error exit).
 
     Bounded & terminating: at most ``max_steps`` iterations run regardless of how
@@ -160,12 +160,21 @@ async def run_bounded_loop(
             res = await step_fn(idx, item, trace)
             results.append(res)
             trace.add("success", f"step {trace.iterations}/{len(items)} completed")
-        except Exception as e:  # honest error exit — loop stops, disclosed
+        except Exception:  # Do not expose callback exception messages.
             trace.exit = EXIT_ERROR
-            trace.add("error", f"step {idx} raised {type(e).__name__}: {e}")
+            trace.add("error", f"step {idx}: step_error")
             return results, trace
 
-        if converged is not None and converged(results):
+        try:
+            convergence_result = converged(results) if converged is not None else False
+            if type(convergence_result) is not bool:
+                raise ValueError("convergence predicate must return bool")
+        except Exception:
+            trace.exit = EXIT_ERROR
+            trace.add("error", f"step {idx}: convergence_error")
+            return results, trace
+
+        if convergence_result:
             trace.exit = EXIT_CONVERGED
             trace.add(
                 "success",
