@@ -225,11 +225,21 @@ def test_tool_pipeline_authenticated_local_tool():
     assert out["khipu_receipt"]["chain_verified"] is True
 
 
-def test_state_changing_tool_blocks_without_second_approver():
+def test_state_changing_tool_blocks_without_second_approver(monkeypatch):
+    from unittest.mock import Mock
     from hatun_mcp import server
+
+    dispatch = Mock(side_effect=AssertionError("cue backend must not be dispatched"))
+
+    async def forbidden_backend(*args, **kwargs):
+        # The wrapper constructs a coroutine before the gate; execution is forbidden.
+        return dispatch(*args, **kwargs)
+
+    monkeypatch.setattr(server.B, "killinchu_cue", forbidden_backend)
     server._set_test_context(client_id="client_demo", scope="admin", second_approver=None)
     out = asyncio.run(
         server.szl_killinchu_cue({"track_id": "T1"}, {"polygon": []}))
+    dispatch.assert_not_called()
     assert out["status"] == "declined"
     assert out["gate_transparency"]["reason"] == "two_person_gate_required"
 

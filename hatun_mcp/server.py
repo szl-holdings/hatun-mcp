@@ -118,6 +118,20 @@ def _scope_ok(scope: str, needs: str) -> bool:
     return order.get(scope, 0) >= order.get(needs, 0)
 
 
+def _backend_succeeded(backend: Any) -> bool:
+    """Require a deployed result with no error and a valid optional HTTP status.
+
+    This classifies the generic result envelope only, not provider readiness or
+    the stronger estate evidence contract. Missing/unknown deployment is failure.
+    """
+    if not isinstance(backend, dict):
+        return False
+    if backend.get("deployed") is not True or backend.get("error") is not None:
+        return False
+    status = backend.get("http_status")
+    return status is None or (type(status) is int and 200 <= status < 400)
+
+
 async def governed(
     *,
     tool: str,
@@ -199,6 +213,8 @@ async def governed(
     try:
         if backend_coro is not None:
             backend = await backend_coro
+        if not isinstance(backend, dict):
+            raise ValueError("invalid backend result")
         if evidence_contract:
             # Bind only validated observation bytes into the receipt. A backend
             # bug must not sign a stale digest or turn missing data into success.
@@ -215,12 +231,13 @@ async def governed(
                 or (snapshot["state"] == "COMPLETE") != (backend.get("error") is None)
             ):
                 raise ValueError("invalid evidence contract")
-    except Exception as e:  # defensive; backends already swallow transport errors
+    except Exception:  # defensive; backends already swallow transport errors
         if evidence_contract:
             err = "EVIDENCE_CONTRACT_ERROR"
             backend = None  # Discard unvalidated data and exception text.
         else:
-            err = f"{type(e).__name__}: {e}"
+            err = "BACKEND_RESULT_ERROR"
+            backend = None  # Exception messages and malformed results stay private.
 
     latency = time.time() - t0
     chain_ok = KHIPU.verify()
@@ -234,9 +251,8 @@ async def governed(
         status = "failure"
     elif evidence_contract:
         status = "success" if backend["evidence_state"] == "COMPLETE" else "failure"
-    elif backend is not None and isinstance(backend, dict) and backend.get("error"):
-        status = "failure" if not backend.get("deployed", True) else "success"
-        # a non-deployed backend is an honest 'not-live' success-with-disclosure, not a crash
+    elif not _backend_succeeded(backend):
+        status = "failure"
 
     score = puriq_utility(lam=1.0, yuyay=yuyay, hukla_tripwire=tripwire,
                           khipu_chain_ok=chain_ok, hatun_factor=factor)

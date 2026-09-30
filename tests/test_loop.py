@@ -116,7 +116,9 @@ def test_error_step_exits_error_and_stops():
     assert results == ["a"]  # stopped at the failing step
     assert trace.iterations == 2  # started step 2, which raised
     d = trace.to_dict()
-    assert any(e["type"] == "error" and "ValueError" in e["label"] for e in d["trace"])
+    assert any(e["type"] == "error" and e["label"] == "step 1: step_error"
+               for e in d["trace"])
+    assert "organ blew up" not in str(d)
 
 
 def test_convergence_predicate_exits_early_when_really_satisfied():
