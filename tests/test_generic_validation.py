@@ -198,7 +198,8 @@ class GenericValidationTests(unittest.TestCase):
         for error in ("http_500", "", False, 0, [], {}):
             for deployed in (True, False, None):
                 with self.subTest(error=error, deployed=deployed):
-                    out, receipts, recorded, _ = self.backend(dict(deployed=deployed, error=error, http_status=500))
+                    # Error must dominate even an otherwise successful HTTP status.
+                    out, receipts, recorded, _ = self.backend(dict(deployed=deployed, error=error, http_status=200))
                     self.assertEqual(out["status"], "failure")
                     self.assertEqual(receipts[0]["status"], "failure")
                     self.assertFalse(recorded[0]["clean"])
