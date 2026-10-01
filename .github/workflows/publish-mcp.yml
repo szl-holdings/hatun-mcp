@@ -111,7 +111,9 @@ jobs:
           curl -fsSL "$URL" -o mcp-publisher.tar.gz
           echo "${MCP_PUBLISHER_SHA256}  mcp-publisher.tar.gz" | sha256sum -c -
           tar xzf mcp-publisher.tar.gz mcp-publisher
-          ./mcp-publisher --help | head -n 3
+          # no pipe into head: with pipefail a closed pipe returns 141 (SIGPIPE) and fails the step
+          ./mcp-publisher --help > /dev/null
+          echo "mcp-publisher ${MCP_PUBLISHER_VERSION} ready"
 
       - name: Validate server.json
         run: ./mcp-publisher validate
