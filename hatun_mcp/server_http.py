@@ -222,7 +222,7 @@ def _server_card() -> dict:
             "inputSchema": input_schema,
         })
     return {
-        "serverInfo": {"name": "hatun-mcp", "version": "1.0.0",
+        "serverInfo": {"name": "hatun-mcp", "version": "1.0.1",
                        "vendor": "SZL Holdings",
                        "description": "Doctrine-aware MCP server — PURIQ governance "
                                       "(Yuyay-13 gate, Khipu receipts, DSSE-signed "
