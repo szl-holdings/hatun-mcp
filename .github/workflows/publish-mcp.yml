@@ -1,0 +1,152 @@
+# Copyright 2026 SZL Holdings — SPDX-License-Identifier: Apache-2.0
+name: Publish to MCP Registry
+
+# Builds the release image for a v* tag, attests its provenance, then publishes
+# server.json to the official MCP Registry (registry.modelcontextprotocol.io)
+# under io.github.szl-holdings/hatun-mcp using GitHub OIDC (no stored secret).
+#
+# Fail-closed: the tag, server.json, hatun_mcp.__version__ and the OCI identifier
+# must all agree before anything is pushed. The run ends by re-reading the
+# registry and writing a receipt artifact; a listing that cannot be re-read is
+# not reported as published.
+#
+# Doctrine v11 LOCKED — 749 / 14 / 163 · Λ = Conjecture 1 · receipts.in ≡ receipts.out
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+  SERVER_NAME: io.github.szl-holdings/hatun-mcp
+  MCP_PUBLISHER_VERSION: 1.8.1
+  MCP_PUBLISHER_SHA256: a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc
+
+jobs:
+  publish:
+    name: build release image · attest · publish server.json
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+      id-token: write          # GHCR provenance attestation + MCP Registry OIDC login
+      attestations: write
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Bind version (tag == server.json == hatun_mcp.__version__ == OCI identifier)
+        id: bind
+        run: |
+          set -euo pipefail
+          case "$GITHUB_REF" in
+            refs/tags/v*) VERSION="${GITHUB_REF#refs/tags/v}" ;;
+            *) echo "::error::publish-mcp runs only from a v* tag (got $GITHUB_REF)"; exit 1 ;;
+          esac
+          SJ_VERSION="$(jq -r .version server.json)"
+          PY_VERSION="$(grep -oP '^__version__ = "\K[^"]+' hatun_mcp/__init__.py)"
+          IDENT="$(jq -r '.packages[0].identifier' server.json)"
+          NAME="$(jq -r .name server.json)"
+          echo "tag=$VERSION server.json=$SJ_VERSION __version__=$PY_VERSION identifier=$IDENT name=$NAME"
+          [ "$VERSION" = "$SJ_VERSION" ] || { echo "::error::server.json version $SJ_VERSION != tag $VERSION"; exit 1; }
+          [ "$VERSION" = "$PY_VERSION" ] || { echo "::error::hatun_mcp.__version__ $PY_VERSION != tag $VERSION"; exit 1; }
+          [ "$IDENT" = "$IMAGE:$VERSION" ] || { echo "::error::OCI identifier $IDENT != $IMAGE:$VERSION"; exit 1; }
+          [ "$NAME" = "$SERVER_NAME" ] || { echo "::error::server.json name $NAME != $SERVER_NAME"; exit 1; }
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+
+      - name: Build and push release image (MCP ownership label + OCI annotations)
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ steps.bind.outputs.version }}
+          labels: |
+            io.modelcontextprotocol.server.name=${{ env.SERVER_NAME }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.bind.outputs.version }}
+            org.opencontainers.image.licenses=Apache-2.0
+            org.opencontainers.image.title=hatun-mcp
+          annotations: |
+            io.modelcontextprotocol.server.name=${{ env.SERVER_NAME }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.bind.outputs.version }}
+          provenance: true
+
+      - name: Attest build provenance (SLSA L2)
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      - name: Install mcp-publisher (pinned release, checksum verified)
+        run: |
+          set -euo pipefail
+          URL="https://github.com/modelcontextprotocol/registry/releases/download/v${MCP_PUBLISHER_VERSION}/mcp-publisher_linux_amd64.tar.gz"
+          curl -fsSL "$URL" -o mcp-publisher.tar.gz
+          echo "${MCP_PUBLISHER_SHA256}  mcp-publisher.tar.gz" | sha256sum -c -
+          tar xzf mcp-publisher.tar.gz mcp-publisher
+          ./mcp-publisher --help | head -n 3
+
+      - name: Validate server.json
+        run: ./mcp-publisher validate
+
+      - name: Authenticate to MCP Registry (GitHub OIDC)
+        run: ./mcp-publisher login github-oidc
+
+      - name: Publish server.json
+        run: ./mcp-publisher publish
+
+      - name: Re-read the registry and write receipt
+        env:
+          VERSION: ${{ steps.bind.outputs.version }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          sleep 5
+          curl -fsS "https://registry.modelcontextprotocol.io/v0/servers?search=${SERVER_NAME}&version=latest" -o registry.json
+          LISTED="$(jq -r --arg n "$SERVER_NAME" --arg v "$VERSION" '[.servers[]? | select(.server.name==$n and .server.version==$v)] | length' registry.json)"
+          jq -n --arg n "$SERVER_NAME" --arg v "$VERSION" --arg d "$DIGEST" --arg i "$IMAGE:$VERSION" \
+                --arg run "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --arg sha "$GITHUB_SHA" \
+                --argjson listed "$LISTED" --slurpfile reg registry.json \
+                '{server:$n, version:$v, image:$i, image_digest:$d, source_commit:$sha, workflow_run:$run,
+                  registry_listed_count:$listed, state:(if $listed>0 then "MEASURED_LISTED" else "PUBLISH_RETURNED_BUT_NOT_READ_BACK" end),
+                  registry_response:$reg[0], ts:(now|todate)}' > mcp-registry-receipt.json
+          cat mcp-registry-receipt.json
+          [ "$LISTED" -gt 0 ] || { echo "::error::registry did not return ${SERVER_NAME}@${VERSION}; not claiming a listing"; exit 1; }
+
+      - name: Persist receipt
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mcp-registry-receipt-${{ steps.bind.outputs.version || 'unbound' }}
+          path: |
+            mcp-registry-receipt.json
+            registry.json
+          if-no-files-found: warn
+          retention-days: 90

@@ -1,0 +1,47 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.szl-holdings/hatun-mcp",
+  "title": "Hatun MCP - Governed Agent Gateway",
+  "description": "Governed MCP gateway: policy gate on every tool call, hash-chained DSSE receipt on every result.",
+  "version": "1.0.0",
+  "websiteUrl": "https://a-11-oy.com/wires",
+  "repository": {
+    "url": "https://github.com/szl-holdings/hatun-mcp",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registryType": "oci",
+      "identifier": "ghcr.io/szl-holdings/hatun-mcp:1.0.0",
+      "runtimeHint": "docker",
+      "transport": {
+        "type": "stdio"
+      },
+      "packageArguments": [
+        { "type": "positional", "value": "python", "valueHint": "python" },
+        { "type": "positional", "value": "-m", "valueHint": "-m" },
+        { "type": "positional", "value": "hatun_mcp.server", "valueHint": "hatun_mcp.server" }
+      ],
+      "environmentVariables": [
+        {
+          "name": "HATUN_MCP_DISABLE_DYNAMIC",
+          "description": "Set to true to skip live organ discovery at startup (hermetic local mode; 25 static tools).",
+          "default": "false",
+          "isRequired": false
+        },
+        {
+          "name": "HATUN_MCP_SIGNING_KEY",
+          "description": "PEM contents of the ECDSA-P256 DSSE signing key. If absent, receipts are emitted UNSIGNED and say so.",
+          "isRequired": false,
+          "isSecret": true
+        }
+      ]
+    }
+  ],
+  "_meta": {
+    "io.modelcontextprotocol.registry/publisher-provided": {
+      "tool": "szl-holdings/hatun-mcp publish-mcp.yml (GitHub Actions, OIDC)",
+      "evidence": "Image is SLSA-provenance attested at build; the registry entry claims only what the OCI manifest and this repository show."
+    }
+  }
+}
