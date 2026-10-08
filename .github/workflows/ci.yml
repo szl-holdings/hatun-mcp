@@ -39,9 +39,9 @@ jobs:
           HATUN_MCP_BACKEND_TIMEOUT: "1.0"
         run: |
           python -m pytest tests/test_server.py tests/test_quorum.py \
-            tests/test_adapters.py tests/test_governance.py \
-            tests/test_http_routes.py tests/test_console_state.py \
-            tests/test_dependency_contract.py -q
+            tests/test_adapters.py tests/test_owned_models.py \
+            tests/test_governance.py tests/test_http_routes.py \
+            tests/test_console_state.py tests/test_dependency_contract.py -q
 
   container-contract:
     name: build and exercise pinned Space image
