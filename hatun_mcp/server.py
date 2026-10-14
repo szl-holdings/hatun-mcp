@@ -681,97 +681,98 @@ async def szl_lambda_quorum(action: dict, context: Any = None,
     5-organ set is well under the budget, so it always exits `converged`. Doctrine:
     "bounded, terminating, receipt-closed" (Λ = Conjecture 1, never a theorem).
     """
-    from .adapters import build_adapters
-    client_id = _ctx_client.get()
-    sovereign = _ctx_sovereign.get()
-    targets = organs or ["a11oy", "immune", "companion", "llm", "killinchu"]
-    ads = build_adapters()
     gate_text = json.dumps(action)[:5000]
 
-    votes: list = []
-    organ_receipts: list = []
-
-    async def _organ_step(idx: int, organ: str, trace) -> Optional[OrganVote]:
-        """One bounded loop iteration: query one organ, mint its receipt, tally."""
-        ad = ads.get(organ)
-        if ad is None:
-            trace.add("action", f"organ '{organ}': no adapter registered; skipped")
-            return None
-        # Each organ evaluates the action via its policy/verdict route.
-        trace.add("network", f"organ '{organ}': policy_evaluate")
-        try:
-            res = await ad.call(
-                "policy_evaluate", {"action": action, "context": context or {}}
-            )
-        except Exception as exc:  # noqa: BLE001 - one organ cannot abort the bounded quorum walk
-            # Convert transport/library failures into an honest unreachable
-            # contribution.  Do not expose exception text: it may contain a URL,
-            # proxy detail, or credential-bearing transport context.
-            trace.add(
-                "error",
-                f"organ '{organ}': adapter transport failure ({type(exc).__name__})",
-            )
-            res = {
-                "deployed": False,
-                "http_status": None,
-                "endpoint": None,
-                "error": "adapter transport failure",
-                "reason": type(exc).__name__,
-            }
-        if not isinstance(res, dict):
-            trace.add("error", f"organ '{organ}': adapter returned a non-object result")
-            res = {
-                "deployed": False,
-                "http_status": None,
-                "endpoint": None,
-                "error": "adapter returned a non-object result",
-                "reason": "INVALID_ADAPTER_RESPONSE",
-            }
-        reachable = bool(res.get("deployed")) and res.get("error") in (None, "")
-        verdict = None
-        if reachable and isinstance(res.get("data"), dict):
-            d = res["data"]
-            verdict = d.get("verdict") or d.get("decision") or d.get("allow")
-        # Mint a per-organ Khipu receipt for this contribution (success or honest miss).
-        rr = KHIPU.emit(
-            tool="szl_lambda_quorum", client_id=client_id or "anonymous",
-            operation_id=f"{organ}.lambda_verdict",
-            status="success" if reachable else "failure",
-            tripwire=None, yuyay_min_axis=None, hatun_mcp_factor=0.0,
-            puriq_score=0.0,
-            detail={"organ": organ, "reachable": reachable,
-                    "verdict": verdict, "backend": _summ(res)},
-            signer=SIGNER,
-        )
-        organ_receipts.append((organ, rr.continuum_hash))
-        vote = OrganVote(organ=organ, reachable=reachable, verdict=verdict,
-                         receipt_hash=rr.continuum_hash,
-                         detail={"backend": _summ(res)})
-        votes.append(vote)
-        return vote
-
-    # Bounded Ouroboros walk over the organ fan-out (no unbounded loop on this path).
-    _, loop_trace = await run_bounded_loop(list(targets), _organ_step)
-    loop = loop_trace.to_dict()
-
-    qresult = quorum_decide(votes, QUORUM_CFG)
-    agg = BLS.aggregate(organ_receipts)
-
-    # Wrap through governed() for the uniform envelope (Yuyay gate + top-level receipt).
     async def _payload():
+        # Keep construction, fan-out, and contribution receipts behind governed().
+        from .adapters import build_adapters
+        client_id = _ctx_client.get()
+        targets = organs or ["a11oy", "immune", "companion", "llm", "killinchu"]
+        ads = build_adapters()
+
+        votes: list = []
+        organ_receipts: list = []
+
+        async def _organ_step(idx: int, organ: str, trace) -> Optional[OrganVote]:
+            """One bounded loop iteration: query one organ, mint its receipt, tally."""
+            ad = ads.get(organ)
+            if ad is None:
+                trace.add("action", f"organ '{organ}': no adapter registered; skipped")
+                return None
+            # Each organ evaluates the action via its policy/verdict route.
+            trace.add("network", f"organ '{organ}': policy_evaluate")
+            try:
+                res = await ad.call(
+                    "policy_evaluate", {"action": action, "context": context or {}}
+                )
+            except Exception as exc:  # noqa: BLE001 - one organ cannot abort the bounded quorum walk
+                # Convert transport/library failures into an honest unreachable
+                # contribution.  Do not expose exception text: it may contain a URL,
+                # proxy detail, or credential-bearing transport context.
+                trace.add(
+                    "error",
+                    f"organ '{organ}': adapter transport failure ({type(exc).__name__})",
+                )
+                res = {
+                    "deployed": False,
+                    "http_status": None,
+                    "endpoint": None,
+                    "error": "adapter transport failure",
+                    "reason": type(exc).__name__,
+                }
+            if not isinstance(res, dict):
+                trace.add("error", f"organ '{organ}': adapter returned a non-object result")
+                res = {
+                    "deployed": False,
+                    "http_status": None,
+                    "endpoint": None,
+                    "error": "adapter returned a non-object result",
+                    "reason": "INVALID_ADAPTER_RESPONSE",
+                }
+            reachable = bool(res.get("deployed")) and res.get("error") in (None, "")
+            verdict = None
+            if reachable and isinstance(res.get("data"), dict):
+                d = res["data"]
+                verdict = d.get("verdict") or d.get("decision") or d.get("allow")
+            # Mint a per-organ Khipu receipt for this contribution (success or honest miss).
+            rr = KHIPU.emit(
+                tool="szl_lambda_quorum", client_id=client_id or "anonymous",
+                operation_id=f"{organ}.lambda_verdict",
+                status="success" if reachable else "failure",
+                tripwire=None, yuyay_min_axis=None, hatun_mcp_factor=0.0,
+                puriq_score=0.0,
+                detail={"organ": organ, "reachable": reachable,
+                        "verdict": verdict, "backend": _summ(res)},
+                signer=SIGNER,
+            )
+            organ_receipts.append((organ, rr.continuum_hash))
+            vote = OrganVote(organ=organ, reachable=reachable, verdict=verdict,
+                             receipt_hash=rr.continuum_hash,
+                             detail={"backend": _summ(res)})
+            votes.append(vote)
+            return vote
+
+        # Bounded Ouroboros walk over the organ fan-out (no unbounded loop on this path).
+        _, loop_trace = await run_bounded_loop(list(targets), _organ_step)
+        loop = loop_trace.to_dict()
+
+        qresult = quorum_decide(votes, QUORUM_CFG)
+        agg = BLS.aggregate(organ_receipts)
+
         return B.BackendResult(
             deployed=True, http_status=200, endpoint="(hatun-mcp quorum)", error=None,
             data={"quorum": qresult.to_dict(), "bls_aggregate": agg.to_dict(),
                   "loop": loop},
         )
+
     out = await governed(
         tool="szl_lambda_quorum", operation_id="lambda.quorum", gate_text=gate_text,
         needs_scope="read", backend_coro=_payload(),
     )
-    out["governance"]["quorum"] = qresult.to_dict()
-    out["governance"]["bls_aggregate"] = agg.to_dict()
-    out["governance"]["loop"] = loop
-    out["governance"]["sovereign_mode"] = sovereign
+    # Declines and wrapper failures have no execution result to expose.
+    if isinstance(out.get("data"), dict):
+        for key in ("quorum", "bls_aggregate", "loop"):
+            out["governance"][key] = out["data"][key]
     return out
 
 
