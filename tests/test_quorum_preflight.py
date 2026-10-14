@@ -1,7 +1,9 @@
 """LOCAL-ONLY synthetic quorum ordering regressions; no provider calls.
 
 Uses the actual server, governance, loop, quorum and installed MCP SDK. Adapter
-results are fake. No key is loaded/generated and receipt forwarding is disabled.
+results are fake. No production or persistent credentials are accessed; installed
+py_ecc may derive deterministic in-process test keys, never independent organ
+signatures. Receipt forwarding is disabled.
 Run through ../../run_checks.py for pinned-source and mutation controls.
 """
 from __future__ import annotations
