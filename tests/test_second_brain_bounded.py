@@ -463,3 +463,77 @@ def test_unbounded_abstain_state_is_not_copied():
     result = asyncio.run(ad.call("retrieve_handles", {"query": "coherence"}))
     assert result["data"]["state"] == "UNAVAILABLE"
     assert "XXXX" not in json.dumps(result["data"])
+
+
+def test_timeout_then_conflicting_query_does_not_post():
+    import httpx
+
+    transport = Transport(error=httpx.TimeoutException("deadline"))
+    ad = adapter(transport)
+    first = asyncio.run(ad.call("retrieve_handles", {"query": "coherence", "operation_id": "op-t"}))
+    assert first["data"]["state"] == "UNAVAILABLE"
+    assert first["data"]["reason"] == "TIMEOUT"
+    assert first["data"]["handles"] == []
+    assert len(transport.posts) == 1
+    conflict = asyncio.run(ad.call("retrieve_handles", {"query": "other", "operation_id": "op-t"}))
+    assert conflict["data"]["state"] == "DENIED"
+    assert conflict["data"]["reason"] == "REPLAY_CONFLICT"
+    assert conflict["data"]["handles"] == []
+    assert len(transport.posts) == 1
+    replay = asyncio.run(ad.call("retrieve_handles", {"query": "coherence", "operation_id": "op-t"}))
+    assert replay["data"]["reason"] == "TIMEOUT"
+    assert len(transport.posts) == 1
+
+
+def test_replay_capacity_refuses_a_new_operation_without_a_post():
+    transport = Transport(post=Response(200, grounded()))
+    ad = adapter(transport)
+    for index in range(32):
+        admitted = asyncio.run(ad.call(
+            "retrieve_handles",
+            {"query": "coherence", "operation_id": f"op-{index}"},
+        ))
+        assert admitted["data"]["state"] == "AVAILABLE"
+    assert len(transport.posts) == 32
+    blocked = asyncio.run(ad.call("retrieve_handles", {"query": "coherence", "operation_id": "op-extra"}))
+    assert blocked["data"]["state"] == "DENIED"
+    assert blocked["data"]["reason"] == "REPLAY_CAPACITY"
+    assert blocked["data"]["handles"] == []
+    assert len(transport.posts) == 32
+    retained = asyncio.run(ad.call("retrieve_handles", {"query": "coherence", "operation_id": "op-0"}))
+    assert retained["data"]["state"] == "AVAILABLE"
+    assert retained["data"]["evidence"]
+    assert len(transport.posts) == 32
+
+
+def test_in_flight_operation_does_not_post_twice():
+    started = asyncio.Event()
+    release = asyncio.Event()
+    posts = []
+
+    class Gated:
+        async def post(self, url, payload):
+            posts.append(payload)
+            started.set()
+            await release.wait()
+            return Response(200, grounded())
+
+    ad = adapter(Gated())
+
+    async def scenario():
+        first = asyncio.create_task(ad.call(
+            "retrieve_handles",
+            {"query": "coherence", "operation_id": "op-c"},
+        ))
+        await started.wait()
+        second = await ad.call("retrieve_handles", {"query": "coherence", "operation_id": "op-c"})
+        assert second["data"]["state"] == "UNAVAILABLE"
+        assert second["data"]["reason"] == "REPLAY_IN_FLIGHT"
+        assert second["data"]["handles"] == []
+        assert len(posts) == 1
+        release.set()
+        admitted = await first
+        assert admitted["data"]["state"] == "AVAILABLE"
+        assert len(posts) == 1
+
+    asyncio.run(scenario())
