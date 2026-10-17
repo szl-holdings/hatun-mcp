@@ -284,9 +284,10 @@ def test_uncertain_backend_returns_empty_evidence():
     assert result["data"]["hydrated"] is False
 
 
-def test_local_catalog_is_not_public_reached():
+def test_local_catalog_is_not_public_reached(monkeypatch):
     from hatun_mcp.state import _organ_registration
 
+    monkeypatch.setenv("HATUN_MCP_DISABLE_DYNAMIC", "false")
     local = _organ_registration({
         "second_brain": {"reachable": True, "tools": 2, "http_status": "local-contract"},
     })
