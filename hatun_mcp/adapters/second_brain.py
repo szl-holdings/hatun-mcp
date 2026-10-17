@@ -222,11 +222,30 @@ class SecondBrainAdapter(OrganAdapter):
 
     def _remember(self, operation: str, key: tuple, result: B.BackendResult) -> None:
         if operation not in self._replay:
+            if len(self._replay) >= _REPLAY_LIMIT:
+                return
             self._replay_order.append(operation)
         self._replay[operation] = (key, copy.deepcopy(result))
-        while len(self._replay_order) > _REPLAY_LIMIT:
-            dropped = self._replay_order.pop(0)
-            self._replay.pop(dropped, None)
+
+    def _stored(self, operation: str, key: tuple, result: B.BackendResult) -> B.BackendResult:
+        if operation:
+            self._remember(operation, key, result)
+        return result
+
+    def _replay_gate(self, operation: str, key: tuple) -> B.BackendResult | None:
+        held = self._replay.get(operation)
+        if held is not None:
+            cached_key, cached = held
+            if cached_key != key:
+                return self._closed("REPLAY_CONFLICT", state="DENIED", action="REFUSE")
+            if cached is None:
+                return self._closed("REPLAY_IN_FLIGHT", state="UNAVAILABLE", action="ABSTAIN")
+            return self._release(copy.deepcopy(cached))
+        if len(self._replay) >= _REPLAY_LIMIT:
+            return self._closed("REPLAY_CAPACITY", state="DENIED", action="REFUSE")
+        self._replay[operation] = (key, None)
+        self._replay_order.append(operation)
+        return None
 
     def _release(self, result: B.BackendResult) -> B.BackendResult:
         data = result.get("data") if isinstance(result.get("data"), dict) else {}
@@ -282,13 +301,13 @@ class SecondBrainAdapter(OrganAdapter):
         if code is not None:
             return self._closed(code, state="DENIED", action="REFUSE")
         query, k = parsed
-        if operation and operation in self._replay:
-            cached_key, cached = self._replay[operation]
-            if cached_key != (tool, query, k):
-                return self._closed("REPLAY_CONFLICT", state="DENIED", action="REFUSE")
-            return self._release(copy.deepcopy(cached))
+        key = (tool, query, k)
+        if operation:
+            replayed = self._replay_gate(operation, key)
+            if replayed is not None:
+                return replayed
         if INVENTED.search(query):
-            return self._closed("INVENTED_IDENTIFIER", state="DENIED", action="REFUSE")
+            return self._stored(operation, key, self._closed("INVENTED_IDENTIFIER", state="DENIED", action="REFUSE"))
         if tool == "refuse_invented" or not query:
             result = B.BackendResult(
                 deployed=False,
@@ -308,20 +327,15 @@ class SecondBrainAdapter(OrganAdapter):
                     "tenant": self._allowed_tenant,
                 },
             )
-            if operation:
-                self._remember(operation, (tool, query, k), result)
-            return result
+            return self._stored(operation, key, result)
         url = self.base_url + _HYBRID
         try:
             response = await self._transport_for(timeout).post(url, {"query": query, "k": k})
         except (httpx.TimeoutException, TimeoutError):
-            return self._closed("TIMEOUT", state="UNAVAILABLE", action="ABSTAIN")
+            return self._stored(operation, key, self._closed("TIMEOUT", state="UNAVAILABLE", action="ABSTAIN"))
         except (httpx.HTTPError, OSError):
-            return self._closed("BACKEND_UNAVAILABLE", state="UNAVAILABLE", action="ABSTAIN")
-        result = self._release(_measured(url, response, self._allowed_tenant))
-        if operation and result["data"].get("state") in {"AVAILABLE", "ABSTAIN", "UNCERTAIN", "DENIED"}:
-            self._remember(operation, (tool, query, k), result)
-        return result
+            return self._stored(operation, key, self._closed("BACKEND_UNAVAILABLE", state="UNAVAILABLE", action="ABSTAIN"))
+        return self._stored(operation, key, self._release(_measured(url, response, self._allowed_tenant)))
 
 
 def _operation(args) -> tuple[str, str | None]:
