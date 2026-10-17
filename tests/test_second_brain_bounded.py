@@ -537,3 +537,18 @@ def test_in_flight_operation_does_not_post_twice():
         assert len(posts) == 1
 
     asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("state", [["UNCERTAIN"], {"status": "UNCERTAIN"}])
+def test_non_string_upstream_state_is_a_closed_malformed_response(state):
+    payload = grounded()
+    payload["state"] = state
+    transport = Transport(post=Response(200, payload))
+    ad = adapter(transport)
+    result = asyncio.run(ad.call("retrieve_handles", {"query": "coherence"}))
+    assert result["data"]["state"] == "UNAVAILABLE"
+    assert result["data"]["reason"] == "MALFORMED_RESPONSE"
+    assert result["data"]["handles"] == []
+    assert result["data"]["evidence"] == []
+    assert result["data"]["hydrated"] is False
+    assert "UNCERTAIN" not in json.dumps(result["data"])

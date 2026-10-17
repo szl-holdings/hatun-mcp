@@ -256,7 +256,10 @@ class SecondBrainAdapter(OrganAdapter):
             return self._closed(code, state="DENIED", action="REFUSE")
         released = dict(data)
         released["execution_authority"] = "NONE"
-        if released.get("state") in {"AVAILABLE", "ABSTAIN", "UNCERTAIN"}:
+        released_state = released.get("state")
+        if released_state is not None and not isinstance(released_state, str):
+            released = _empty("UNAVAILABLE", "MALFORMED_RESPONSE")
+        elif released_state in {"AVAILABLE", "ABSTAIN", "UNCERTAIN"}:
             released["tenant"] = self._allowed_tenant
         return B.BackendResult(
             deployed=result.get("deployed"),
@@ -464,7 +467,10 @@ def _admit(body, allowed_tenant: str) -> dict | None:
         return None
     if body.get("execution_authority") not in (None, "NONE") or body.get("execution_authorized") not in (None, False):
         return _held("DENIED", "AUTHORITY_PROMOTION", "REFUSE")
-    if body.get("state") in {"UNCERTAIN", "INDETERMINATE"}:
+    upstream_state = body.get("state")
+    if upstream_state is not None and not isinstance(upstream_state, str):
+        return _empty("UNAVAILABLE", "MALFORMED_RESPONSE")
+    if upstream_state in {"UNCERTAIN", "INDETERMINATE"}:
         return {
             "state": "UNCERTAIN",
             "action": "ABSTAIN",

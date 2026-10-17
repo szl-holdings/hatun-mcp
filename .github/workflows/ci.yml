@@ -42,7 +42,8 @@ jobs:
           python -m pytest tests/test_server.py tests/test_quorum.py \
             tests/test_adapters.py tests/test_owned_models.py \
             tests/test_owned_model_preflight.py tests/test_governance.py tests/test_http_routes.py \
-            tests/test_console_state.py tests/test_dependency_contract.py -q
+            tests/test_console_state.py tests/test_dependency_contract.py \
+            tests/test_second_brain_bounded.py -q
 
   container-contract:
     name: build and exercise pinned Space image
