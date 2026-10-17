@@ -141,6 +141,7 @@ def test_invented_identifier_and_empty_query_do_not_call_transport():
     ad = adapter(transport)
     refused = asyncio.run(ad.call("retrieve_handles", {"query": "look up receipt-7f3a"}))
     assert refused["data"]["action"] == "REFUSE"
+    assert refused["data"]["reason"] == "INVENTED_IDENTIFIER"
     assert refused["data"]["hydrated"] is False
     empty = asyncio.run(ad.call("retrieve_handles", {"query": "   "}))
     assert empty["data"]["state"] == "ABSTAIN"
@@ -212,6 +213,7 @@ def test_timeout_and_unreachable_backend():
     down = Transport(error=httpx.ConnectError("refused"))
     ad = adapter(down)
     result = asyncio.run(ad.call("retrieve_handles", {"query": "coherence"}))
+    assert result["deployed"] is False
     assert result["data"]["reason"] == "BACKEND_UNAVAILABLE"
     assert result["data"]["state"] == "UNAVAILABLE"
 
@@ -231,3 +233,33 @@ def test_catalog_reachability_comes_from_the_capabilities_response():
     catalog = asyncio.run(denied.fetch_catalog())
     assert catalog.reachable is False
     assert catalog.tools == []
+    gets_after_catalog = list(transport.gets)
+    probe = asyncio.run(denied.probe())
+    assert probe.reachable is False
+    assert transport.gets == gets_after_catalog
+
+
+def test_unusable_clock_does_not_authorize_a_zero_time_grant():
+    transport = Transport(post=Response(200, grounded()))
+    ad = SecondBrainAdapter(
+        base_url="https://second-brain.test",
+        grant=grant(not_before=-5, expires_at=60),
+        transport=transport,
+        clock=lambda: float("nan"),
+    )
+    result = asyncio.run(ad.call("retrieve_handles", {"query": "coherence"}))
+    assert result["deployed"] is False
+    assert result["data"]["reason"] == "MALFORMED"
+    assert transport.posts == []
+
+
+def test_unbounded_abstain_state_is_not_copied():
+    payload = grounded()
+    payload["state"] = "ABSTAIN_" + ("X" * 4000)
+    payload["handles"] = []
+    payload["evidence"] = []
+    transport = Transport(post=Response(200, payload))
+    ad = adapter(transport)
+    result = asyncio.run(ad.call("retrieve_handles", {"query": "coherence"}))
+    assert result["data"]["state"] == "UNAVAILABLE"
+    assert "XXXX" not in json.dumps(result["data"])

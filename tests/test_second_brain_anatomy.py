@@ -11,10 +11,12 @@ def test_second_brain_handles_only() -> None:
     assert catalog.tools == []
     hit = asyncio.run(ad.call("retrieve_handles", {"query": "use khipu.handle.alpha only"}))
     assert hit["deployed"] is False
+    assert hit["data"]["reason"] == "GRANT_REQUIRED"
     assert hit["data"]["handles"] == []
     assert hit["data"]["hydrated"] is False
     refuse = asyncio.run(ad.call("retrieve_handles", {"query": "look up receipt-7f3a"}))
     assert refuse["data"]["action"] == "REFUSE"
+    assert refuse["data"]["reason"] == "GRANT_REQUIRED"
     assert refuse["data"]["handles"] == []
 
 

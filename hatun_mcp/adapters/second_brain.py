@@ -15,11 +15,12 @@ from dataclasses import dataclass
 import httpx
 
 from .. import backends as B
-from .base import CatalogResult, OrganAdapter, OrganTool, DEFAULT_TIMEOUT
+from .base import CatalogResult, OrganAdapter, OrganTool, ProbeResult, DEFAULT_TIMEOUT
 
 INVENTED = re.compile(r"receipt-7f3a|hidden customer identifier", re.I)
 _PIN = re.compile(r"[0-9a-f]{40}\Z")
 _PRINCIPAL = re.compile(r"[A-Za-z0-9_.:@/-]{1,128}\Z")
+_UPSTREAM = re.compile(r"(?:GROUNDED_HANDLES_READY|ABSTAIN(?:_[A-Z0-9_]{1,64})?)\Z")
 _PRIVATE = {"content", "text", "document", "documents", "body", "raw"}
 _HYBRID = "/api/v1/hybrid"
 _CAPABILITIES = "/api/v1/retrieval-capabilities"
@@ -96,10 +97,13 @@ class SecondBrainAdapter(OrganAdapter):
         self._transport = transport
         self._clock = clock or time.time
 
-    def _now(self) -> int:
-        value = self._clock()
+    def _now(self) -> int | None:
+        try:
+            value = self._clock()
+        except Exception:
+            return None
         if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(float(value)):
-            return 0
+            return None
         return int(value)
 
     def _transport_for(self, timeout: float):
@@ -128,7 +132,10 @@ class SecondBrainAdapter(OrganAdapter):
             return "GRANT_REQUIRED"
         if not isinstance(self._grant, ControllerGrant):
             return "MALFORMED"
-        return self._grant.denial(self._now(), self._allowed_tenant)
+        now = self._now()
+        if now is None:
+            return "MALFORMED"
+        return self._grant.denial(now, self._allowed_tenant)
 
     async def fetch_catalog(self, timeout: float = DEFAULT_TIMEOUT) -> CatalogResult:
         code = self._grant_code()
@@ -139,7 +146,7 @@ class SecondBrainAdapter(OrganAdapter):
             response = await self._transport_for(timeout).get(route)
         except (httpx.TimeoutException, TimeoutError):
             return CatalogResult(self.organ, False, [], "timeout", route, reason="TIMEOUT")
-        except (httpx.TransportError, OSError):
+        except (httpx.HTTPError, OSError):
             return CatalogResult(self.organ, False, [], "transport", route, reason="BACKEND_UNAVAILABLE")
         if response.status_code in (301, 302, 303, 307, 308) or response.status_code != 200:
             return CatalogResult(
@@ -172,6 +179,35 @@ class SecondBrainAdapter(OrganAdapter):
             ),
         ]
         return CatalogResult(self.organ, True, tools, response.status_code, route, reason="MEASURED")
+
+    async def probe(self, timeout: float = DEFAULT_TIMEOUT) -> ProbeResult:
+        code = self._grant_code()
+        if code is not None:
+            return ProbeResult(self.organ, False, None, detail=code)
+        try:
+            response = await self._transport_for(timeout).get(self.base_url + _CAPABILITIES)
+        except (httpx.TimeoutException, TimeoutError):
+            return ProbeResult(self.organ, False, None, detail="TIMEOUT")
+        except (httpx.HTTPError, OSError):
+            return ProbeResult(self.organ, False, None, detail="BACKEND_UNAVAILABLE")
+        status = getattr(response, "status_code", None)
+        if status != 200:
+            return ProbeResult(self.organ, False, status, detail="CAPABILITIES_UNAVAILABLE")
+        try:
+            body = response.json()
+        except (ValueError, TypeError):
+            return ProbeResult(self.organ, False, status, detail="UNEXPECTED_PAYLOAD")
+        reachable = (
+            isinstance(body, dict)
+            and body.get("public_content_access") == "HANDLES_ONLY"
+            and isinstance(body.get("public_runtime_mode"), str)
+        )
+        return ProbeResult(
+            self.organ,
+            reachable,
+            status,
+            detail="MEASURED" if reachable else "UNEXPECTED_PAYLOAD",
+        )
 
     async def call(self, tool: str, args: dict, timeout: float = DEFAULT_TIMEOUT) -> B.BackendResult:
         code = self._grant_code()
@@ -207,7 +243,7 @@ class SecondBrainAdapter(OrganAdapter):
             response = await self._transport_for(timeout).post(url, {"query": query, "k": k})
         except (httpx.TimeoutException, TimeoutError):
             return self._closed("TIMEOUT", state="UNAVAILABLE", action="ABSTAIN")
-        except (httpx.TransportError, OSError):
+        except (httpx.HTTPError, OSError):
             return self._closed("BACKEND_UNAVAILABLE", state="UNAVAILABLE", action="ABSTAIN")
         return _measured(url, response)
 
@@ -316,6 +352,8 @@ def _admit(body) -> dict | None:
         if (
             not isinstance(node, str)
             or not isinstance(source, str)
+            or not source
+            or len(source) > 256
             or not isinstance(digest, str)
             or re.fullmatch(r"[0-9a-f]{64}", digest) is None
         ):
@@ -327,7 +365,7 @@ def _admit(body) -> dict | None:
     state = body.get("state")
     if state == "GROUNDED_HANDLES_READY":
         reported = "AVAILABLE"
-    elif isinstance(state, str) and state.startswith("ABSTAIN"):
+    elif isinstance(state, str) and state.startswith("ABSTAIN") and _UPSTREAM.fullmatch(state) is not None:
         reported = "ABSTAIN"
     else:
         return None
