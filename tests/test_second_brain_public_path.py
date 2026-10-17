@@ -87,6 +87,12 @@ def test_authorized_public_handles_round_trip():
         if data["state"] == "AVAILABLE":
             assert data["handles"]
             assert data["evidence"]
+            assert data["execution_authority"] == "NONE"
+            for row in data["evidence"]:
+                assert row["tenant"] == "public"
+                assert row["rights"] in {"public_handles", "public_citation"}
+                assert len(row["document_revision"]) in {40, 64}
+                assert len(row["license"]) > 0
     finally:
         process.terminate()
         try:

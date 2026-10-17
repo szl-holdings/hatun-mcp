@@ -74,7 +74,15 @@ def grounded(node="node-1"):
         "state": "GROUNDED_HANDLES_READY",
         "content_access": "HANDLES_ONLY",
         "handles": [{"nodeId": node, "nodeKind": "INDEX", "label": "DECLARED"}],
-        "evidence": [{"node_id": node, "source": "public-corpus", "sha256": "a" * 64}],
+        "evidence": [{
+            "node_id": node,
+            "source": "public-corpus",
+            "sha256": "a" * 64,
+            "document_revision": "d" * 40,
+            "license": "CC-BY-4.0",
+            "rights": "public_handles",
+            "tenant": "public",
+        }],
         "generation_sha256": "b" * 64,
         "evidence_set_sha256": "c" * 64,
     }
@@ -305,6 +313,144 @@ def test_unusable_clock_does_not_authorize_a_zero_time_grant():
     assert result["deployed"] is False
     assert result["data"]["reason"] == "MALFORMED"
     assert transport.posts == []
+
+
+def test_missing_rights_abstain_without_releasing_handles():
+    payload = grounded()
+    for row in payload["evidence"]:
+        row.pop("license")
+        row.pop("rights")
+    transport = Transport(post=Response(200, payload))
+    ad = adapter(transport)
+    result = asyncio.run(ad.call("retrieve_handles", {"query": "coherence"}))
+    assert result["data"]["state"] == "ABSTAIN"
+    assert result["data"]["reason"] == "RIGHTS_UNBOUND"
+    assert result["data"]["handles"] == []
+    assert result["data"]["evidence"] == []
+    assert result["data"]["execution_authority"] == "NONE"
+
+
+def test_withdrawn_source_is_not_released():
+    payload = grounded()
+    payload["evidence"][0]["rights"] = "withdrawn"
+    transport = Transport(post=Response(200, payload))
+    result = asyncio.run(adapter(transport).call("retrieve_handles", {"query": "coherence"}))
+    assert result["data"]["state"] == "ABSTAIN"
+    assert result["data"]["reason"] == "WITHDRAWN"
+    assert result["data"]["evidence"] == []
+    assert result["data"]["handles"] == []
+
+
+def test_evidence_tenant_change_is_denied():
+    payload = grounded()
+    payload["evidence"][0]["tenant"] = "other"
+    transport = Transport(post=Response(200, payload))
+    result = asyncio.run(adapter(transport).call("retrieve_handles", {"query": "coherence"}))
+    assert result["data"]["state"] == "DENIED"
+    assert result["data"]["reason"] == "WRONG_TENANT"
+    assert result["data"]["evidence"] == []
+
+
+def test_authority_claim_is_not_promoted():
+    payload = grounded()
+    payload["execution_authority"] = "EXECUTE"
+    transport = Transport(post=Response(200, payload))
+    result = asyncio.run(adapter(transport).call("retrieve_handles", {"query": "coherence"}))
+    assert result["data"]["state"] == "DENIED"
+    assert result["data"]["reason"] == "AUTHORITY_PROMOTION"
+    assert result["data"]["execution_authority"] == "NONE"
+    assert result["data"]["handles"] == []
+    assert "EXECUTE" not in json.dumps(result["data"])
+
+
+def test_replay_does_not_post_twice_and_conflict_does_not_post():
+    transport = Transport(post=Response(200, grounded()))
+    ad = adapter(transport)
+    first = asyncio.run(ad.call("retrieve_handles", {"query": "coherence", "operation_id": "op-1"}))
+    second = asyncio.run(ad.call("retrieve_handles", {"query": "coherence", "operation_id": "op-1"}))
+    assert first["data"]["state"] == "AVAILABLE"
+    assert second["data"]["evidence"] == first["data"]["evidence"]
+    assert len(transport.posts) == 1
+    conflict = asyncio.run(ad.call("retrieve_handles", {"query": "other", "operation_id": "op-1"}))
+    assert conflict["data"]["reason"] == "REPLAY_CONFLICT"
+    assert conflict["data"]["state"] == "DENIED"
+    assert len(transport.posts) == 1
+
+
+def test_grant_expiring_before_release_drops_handles():
+    ticks = iter((NOW, NOW + 1000))
+    transport = Transport(post=Response(200, grounded()))
+    ad = SecondBrainAdapter(
+        base_url="https://second-brain.test",
+        grant=grant(),
+        transport=transport,
+        clock=lambda: next(ticks),
+    )
+    result = asyncio.run(ad.call("retrieve_handles", {"query": "coherence"}))
+    assert len(transport.posts) == 1
+    assert result["data"]["state"] == "DENIED"
+    assert result["data"]["reason"] == "EXPIRED"
+    assert result["data"]["handles"] == []
+    assert result["data"]["evidence"] == []
+
+
+def test_egress_rechecks_grant_and_does_not_call_transport():
+    transport = Transport(post=Response(200, grounded()))
+    ad = adapter(transport)
+    admitted = asyncio.run(ad.call("retrieve_handles", {"query": "coherence"}))
+    released = ad.release_for_egress(admitted["data"])
+    assert released["execution_authority"] == "NONE"
+    assert released["tenant"] == "public"
+    assert len(transport.posts) == 1
+    expired = SecondBrainAdapter(
+        base_url="https://second-brain.test",
+        grant=grant(expires_at=NOW),
+        transport=transport,
+        clock=lambda: NOW,
+    )
+    denied = expired.release_for_egress(admitted["data"])
+    assert denied["state"] == "DENIED"
+    assert denied["reason"] == "EXPIRED"
+    assert denied["evidence"] == []
+    assert len(transport.posts) == 1
+
+
+def test_registered_read_tool_does_not_become_a_write():
+    from hatun_mcp.adapters.base import OrganTool, _register_one
+
+    recorded = {}
+
+    class MCP:
+        def tool(self, name=None):
+            def deco(fn):
+                recorded["fn"] = fn
+                recorded["name"] = name
+                return fn
+            return deco
+
+    async def governed(**kwargs):
+        recorded["scope"] = kwargs["needs_scope"]
+        recorded["state_changing"] = kwargs["state_changing"]
+        return await kwargs["backend_coro"]
+
+    transport = Transport(post=Response(200, grounded()))
+    ad = adapter(transport)
+    tool = OrganTool(
+        organ="second_brain",
+        name="retrieve_handles",
+        description="Return measured public handles. Never hydrate content.",
+        input_schema={"type": "object"},
+        gate_required=True,
+    )
+    _register_one(MCP(), ad, tool, governed, None)
+    result = asyncio.run(recorded["fn"]({"query": "coherence", "k": 6}))
+    assert recorded["name"] == "second_brain_retrieve_handles"
+    assert recorded["scope"] == "read"
+    assert recorded["state_changing"] is False
+    assert result["data"]["execution_authority"] == "NONE"
+    assert result["data"]["evidence"][0]["rights"] == "public_handles"
+    assert result["data"]["evidence"][0]["tenant"] == "public"
+    assert len(transport.posts) == 1
 
 
 def test_unbounded_abstain_state_is_not_copied():

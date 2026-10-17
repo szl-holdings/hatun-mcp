@@ -7,6 +7,7 @@ an actual HTTP response from the configured origin.
 """
 from __future__ import annotations
 
+import copy
 import math
 import re
 import time
@@ -21,9 +22,15 @@ INVENTED = re.compile(r"receipt-7f3a|hidden customer identifier", re.I)
 _PIN = re.compile(r"[0-9a-f]{40}\Z")
 _PRINCIPAL = re.compile(r"[A-Za-z0-9_.:@/-]{1,128}\Z")
 _UPSTREAM = re.compile(r"(?:GROUNDED_HANDLES_READY|ABSTAIN(?:_[A-Z0-9_]{1,64})?)\Z")
+_LICENSE = re.compile(r"[A-Za-z0-9.+-]{1,64}\Z")
+_REVISION = re.compile(r"[0-9a-f]{40}\Z|[0-9a-f]{64}\Z")
+_OPERATION = re.compile(r"[A-Za-z0-9_.:-]{1,128}\Z")
 _PRIVATE = {"content", "text", "document", "documents", "body", "raw"}
+_RIGHTS_OK = frozenset({"public_handles", "public_citation"})
+_RIGHTS_WITHDRAWN = frozenset({"withdrawn", "revoked"})
 _HYBRID = "/api/v1/hybrid"
 _CAPABILITIES = "/api/v1/retrieval-capabilities"
+_REPLAY_LIMIT = 32
 
 
 @dataclass(frozen=True)
@@ -96,6 +103,8 @@ class SecondBrainAdapter(OrganAdapter):
         self._allowed_tenant = allowed_tenant
         self._transport = transport
         self._clock = clock or time.time
+        self._replay: dict[str, tuple] = {}
+        self._replay_order: list[str] = []
 
     def _now(self) -> int | None:
         try:
@@ -124,6 +133,8 @@ class SecondBrainAdapter(OrganAdapter):
                 "content_access": "NONE",
                 "reason": code,
                 "source_revision": None,
+                "execution_authority": "NONE",
+                "tenant": None,
             },
         )
 
@@ -209,9 +220,61 @@ class SecondBrainAdapter(OrganAdapter):
             detail="MEASURED" if reachable else "UNEXPECTED_PAYLOAD",
         )
 
+    def _remember(self, operation: str, key: tuple, result: B.BackendResult) -> None:
+        if operation not in self._replay:
+            self._replay_order.append(operation)
+        self._replay[operation] = (key, copy.deepcopy(result))
+        while len(self._replay_order) > _REPLAY_LIMIT:
+            dropped = self._replay_order.pop(0)
+            self._replay.pop(dropped, None)
+
+    def _release(self, result: B.BackendResult) -> B.BackendResult:
+        data = result.get("data") if isinstance(result.get("data"), dict) else {}
+        if data.get("execution_authority") not in (None, "NONE") or data.get("execution_authorized") not in (None, False):
+            return self._closed("AUTHORITY_PROMOTION", state="DENIED", action="REFUSE")
+        code = self._grant_code()
+        if code is not None:
+            return self._closed(code, state="DENIED", action="REFUSE")
+        released = dict(data)
+        released["execution_authority"] = "NONE"
+        if released.get("state") in {"AVAILABLE", "ABSTAIN", "UNCERTAIN"}:
+            released["tenant"] = self._allowed_tenant
+        return B.BackendResult(
+            deployed=result.get("deployed"),
+            http_status=result.get("http_status"),
+            endpoint=result.get("endpoint"),
+            error=result.get("error"),
+            data=released,
+        )
+
+    def release_for_egress(self, data: dict) -> dict:
+        """Recheck the grant before a result can leave the process.
+
+        This does not call the origin and it does not grant execution.
+        """
+        if not isinstance(data, dict):
+            return self._closed("MALFORMED", state="DENIED", action="REFUSE")["data"]
+        if data.get("execution_authority") not in (None, "NONE") or data.get("execution_authorized") not in (None, False):
+            return self._closed("AUTHORITY_PROMOTION", state="DENIED", action="REFUSE")["data"]
+        code = self._grant_code()
+        if code is not None:
+            return self._closed(code, state="DENIED", action="REFUSE")["data"]
+        if data.get("state") == "AVAILABLE":
+            evidence = data.get("evidence")
+            if not isinstance(evidence, list) or not evidence or any(not _bound_row(row, self._allowed_tenant) for row in evidence):
+                return self._closed("RIGHTS_UNBOUND", state="ABSTAIN", action="ABSTAIN")["data"]
+        released = dict(data)
+        released["execution_authority"] = "NONE"
+        released["hydrated"] = False
+        released["tenant"] = self._allowed_tenant
+        return released
+
     async def call(self, tool: str, args: dict, timeout: float = DEFAULT_TIMEOUT) -> B.BackendResult:
         if tool not in ("retrieve_handles", "refuse_invented"):
             return self._closed("UNSUPPORTED_OPERATION", state="UNAVAILABLE", action="ABSTAIN")
+        operation, operation_error = _operation(args)
+        if operation_error is not None:
+            return self._closed("MALFORMED", state="DENIED", action="REFUSE")
         parsed = _arguments(args)
         if parsed is None:
             return self._closed("MALFORMED", state="DENIED", action="REFUSE")
@@ -219,10 +282,15 @@ class SecondBrainAdapter(OrganAdapter):
         if code is not None:
             return self._closed(code, state="DENIED", action="REFUSE")
         query, k = parsed
+        if operation and operation in self._replay:
+            cached_key, cached = self._replay[operation]
+            if cached_key != (tool, query, k):
+                return self._closed("REPLAY_CONFLICT", state="DENIED", action="REFUSE")
+            return self._release(copy.deepcopy(cached))
         if INVENTED.search(query):
             return self._closed("INVENTED_IDENTIFIER", state="DENIED", action="REFUSE")
         if tool == "refuse_invented" or not query:
-            return B.BackendResult(
+            result = B.BackendResult(
                 deployed=False,
                 http_status=None,
                 endpoint=self.base_url + _HYBRID,
@@ -236,8 +304,13 @@ class SecondBrainAdapter(OrganAdapter):
                     "content_access": "NONE",
                     "reason": "NO_QUERY" if not query else "LOCAL_CLASSIFIER",
                     "source_revision": None,
+                    "execution_authority": "NONE",
+                    "tenant": self._allowed_tenant,
                 },
             )
+            if operation:
+                self._remember(operation, (tool, query, k), result)
+            return result
         url = self.base_url + _HYBRID
         try:
             response = await self._transport_for(timeout).post(url, {"query": query, "k": k})
@@ -245,7 +318,38 @@ class SecondBrainAdapter(OrganAdapter):
             return self._closed("TIMEOUT", state="UNAVAILABLE", action="ABSTAIN")
         except (httpx.HTTPError, OSError):
             return self._closed("BACKEND_UNAVAILABLE", state="UNAVAILABLE", action="ABSTAIN")
-        return _measured(url, response)
+        result = self._release(_measured(url, response, self._allowed_tenant))
+        if operation and result["data"].get("state") in {"AVAILABLE", "ABSTAIN", "UNCERTAIN", "DENIED"}:
+            self._remember(operation, (tool, query, k), result)
+        return result
+
+
+def _operation(args) -> tuple[str, str | None]:
+    if not isinstance(args, dict) or "operation_id" not in args:
+        return "", None
+    value = args.get("operation_id")
+    if not isinstance(value, str) or _OPERATION.fullmatch(value) is None:
+        return "", "MALFORMED"
+    return value, None
+
+
+def _bound_row(item, allowed_tenant: str) -> bool:
+    if not isinstance(item, dict):
+        return False
+    revision = item.get("document_revision")
+    license_name = item.get("license")
+    return (
+        isinstance(item.get("node_id"), str)
+        and isinstance(item.get("source"), str)
+        and isinstance(item.get("sha256"), str)
+        and re.fullmatch(r"[0-9a-f]{64}", item["sha256"]) is not None
+        and isinstance(revision, str)
+        and _REVISION.fullmatch(revision) is not None
+        and isinstance(license_name, str)
+        and _LICENSE.fullmatch(license_name) is not None
+        and item.get("rights") in _RIGHTS_OK
+        and item.get("tenant") == allowed_tenant
+    )
 
 
 def _arguments(args) -> tuple[str, int] | None:
@@ -263,7 +367,7 @@ def _arguments(args) -> tuple[str, int] | None:
     return query, k
 
 
-def _measured(url: str, response) -> B.BackendResult:
+def _measured(url: str, response, allowed_tenant: str) -> B.BackendResult:
     status = getattr(response, "status_code", None)
     if status in (301, 302, 303, 307, 308):
         return B.BackendResult(
@@ -294,7 +398,7 @@ def _measured(url: str, response) -> B.BackendResult:
             deployed=True, http_status=status, endpoint=url, error="UNEXPECTED_PAYLOAD",
             data=_empty("UNAVAILABLE", "UNEXPECTED_PAYLOAD"),
         )
-    admitted = _admit(body)
+    admitted = _admit(body, allowed_tenant)
     if admitted is None:
         return B.BackendResult(
             deployed=True, http_status=status, endpoint=url, error="UNEXPECTED_PAYLOAD",
@@ -319,14 +423,33 @@ def _empty(state: str, reason: str) -> dict:
         "content_access": "NONE",
         "reason": reason,
         "source_revision": None,
+        "execution_authority": "NONE",
+        "tenant": None,
     }
 
 
-def _admit(body) -> dict | None:
+def _held(state: str, reason: str, action: str) -> dict:
+    return {
+        "state": state,
+        "action": action,
+        "handles": [],
+        "evidence": [],
+        "hydrated": False,
+        "content_access": "NONE" if state == "DENIED" else "HANDLES_ONLY",
+        "reason": reason,
+        "source_revision": None,
+        "execution_authority": "NONE",
+        "tenant": None,
+    }
+
+
+def _admit(body, allowed_tenant: str) -> dict | None:
     if not isinstance(body, dict) or body.get("content_access") != "HANDLES_ONLY":
         return None
     if _PRIVATE.intersection(body):
         return None
+    if body.get("execution_authority") not in (None, "NONE") or body.get("execution_authorized") not in (None, False):
+        return _held("DENIED", "AUTHORITY_PROMOTION", "REFUSE")
     if body.get("state") in {"UNCERTAIN", "INDETERMINATE"}:
         return {
             "state": "UNCERTAIN",
@@ -355,6 +478,7 @@ def _admit(body) -> dict | None:
         handle_ids.append(node)
     evidence_ids = []
     clean_evidence = []
+    hold = None
     for item in evidence:
         if not isinstance(item, dict) or _PRIVATE.intersection(item):
             return None
@@ -370,8 +494,33 @@ def _admit(body) -> dict | None:
             or re.fullmatch(r"[0-9a-f]{64}", digest) is None
         ):
             return None
+        rights = item.get("rights")
+        tenant = item.get("tenant")
+        if rights in _RIGHTS_WITHDRAWN:
+            hold = hold or "withdrawn"
+            continue
+        if isinstance(tenant, str) and tenant != allowed_tenant:
+            hold = "wrong_tenant"
+            continue
+        if not _bound_row(item, allowed_tenant):
+            hold = hold or "unbound"
+            continue
         evidence_ids.append(node)
-        clean_evidence.append({"node_id": node, "source": source, "sha256": digest})
+        clean_evidence.append({
+            "node_id": node,
+            "source": source,
+            "sha256": digest,
+            "document_revision": item["document_revision"],
+            "license": item["license"],
+            "rights": rights,
+            "tenant": tenant,
+        })
+    if hold == "wrong_tenant":
+        return _held("DENIED", "WRONG_TENANT", "REFUSE")
+    if hold == "withdrawn":
+        return _held("ABSTAIN", "WITHDRAWN", "ABSTAIN")
+    if hold:
+        return _held("ABSTAIN", "RIGHTS_UNBOUND", "ABSTAIN")
     if set(handle_ids) != set(evidence_ids):
         return None
     state = body.get("state")
@@ -406,4 +555,6 @@ def _admit(body) -> dict | None:
         "reason": "MEASURED",
         "source_revision": revision,
         "upstream_state": state,
+        "execution_authority": "NONE",
+        "tenant": allowed_tenant,
     }
