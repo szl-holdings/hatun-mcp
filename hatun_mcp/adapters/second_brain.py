@@ -464,6 +464,8 @@ def _admit(body, allowed_tenant: str) -> dict | None:
         return None
     if body.get("execution_authority") not in (None, "NONE") or body.get("execution_authorized") not in (None, False):
         return _held("DENIED", "AUTHORITY_PROMOTION", "REFUSE")
+    if isinstance(body.get("state"), (list, dict)):
+        return _held("DENIED", "MALFORMED", "REFUSE")
     if body.get("state") in {"UNCERTAIN", "INDETERMINATE"}:
         return {
             "state": "UNCERTAIN",

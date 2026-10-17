@@ -453,6 +453,26 @@ def test_registered_read_tool_does_not_become_a_write():
     assert len(transport.posts) == 1
 
 
+@pytest.mark.parametrize(
+    "state",
+    [["GROUNDED_HANDLES_READY"], {"value": "GROUNDED_HANDLES_READY"}],
+)
+def test_malformed_state_list_or_object_is_denied(state):
+    payload = grounded()
+    payload["state"] = state
+    transport = Transport(post=Response(200, payload))
+    result = asyncio.run(adapter(transport).call("retrieve_handles", {"query": "coherence"}))
+    data = result["data"]
+    assert data["state"] == "DENIED"
+    assert data["reason"] == "MALFORMED"
+    assert data["handles"] == []
+    assert data["evidence"] == []
+    assert "upstream_state" not in data
+    encoded = json.dumps(data)
+    assert "GROUNDED_HANDLES_READY" not in encoded
+    assert len(transport.posts) == 1
+
+
 def test_unbounded_abstain_state_is_not_copied():
     payload = grounded()
     payload["state"] = "ABSTAIN_" + ("X" * 4000)
