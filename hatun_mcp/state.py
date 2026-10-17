@@ -153,12 +153,16 @@ def _organ_registration(summary: Any) -> dict:
             continue
         count = value.get("tools") if isinstance(value, dict) else value
         reachable = value.get("reachable") if isinstance(value, dict) else None
+        http_status = value.get("http_status") if isinstance(value, dict) else None
+        # Local tool lists are structural. Public REACHED requires the catalog
+        # probe's own integer HTTP status, not merely a reachable flag.
+        backend_reached = reachable is True and type(http_status) is int
         organs.append(
             {
                 "organ": organ,
                 "tools_registered": count if isinstance(count, int) else None,
                 "reachability": (
-                    "REACHED" if reachable is True
+                    "REACHED" if backend_reached
                     else UNAVAILABLE if reachable is False
                     else STRUCTURAL_ONLY
                 ),
