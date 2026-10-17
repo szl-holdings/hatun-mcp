@@ -284,9 +284,12 @@ def test_uncertain_backend_returns_empty_evidence():
     assert result["data"]["hydrated"] is False
 
 
-def test_local_catalog_is_not_public_reached():
+def test_local_catalog_is_not_public_reached(monkeypatch):
     from hatun_mcp.state import _organ_registration
 
+    # Hermetic CI sets this for the whole process. The classifier is the
+    # subject here, so the flag must not replace the organ list with [].
+    monkeypatch.setenv("HATUN_MCP_DISABLE_DYNAMIC", "false")
     local = _organ_registration({
         "second_brain": {"reachable": True, "tools": 2, "http_status": "local-contract"},
     })
