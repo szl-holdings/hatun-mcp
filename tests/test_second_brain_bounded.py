@@ -209,12 +209,17 @@ def test_timeout_and_unreachable_backend():
     ad = adapter(timed)
     result = asyncio.run(ad.call("retrieve_handles", {"query": "coherence"}))
     assert result["deployed"] is False
+    assert result["http_status"] is None
     assert result["data"]["reason"] == "TIMEOUT"
+    assert result["data"]["evidence"] == []
+    assert result["data"]["handles"] == []
     down = Transport(error=httpx.ConnectError("refused"))
     ad = adapter(down)
     result = asyncio.run(ad.call("retrieve_handles", {"query": "coherence"}))
     assert result["deployed"] is False
+    assert result["http_status"] is None
     assert result["data"]["reason"] == "BACKEND_UNAVAILABLE"
+    assert result["data"]["evidence"] == []
     assert result["data"]["state"] == "UNAVAILABLE"
 
 
@@ -236,7 +241,56 @@ def test_catalog_reachability_comes_from_the_capabilities_response():
     gets_after_catalog = list(transport.gets)
     probe = asyncio.run(denied.probe())
     assert probe.reachable is False
+    assert probe.http_status is None
     assert transport.gets == gets_after_catalog
+
+
+def test_policy_evaluate_is_not_retrieval():
+    transport = Transport(post=Response(200, grounded("khipu.handle.alpha")))
+    ad = adapter(transport)
+    result = asyncio.run(ad.call("policy_evaluate", {"query": "use khipu.handle.alpha only", "k": 6}))
+    assert result["deployed"] is False
+    assert result["http_status"] is None
+    assert result["data"]["reason"] == "UNSUPPORTED_OPERATION"
+    assert result["data"]["handles"] == []
+    assert result["data"]["evidence"] == []
+    assert result["data"]["action"] == "ABSTAIN"
+    assert "khipu.handle.alpha" not in json.dumps(result["data"])
+    assert transport.posts == []
+    assert transport.gets == []
+
+
+def test_uncertain_backend_returns_empty_evidence():
+    payload = {
+        "state": "UNCERTAIN",
+        "content_access": "HANDLES_ONLY",
+        "handles": [{"nodeId": "node-1"}],
+        "evidence": [{"node_id": "node-1", "source": "public-corpus", "sha256": "a" * 64}],
+    }
+    transport = Transport(post=Response(200, payload))
+    ad = adapter(transport)
+    result = asyncio.run(ad.call("retrieve_handles", {"query": "coherence"}))
+    assert result["data"]["state"] == "UNCERTAIN"
+    assert result["data"]["handles"] == []
+    assert result["data"]["evidence"] == []
+    assert result["data"]["hydrated"] is False
+
+
+def test_local_catalog_is_not_public_reached():
+    from hatun_mcp.state import _organ_registration
+
+    local = _organ_registration({
+        "second_brain": {"reachable": True, "tools": 2, "http_status": "local-contract"},
+    })
+    assert local["organs"][0]["reachability"] == "STRUCTURAL-ONLY"
+    measured = _organ_registration({
+        "second_brain": {"reachable": True, "tools": 2, "http_status": 200},
+    })
+    assert measured["organs"][0]["reachability"] == "REACHED"
+    absent = _organ_registration({
+        "second_brain": {"reachable": False, "tools": 0, "http_status": None},
+    })
+    assert absent["organs"][0]["reachability"] == "UNAVAILABLE"
 
 
 def test_unusable_clock_does_not_authorize_a_zero_time_grant():

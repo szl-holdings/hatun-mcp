@@ -210,14 +210,14 @@ class SecondBrainAdapter(OrganAdapter):
         )
 
     async def call(self, tool: str, args: dict, timeout: float = DEFAULT_TIMEOUT) -> B.BackendResult:
-        code = self._grant_code()
-        if code is not None:
-            return self._closed(code, state="DENIED", action="REFUSE")
         if tool not in ("retrieve_handles", "refuse_invented"):
-            return self._closed("UNKNOWN_TOOL", state="UNAVAILABLE", action="ABSTAIN")
+            return self._closed("UNSUPPORTED_OPERATION", state="UNAVAILABLE", action="ABSTAIN")
         parsed = _arguments(args)
         if parsed is None:
             return self._closed("MALFORMED", state="DENIED", action="REFUSE")
+        code = self._grant_code()
+        if code is not None:
+            return self._closed(code, state="DENIED", action="REFUSE")
         query, k = parsed
         if INVENTED.search(query):
             return self._closed("INVENTED_IDENTIFIER", state="DENIED", action="REFUSE")
@@ -327,6 +327,18 @@ def _admit(body) -> dict | None:
         return None
     if _PRIVATE.intersection(body):
         return None
+    if body.get("state") in {"UNCERTAIN", "INDETERMINATE"}:
+        return {
+            "state": "UNCERTAIN",
+            "action": "ABSTAIN",
+            "handles": [],
+            "evidence": [],
+            "hydrated": False,
+            "content_access": "HANDLES_ONLY",
+            "reason": "UNCERTAIN",
+            "source_revision": None,
+            "upstream_state": body.get("state"),
+        }
     handles = body.get("handles")
     evidence = body.get("evidence")
     if not isinstance(handles, list) or not isinstance(evidence, list):
