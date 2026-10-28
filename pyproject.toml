@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: Apache-2.0
+# Packaging metadata for the hatun_mcp package (PEP 517 / PEP 621).
+#
+# Runtime dependencies stay in requirements.txt, which CI and the Dockerfile
+# install. This file declares none and does not change how either installs.
+# The version is read from hatun_mcp.__version__, which publish-mcp.yml already
+# binds to the release tag and server.json.
+
+[build-system]
+# 77 is the first setuptools that accepts an SPDX string for project.license.
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hatun-mcp"
+dynamic = ["version"]
+description = "Governed MCP gateway: policy gate on every tool call, hash-chained DSSE receipt on every result."
+requires-python = ">=3.12"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+
+[tool.setuptools]
+packages = ["hatun_mcp", "hatun_mcp.adapters", "hatun_mcp.tools"]
+
+[tool.setuptools.dynamic]
+version = {attr = "hatun_mcp.__version__"}
