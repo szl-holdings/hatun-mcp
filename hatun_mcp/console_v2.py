@@ -8,8 +8,13 @@ SPDX-License-Identifier: Apache-2.0
 """
 from __future__ import annotations
 
+from html import escape
+
+from .deployment import PUBLIC_BASE
+
 REPO_URL = "https://github.com/szl-holdings/hatun-mcp"
-SPACE_URL = "https://szlholdings-hatun-mcp.hf.space"
+# Compatibility export; the configured runtime is not a standalone HF Space.
+SPACE_URL = PUBLIC_BASE
 
 CONSOLE_HTML = r"""<!doctype html>
 <html lang="en" data-theme="dark" data-szl-family="obsidian-signal" data-szl-surface="hatun">
@@ -138,7 +143,7 @@ footer{padding:34px 0 calc(34px + env(safe-area-inset-bottom));color:var(--faint
 {
   <span class="key">"mcpServers"</span>: {
     <span class="key">"hatun"</span>: {
-      <span class="key">"url"</span>: "https://szlholdings-hatun-mcp.hf.space/mcp/",
+      <span class="key">"url"</span>: "__HATUN_PUBLIC_BASE__/mcp/",
       <span class="key">"headers"</span>: {
         <span class="key">"Authorization"</span>: "Bearer szl_..."
       }
@@ -221,4 +226,4 @@ GET  /healthz  /readyz  /pubkey</pre></article>
 })();
 </script>
 </body>
-</html>"""
+</html>""".replace("__HATUN_PUBLIC_BASE__", escape(PUBLIC_BASE, quote=True))
