@@ -202,6 +202,17 @@ honest sha256 Merkle-root fallback if the BLS backend is absent). If any organ's
 policy route is not live, quorum degrades gracefully (n=4 still satisfies n ≥ 3f+1)
 and discloses the degradation in `governance.quorum`.
 
+The BLS keys are held by the **gateway process**, which signs its observations
+under per-organ key labels. This is not a collection of independently signed
+organ attestations. Without `HATUN_MCP_BLS_SEED`, each aggregator instance uses
+a random ephemeral seed; its identity changes on restart. Responses include
+ordered `public_keys`, `key_source`, and `ephemeral` so consumers can distinguish
+signature verification from trusted identity. Pin or authenticate the public
+keys separately before relying on origin claims. For a persistent identity,
+supply a private, high-entropy seed through the secret store; never use the
+retired public default `hatun-mcp-doctrine-v11` as a configured secret. Receipts
+made with that historical default cannot establish an exclusive signer identity.
+
 ---
 
 ## Run locally (stdio)
