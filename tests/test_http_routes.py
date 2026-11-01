@@ -61,6 +61,8 @@ def test_public_origin_accepts_https_or_local_development(origin):
 def test_public_origin_normalizes_to_browser_origin():
     assert public_base("https://GATEWAY.example.org:443/") == "https://gateway.example.org"
     assert public_base("http://LOCALHOST:80/") == "http://localhost"
+    assert public_base("http://[0:0:0:0:0:0:0:1]:7860") == "http://[::1]:7860"
+    assert public_base("https://[2001:0DB8:0:0:0:0:0:1]:443/") == "https://[2001:db8::1]"
 
 
 @pytest.mark.parametrize("origin", [
@@ -74,6 +76,9 @@ def test_public_origin_normalizes_to_browser_origin():
     "https://gateway.example.org/<script>", "https://gateway%2Fexample.org",
     "https://gateway..example.org", "https://-gateway.example.org",
     "https://gateway.example-.org", "http://[::1%25eth0]:7860",
+    "https://2130706433", "https://127.000.000.001", "https://0x7f000001",
+    "https://999.999.999.999", "https://[v1.example]",
+    "https://0x", "https://1.0x",
 ])
 def test_public_origin_rejects_unsafe_or_misleading_endpoints(origin):
     with pytest.raises(ValueError, match="HATUN_MCP_PUBLIC_BASE") as error:
@@ -81,8 +86,12 @@ def test_public_origin_rejects_unsafe_or_misleading_endpoints(origin):
     assert "private" not in str(error.value)
 
 
-@pytest.mark.parametrize("configured", [None, "https://gateway.example.org:8443/"])
-def test_fresh_runtime_binds_all_discovery_to_operator_origin(configured):
+@pytest.mark.parametrize(("configured", "expected"), [
+    (None, "http://127.0.0.1:7860"),
+    ("https://gateway.example.org:8443/", "https://gateway.example.org:8443"),
+    ("http://[0:0:0:0:0:0:0:1]:7860", "http://[::1]:7860"),
+])
+def test_fresh_runtime_binds_all_discovery_to_operator_origin(configured, expected):
     env = os.environ.copy()
     for key in ("HATUN_MCP_PUBLIC_BASE", "HATUN_MCP_ALLOWED_ORIGINS",
                 "HATUN_MCP_ALLOWED_HOSTS", "HATUN_MCP_SIGNING_KEY"):
@@ -90,7 +99,6 @@ def test_fresh_runtime_binds_all_discovery_to_operator_origin(configured):
     env["HATUN_MCP_DISABLE_DYNAMIC"] = "true"
     if configured is not None:
         env["HATUN_MCP_PUBLIC_BASE"] = configured
-    expected = configured.rstrip("/") if configured else "http://127.0.0.1:7860"
     code = r'''
 import hashlib, json
 from starlette.testclient import TestClient

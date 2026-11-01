@@ -46,9 +46,17 @@ def public_base(value: str) -> str:
         loopback = address.is_loopback
         if "%" in host:  # Scoped IPv6 addresses are not public browser origins.
             raise ValueError(error)
+        host = address.compressed
     except ValueError:
         labels = host.removesuffix(".").split(".")
-        if len(host) > 253 or any(
+        # Browsers interpret numeric final labels as IPv4, including integer,
+        # octal and hex forms that urlsplit accepts as DNS names. Require the
+        # canonical IP syntax accepted above; do not publish a different origin.
+        if (
+            "[" in parsed.netloc or "]" in parsed.netloc
+            or re.fullmatch(r"(?:[0-9]+|0[xX][0-9a-fA-F]*)", labels[-1])
+            or len(host) > 253
+        ) or any(
             not re.fullmatch(r"[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?", label)
             for label in labels
         ):
