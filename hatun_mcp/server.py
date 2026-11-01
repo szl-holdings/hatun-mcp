@@ -25,11 +25,13 @@ import os
 import time
 from contextvars import ContextVar
 from typing import Any, Optional
+from urllib.parse import urlsplit
 
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 
 from . import backends as B
+from .deployment import PUBLIC_BASE
 from .governance import (
     DOCTRINE,
     ClientRegistry,
@@ -57,20 +59,20 @@ _ctx_second_approver: ContextVar[Optional[str]] = ContextVar("second_approver", 
 DEFAULT_LATENCY_BUDGET = float(os.environ.get("HATUN_MCP_LATENCY_BUDGET", "5.0"))
 ALLOW_ANON = os.environ.get("HATUN_MCP_ALLOW_ANON", "false").lower() == "true"
 
-# DNS-rebinding / Host-header validation. Behind the HF Spaces reverse proxy the
-# forwarded Host is the public hostname, which the SDK's default (localhost-only)
-# policy rejects with HTTP 421 "Invalid Host header". We explicitly allow the
-# hosted hostname (and operator-supplied extras via env) while keeping our own
+# DNS-rebinding / Host-header validation. Pin the configured runtime origin's
+# authority (including its port) so the SDK admits the endpoint advertised by
+# /connect. Additional reverse-proxy hosts require operator configuration.
+# Keep our own
 # Origin validation in GovernanceAuthMiddleware as the primary DNS-rebinding
 # defense. Set HATUN_MCP_ALLOWED_HOSTS="*" to disable host pinning entirely.
 _hosts_env = os.environ.get(
     "HATUN_MCP_ALLOWED_HOSTS",
-    "szlholdings-hatun-mcp.hf.space,*.hf.space,localhost,127.0.0.1",
+    f"{urlsplit(PUBLIC_BASE).netloc},localhost,127.0.0.1",
 )
 _allowed_hosts = [h.strip() for h in _hosts_env.split(",") if h.strip()]
 _origins_env = os.environ.get(
     "HATUN_MCP_ALLOWED_ORIGINS",
-    "https://szlholdings-hatun-mcp.hf.space,https://smithery.ai,http://localhost",
+    f"{PUBLIC_BASE},https://smithery.ai,http://localhost",
 )
 _allowed_origins = [o.strip() for o in _origins_env.split(",") if o.strip()]
 _disable_host_pin = ("*" in _allowed_hosts) or ("*" in _allowed_origins)
