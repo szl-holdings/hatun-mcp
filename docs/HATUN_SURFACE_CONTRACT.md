@@ -44,6 +44,30 @@ runtime evidence is unavailable.
    the indigo/frost gateway weave; decorative lines are not telemetry.
 7. Λ remains Conjecture 1 and is not a theorem.
 
+## Admitted runtime configuration
+
+The independently deployed Python package uses `HATUN_MCP_PUBLIC_BASE` as its
+public origin, for example `https://gateway.example.org`. Configure it before
+process startup. Its `/connect` descriptor, console client snippet, manifest
+identity, and attestation public-key URL use that same fixed origin. Request
+`Host` and forwarded headers cannot rewrite these cached artifacts.
+
+With no setting, the development default is `http://127.0.0.1:7860`. HTTP is
+accepted only for loopback; hosted origins require HTTPS. Credentials, path
+prefixes, query strings, fragments and malformed origins fail startup. The
+origin's `/mcp/` and `/sse/` paths are mounted at the root. Set
+`HATUN_MCP_ALLOWED_ORIGINS` explicitly if browser clients need additional
+origins; its default includes the configured public origin.
+The MCP transport pins the configured host and port as well. Reverse proxies
+that forward another host must explicitly set `HATUN_MCP_ALLOWED_HOSTS`.
+
+This setting does not deploy a server, admit a release, configure credentials,
+or establish availability. The public product at `a-11-oy.com/wires` is not an
+MCP transport origin. The retired Hugging Face address is not a default or a
+readiness probe target. An operator must separately witness `/healthz`,
+`/readyz`, `/api/build-info`, and authenticated MCP behavior on the admitted
+runtime before claiming that runtime is operational.
+
 ## Public witness
 
 `.github/workflows/hf-drift-check.yml` retains its historical filename for

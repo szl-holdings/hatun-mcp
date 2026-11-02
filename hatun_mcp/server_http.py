@@ -26,6 +26,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response
 from starlette.routing import Mount, Route
 
+from .deployment import PUBLIC_BASE
 from . import server as _server
 from .server import (
     SIGNER, CLIENTS, KHIPU, mcp,
@@ -44,11 +45,10 @@ from .state import console_state, observed_signer_mode, set_card_tool_names
 ALLOWED_ORIGINS = set(
     o.strip() for o in os.environ.get(
         "HATUN_MCP_ALLOWED_ORIGINS",
-        "https://szlholdings-hatun-mcp.hf.space,https://smithery.ai,http://localhost",
+        f"{PUBLIC_BASE},https://smithery.ai,http://localhost",
     ).split(",")
 )
 
-PUBLIC_BASE = "https://szlholdings-hatun-mcp.hf.space"
 MCP_MANIFEST_PATH = "/.well-known/mcp"
 MCP_MANIFEST_URI = f"{PUBLIC_BASE}{MCP_MANIFEST_PATH}"
 MCP_MANIFEST_ATTESTATION_PATH = "/.well-known/mcp-manifest-attestation"
