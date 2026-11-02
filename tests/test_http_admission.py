@@ -112,6 +112,7 @@ class HttpAdmissionTests(unittest.TestCase):
     def test_read_write_and_admin_bindings_cannot_call_privileged_or_dynamic_tools(self):
         names = ("dsse_sign", "khipu_append_and_verify", "puriq_master_tool",
                  "szl_killinchu_cue", "szl_lambda_quorum", "szl_puriq_evaluate",
+                 "yuyay_gate_check", "mesh_quorum_status", "governance_pacbayes_bound",
                  "unreviewed_dynamic_tool")
         before = http.KHIPU.depth()
         for scope in ("read", "write", "admin"):

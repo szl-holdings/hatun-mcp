@@ -86,9 +86,6 @@ _HTTP_READ_TOOLS = frozenset({
     "szl_github_estate_snapshot",
     "szl_yuyay_score",
     "szl_formula_evaluate",
-    "yuyay_gate_check",
-    "mesh_quorum_status",
-    "governance_pacbayes_bound",
 })
 _HTTP_LOCAL_FORMULAS = frozenset({"puriq", "sigmoid", "liu_hui_pi"})
 _HTTP_READ_RESOURCES = frozenset({"hatun://doctrine/locked-numbers"})

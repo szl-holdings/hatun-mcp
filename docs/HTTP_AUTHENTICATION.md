@@ -43,9 +43,8 @@ report `sse_endpoint: null`.
 Every admitted scope is limited to the same explicit HTTP capability set:
 
 - `szl_github_estate_snapshot`: bounded public GitHub reads.
-- `szl_yuyay_score`, `yuyay_gate_check`,
-  `mesh_quorum_status`, `governance_pacbayes_bound`: local calculations and their
-  ordinary audit receipts.
+- `szl_yuyay_score`: local scoring with a receipt attributed to the admitted
+  operator identity.
 - `szl_formula_evaluate`: only exact names `puriq`, `sigmoid`, `liu_hui_pi`.
   Other names can fall back to a remote backend and are denied by this profile.
 - `resources/read`: only `hatun://doctrine/locked-numbers`.
@@ -56,6 +55,9 @@ raw signing, arbitrary Khipu appends, caller-asserted PURIQ execution, external
 actions and global recent-receipt reads are denied. In particular, a `write` or
 `admin` binding does not enable them over HTTP. A real higher-privilege approval
 protocol must be implemented and reviewed before expanding this profile.
+Direct governance calculators (`yuyay_gate_check`, `mesh_quorum_status`, and
+`governance_pacbayes_bound`) are also denied: their existing receipt path uses
+the fixed identity `mcp`, so it cannot audit which HTTP operator invoked them.
 
 `X-Second-Approver` and `X-Sovereign-Mode` are not verified authority and are
 ignored. Public `/connect` and server-card metadata disclose the HTTP policy;
