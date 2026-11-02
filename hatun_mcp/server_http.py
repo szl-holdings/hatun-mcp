@@ -1,11 +1,12 @@
 """
-hatun_mcp.server_http — hosted HTTP entrypoint (Streamable HTTP /mcp + legacy /sse).
+hatun_mcp.server_http — admitted read-only Streamable HTTP entrypoint (/mcp).
 
 Wraps the FastMCP app in a Starlette application that:
   * authenticates each request via the SZL API key (Authorization: Bearer szl_... ,
     or X-Api-Key). Resolves key -> client_id + scope and sets the request contextvars.
   * validates the Origin header (DNS-rebinding defense; MCP transport requirement).
-  * honors X-Sovereign-Mode and X-Second-Approver headers (Frontier #4, 2-person gate).
+  * admits only explicit operator-bound credentials and reviewed read-only RPCs.
+  * ignores caller-supplied sovereign-mode and second-approver claims.
   * serves the draft server-card discovery extension so registries can enumerate
     the 26 static tools even behind the auth wall.
   * binds the exact card bytes to a cached in-toto Statement v1 / DSSE artifact.
@@ -16,9 +17,11 @@ SPDX-License-Identifier: Apache-2.0
 """
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import os
+import re
 
 from starlette.applications import Starlette
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -70,22 +73,64 @@ _DISCOVERY_HEADERS = {
 # guess through a computationally expensive KDF. Overridable for ops rotation.
 _FP_SALT = os.environ.get("HATUN_MCP_FP_SALT", "hatun-mcp/api-key-fingerprint/v1").encode()
 _FP_ITERATIONS = int(os.environ.get("HATUN_MCP_FP_ITERATIONS", "210000"))
+_KEY_PATTERN = re.compile(r"szl_[A-Za-z0-9_-]{1,252}\Z")
+_SCOPE_BINDING_PATTERN = re.compile(r"HATUN_MCP_SCOPE_[0-9a-f]{16}\Z")
+_VALID_SCOPES = frozenset({"read", "write", "admin"})
+_MAX_RPC_BYTES = 256 * 1024
+_BODY_TIMEOUT_SECONDS = 10.0
+
+# HTTP is an operator-admitted read-only surface. The complete package catalog
+# remains available to trusted local stdio callers; discovery is not permission.
+# New/dynamic tools require an explicit review before entering this allowlist.
+_HTTP_READ_TOOLS = frozenset({
+    "szl_github_estate_snapshot",
+    "szl_yuyay_score",
+    "szl_formula_evaluate",
+    "yuyay_gate_check",
+    "mesh_quorum_status",
+    "governance_pacbayes_bound",
+})
+_HTTP_LOCAL_FORMULAS = frozenset({"puriq", "sigmoid", "liu_hui_pi"})
+_HTTP_READ_RESOURCES = frozenset({"hatun://doctrine/locked-numbers"})
+_HTTP_METADATA_METHODS = frozenset({
+    "initialize", "notifications/initialized", "notifications/cancelled", "ping",
+    "tools/list", "resources/list", "resources/templates/list", "prompts/list",
+})
+
+
+def http_auth_configured() -> bool:
+    """Observe explicit operator bindings without exposing their fingerprints."""
+    return any(
+        _SCOPE_BINDING_PATTERN.fullmatch(name) and scope in _VALID_SCOPES
+        for name, scope in os.environ.items()
+    )
+
+
+def _http_transport_policy() -> dict:
+    return {
+        "profile": "operator-read-only",
+        "credential_authority": "explicit-operator-scope-binding",
+        "portal_validation": "NOT_IMPLEMENTED",
+        "tools": sorted(_HTTP_READ_TOOLS),
+        "local_formulas": sorted(_HTTP_LOCAL_FORMULAS),
+        "resources": sorted(_HTTP_READ_RESOURCES),
+        "write_authorization": "UNAVAILABLE",
+        "approval_headers": "NOT_TRUSTED",
+        "catalog_is_authorization": False,
+        "transport": "stateless-streamable-http",
+        "legacy_sse": "DISABLED",
+    }
 
 
 def resolve_api_key(raw_key: str | None) -> tuple[str | None, str]:
-    """Resolve an SZL API key to (client_id, scope).
+    """Resolve only a bounded key with an explicit valid operator scope binding.
 
-    The authoritative store is the customer-portal (customer_surface/API_KEY_SYSTEM.md);
-    this gateway derives a deterministic client_id from a slow KDF over the key and reads
-    scope from the key's env binding. A key shaped 'szl_{env}_{flagship?}_{rand}' is
-    accepted; the client_id is the key fingerprint so the same caller keeps a stable
-    reputation. The fingerprint is computed with PBKDF2-HMAC-SHA256 (a computationally
-    expensive KDF) over a fixed domain-separation salt rather than a bare fast hash, so a
-    captured fingerprint cannot be brute-forced back to the API key.
+    A prefix or fingerprint alone is not authentication. This is a local
+    operator allowlist, not a customer-portal validation/introspection service.
+    The existing PBKDF2 fingerprint and HATUN_MCP_SCOPE_<fingerprint> names are
+    retained; absent, empty and unknown scope values fail closed.
     """
-    if not raw_key:
-        return None, "read"
-    if not raw_key.startswith("szl_"):
+    if not isinstance(raw_key, str) or not _KEY_PATTERN.fullmatch(raw_key):
         return None, "read"
     fp = hashlib.pbkdf2_hmac(
         "sha256",
@@ -93,10 +138,51 @@ def resolve_api_key(raw_key: str | None) -> tuple[str | None, str]:
         _FP_SALT,
         _FP_ITERATIONS,
     ).hex()[:16]
-    # scope: an explicit override env var maps fingerprints -> scope; default read.
-    # admin/write keys are provisioned by the portal; demo keys are read.
-    scope = os.environ.get(f"HATUN_MCP_SCOPE_{fp}", "read")
+    scope = os.environ.get(f"HATUN_MCP_SCOPE_{fp}")
+    if scope not in _VALID_SCOPES:
+        return None, "read"
     return f"client_{fp}", scope
+
+
+def _transport_error(status: int, code: str) -> JSONResponse:
+    headers = {"Cache-Control": "no-store"}
+    if status == 401:
+        headers["WWW-Authenticate"] = 'Bearer realm="hatun-mcp"'
+    return JSONResponse({"error": code}, status_code=status, headers=headers)
+
+
+def _admit_http_rpc(message) -> JSONResponse | None:
+    """Admit a single read-only MCP message before any server dispatch."""
+    if not isinstance(message, dict) or message.get("jsonrpc") != "2.0":
+        return _transport_error(400, "invalid_mcp_message")
+    method = message.get("method")
+    if not isinstance(method, str):
+        return _transport_error(400, "invalid_mcp_message")
+    if method in _HTTP_METADATA_METHODS:
+        return None
+    params = message.get("params")
+    if not isinstance(params, dict):
+        return _transport_error(400, "invalid_mcp_parameters")
+    if method == "tools/call":
+        name = params.get("name")
+        if not isinstance(name, str) or name not in _HTTP_READ_TOOLS:
+            return _transport_error(403, "tool_not_admitted_for_http")
+        arguments = params.get("arguments", {})
+        if not isinstance(arguments, dict):
+            return _transport_error(400, "invalid_mcp_parameters")
+        if name == "szl_formula_evaluate":
+            # Other names, including invalid KL inputs, can fall back to a live
+            # backend. This profile admits only guaranteed local formula paths.
+            formula = arguments.get("name")
+            if not isinstance(formula, str) or formula not in _HTTP_LOCAL_FORMULAS:
+                return _transport_error(403, "formula_not_admitted_for_http")
+        return None
+    if method == "resources/read":
+        uri = params.get("uri")
+        if isinstance(uri, str) and uri in _HTTP_READ_RESOURCES:
+            return None
+        return _transport_error(403, "resource_not_admitted_for_http")
+    return _transport_error(403, "method_not_admitted_for_http")
 
 
 # ── SAFE-NOW hardening (R2): real security response headers on every route ──────
@@ -140,33 +226,102 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 
-class GovernanceAuthMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        # Origin validation (DNS-rebinding defense) — only enforce for /mcp & /sse.
-        if request.url.path.startswith(("/mcp", "/sse", "/messages")):
-            origin = request.headers.get("origin")
-            if origin and ALLOWED_ORIGINS and origin not in ALLOWED_ORIGINS \
-                    and "*" not in ALLOWED_ORIGINS:
-                return JSONResponse(
-                    {"error": "origin_not_allowed", "owasp_class": "transport-origin"},
-                    status_code=403,
-                )
-        # API-key auth.
-        auth = request.headers.get("authorization", "")
-        raw = auth[7:] if auth.lower().startswith("bearer ") else request.headers.get("x-api-key")
-        client_id, scope = resolve_api_key(raw)
+class GovernanceAuthMiddleware:
+    """Authenticate and admit every HTTP MCP transport before dispatch.
+
+    ASGI body replay keeps the same bounded, inspected bytes visible to the SDK.
+    Legacy SSE is disabled because its long-lived session cannot safely inherit
+    an identity from independently authenticated message POST requests.
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http" or not scope.get("path", "").startswith(
+            ("/mcp", "/sse", "/messages")
+        ):
+            await self.app(scope, receive, send)
+            return
+        request = Request(scope)
+        origin = request.headers.get("origin")
+        if origin and ALLOWED_ORIGINS and origin not in ALLOWED_ORIGINS \
+                and "*" not in ALLOWED_ORIGINS:
+            await _transport_error(403, "origin_not_allowed")(scope, receive, send)
+            return
+        authorization = request.headers.getlist("authorization")
+        api_keys = request.headers.getlist("x-api-key")
+        if len(authorization) > 1 or len(api_keys) > 1 or (authorization and api_keys):
+            await _transport_error(401, "ambiguous_credentials")(scope, receive, send)
+            return
+        auth = authorization[0] if authorization else ""
+        raw = auth[7:] if auth.lower().startswith("bearer ") else (
+            api_keys[0] if api_keys and not authorization else None
+        )
+        client_id, key_scope = resolve_api_key(raw)
+        if client_id is None:
+            await _transport_error(401, "operator_key_required")(scope, receive, send)
+            return
+        if scope["path"].startswith(("/sse", "/messages")):
+            await _transport_error(410, "legacy_transport_disabled")(scope, receive, send)
+            return
+
+        downstream_receive = receive
+        if scope["method"] == "POST":
+            content_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+            if content_type != "application/json":
+                await _transport_error(415, "json_content_type_required")(scope, receive, send)
+                return
+            body = bytearray()
+            try:
+                async with asyncio.timeout(_BODY_TIMEOUT_SECONDS):
+                    while True:
+                        event = await receive()
+                        if event["type"] == "http.disconnect":
+                            return
+                        if event["type"] != "http.request":
+                            await _transport_error(400, "invalid_mcp_message")(scope, receive, send)
+                            return
+                        chunk = event.get("body", b"")
+                        if len(body) + len(chunk) > _MAX_RPC_BYTES:
+                            await _transport_error(413, "mcp_message_too_large")(scope, receive, send)
+                            return
+                        body.extend(chunk)
+                        if not event.get("more_body", False):
+                            break
+            except TimeoutError:
+                await _transport_error(408, "mcp_body_timeout")(scope, receive, send)
+                return
+            try:
+                message = json.loads(body)
+            except (ValueError, UnicodeDecodeError, RecursionError):
+                await _transport_error(400, "invalid_mcp_message")(scope, receive, send)
+                return
+            error = _admit_http_rpc(message)
+            if error is not None:
+                await error(scope, receive, send)
+                return
+            replayed = False
+
+            async def downstream_receive():
+                nonlocal replayed
+                if not replayed:
+                    replayed = True
+                    return {"type": "http.request", "body": bytes(body), "more_body": False}
+                return await receive()
+
         tok_client = _ctx_client.set(client_id)
-        tok_scope = _ctx_scope.set(scope)
-        tok_sov = _ctx_sovereign.set(request.headers.get("x-sovereign-mode", "").lower() == "true")
-        tok_sec = _ctx_second_approver.set(request.headers.get("x-second-approver"))
+        tok_scope = _ctx_scope.set(key_scope)
+        # Unverified request headers are not approval or sovereign authority.
+        tok_sov = _ctx_sovereign.set(False)
+        tok_sec = _ctx_second_approver.set(None)
         try:
-            response = await call_next(request)
+            await self.app(scope, downstream_receive, send)
         finally:
             _ctx_client.reset(tok_client)
             _ctx_scope.reset(tok_scope)
             _ctx_sovereign.reset(tok_sov)
             _ctx_second_approver.reset(tok_sec)
-        return response
 
 
 # ── well-known server card (for Smithery / registry scanning) ───────────────────
@@ -227,10 +382,11 @@ def _server_card() -> dict:
                        "description": "Doctrine-aware MCP server — PURIQ governance "
                                       "(Yuyay-13 gate, Khipu receipts, DSSE-signed "
                                       "responses) extended to the world's agents."},
-        "authentication": {"required": not (os.environ.get("HATUN_MCP_ALLOW_ANON", "false").lower() == "true"),
+        "authentication": {"required": True,
                             "schemes": ["apiKey"],
                             "note": "Provide an SZL API key as Authorization: Bearer szl_... "
-                                    "Anonymous calls are declined and receipted."},
+                                    "An explicit operator scope binding is required."},
+        "http_transport_policy": _http_transport_policy(),
         "tools": tools, "resources": [
             {"uri": "hatun://khipu/recent", "description": "Recent Khipu receipts"},
             {"uri": "hatun://doctrine/locked-numbers", "description": "Doctrine v11 LOCKED numbers"},
@@ -395,12 +551,13 @@ def _connect_info() -> dict:
         "service": "hatun-mcp",
         "transport": "streamable-http",
         "mcp_endpoint": f"{base}/mcp/",
-        "sse_endpoint": f"{base}/sse/",
+        "sse_endpoint": None,
         "authentication": {
             "scheme": "apiKey",
             "header": "Authorization: Bearer szl_...",
-            "note": "An SZL API key is required; anonymous calls are declined and receipted.",
+            "note": "An explicitly admitted operator key is required; a key prefix alone is not authentication.",
         },
+        "http_transport_policy": _http_transport_policy(),
         "server_card": f"{base}/.well-known/mcp/server-card.json",
         "manifest_attestation": MCP_MANIFEST_ATTESTATION_URI,
         "clients": {
@@ -469,6 +626,11 @@ async def console_state_route(request: Request):
         organ_summary=getattr(_server, "ORGAN_CATALOG_SUMMARY", None),
         public_base=PUBLIC_BASE,
     )
+    auth_ready = http_auth_configured()
+    payload["health"]["authentication"] = "CONFIGURED" if auth_ready else "UNAVAILABLE"
+    if not auth_ready:
+        payload["health"]["readiness"] = "NOT-READY"
+    payload["http_transport_policy"] = _http_transport_policy()
     return JSONResponse(payload, headers={"Cache-Control": "no-store"})
 
 
@@ -493,7 +655,8 @@ async def readyz(request: Request):
         chain_verified, chain_state = False, "UNAVAILABLE"
     signer_mode = observed_signer_mode(SIGNER)
     signer_ready = signer_mode == "ECDSA-P256"
-    ready = chain_verified and signer_ready
+    auth_ready = http_auth_configured()
+    ready = chain_verified and signer_ready and auth_ready
     return JSONResponse(
         {
             "status": "ready" if ready else "not_ready",
@@ -502,6 +665,7 @@ async def readyz(request: Request):
             "checks": {
                 "receipt_chain": chain_state,
                 "signer": "CONFIGURED" if signer_ready else "UNAVAILABLE",
+                "authentication": "CONFIGURED" if auth_ready else "UNAVAILABLE",
             },
             "signer_mode": signer_mode,
             "protocol_revision": DOCTRINE["protocol_revision"],
@@ -518,12 +682,12 @@ async def pubkey(request: Request):
     return PlainTextResponse(pem, media_type="application/x-pem-file")
 
 
-# The canonical JSON service descriptor — byte-identical to the original index.
+# The canonical JSON service descriptor.
 # Returned to API/MCP clients (Accept: application/json, or no text/html). MCP
 # transport handshakes never see HTML.
 _INDEX_JSON = {
     "service": "hatun-mcp", "tagline": "the great context protocol",
-    "mcp_endpoint": "/mcp/", "sse_endpoint": "/sse/",
+    "mcp_endpoint": "/mcp/", "sse_endpoint": None,
     "server_card": "/.well-known/mcp/server-card.json",
     "manifest_attestation": MCP_MANIFEST_ATTESTATION_PATH,
     "connect": "/connect",
@@ -557,7 +721,7 @@ async def index(request: Request):
     return JSONResponse(_INDEX_JSON)
 
 
-# Compose the Starlette app: mount FastMCP's SSE + Streamable HTTP apps.
+# Compose the Starlette app with the stateless Streamable HTTP transport.
 #
 # IMPORTANT: FastMCP's Streamable HTTP app runs a session manager that MUST be started
 # via the ASGI lifespan. When we mount it under a parent Starlette app, the parent must
@@ -567,17 +731,14 @@ async def index(request: Request):
 import contextlib
 
 http_app = mcp.streamable_http_app()
-sse_app = mcp.sse_app()
 
 
 @contextlib.asynccontextmanager
 async def lifespan(app):
-    # Run both child apps' lifespans (session managers, task groups).
+    # Run the child app's session manager and task group.
     async with contextlib.AsyncExitStack() as stack:
         if http_app.router.lifespan_context is not None:
             await stack.enter_async_context(http_app.router.lifespan_context(http_app))
-        if sse_app.router.lifespan_context is not None:
-            await stack.enter_async_context(sse_app.router.lifespan_context(sse_app))
         yield
 
 
@@ -597,8 +758,6 @@ app = Starlette(
         Route("/server-card", server_card_alias),
         Route("/card", server_card_alias),
         Mount("/mcp", app=http_app),
-        Mount("/sse", app=sse_app),
-        Mount("/messages", app=sse_app),
     ],
     lifespan=lifespan,
 )
