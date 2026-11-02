@@ -1,0 +1,110 @@
+[
+  {
+    "request": {
+      "args": {
+        "x": 0
+      },
+      "name": "sigmoid",
+      "operation_id": "formula.evaluate",
+      "receipt_challenge": null,
+      "tool": "szl_formula_evaluate"
+    },
+    "response": {
+      "tool": "szl_formula_evaluate",
+      "status": "success",
+      "data": {
+        "name": "sigmoid",
+        "value": 0.5
+      },
+      "backend": {
+        "deployed": true,
+        "http_status": 200,
+        "endpoint": "(local closed-form evaluator)",
+        "error": null,
+        "reason": null
+      }
+    },
+    "request_canonical_utf8": "{\"args\":{\"x\":0},\"name\":\"sigmoid\",\"operation_id\":\"formula.evaluate\",\"receipt_challenge\":null,\"tool\":\"szl_formula_evaluate\"}",
+    "response_canonical_utf8": "{\"backend\":{\"deployed\":true,\"endpoint\":\"(local closed-form evaluator)\",\"error\":null,\"http_status\":200,\"reason\":null},\"data\":{\"name\":\"sigmoid\",\"value\":0.5},\"status\":\"success\",\"tool\":\"szl_formula_evaluate\"}",
+    "binding": {
+      "schema": "urn:szl:hatun:formula-call-binding:v1",
+      "canonicalization": "python-json-finite-v1",
+      "algorithm": "sha256",
+      "request_digest": "d1851c7c74a670ef3b0e27e8d2a56cbe5e2c12d2b1a38b6d57cc730fcabd3f01",
+      "response_digest": "723c975e06de6a493f4d0f85a85f8fbae6b281169e8e7af54d0148701255391e"
+    }
+  },
+  {
+    "request": {
+      "args": {
+        "x": 0.0
+      },
+      "name": "sigmoid",
+      "operation_id": "formula.evaluate",
+      "receipt_challenge": "caller_saved_challenge_001",
+      "tool": "szl_formula_evaluate"
+    },
+    "response": {
+      "tool": "szl_formula_evaluate",
+      "status": "success",
+      "data": {
+        "name": "sigmoid",
+        "value": 0.5
+      },
+      "backend": {
+        "deployed": true,
+        "http_status": 200,
+        "endpoint": "(local closed-form evaluator)",
+        "error": null,
+        "reason": null
+      }
+    },
+    "request_canonical_utf8": "{\"args\":{\"x\":0.0},\"name\":\"sigmoid\",\"operation_id\":\"formula.evaluate\",\"receipt_challenge\":\"caller_saved_challenge_001\",\"tool\":\"szl_formula_evaluate\"}",
+    "response_canonical_utf8": "{\"backend\":{\"deployed\":true,\"endpoint\":\"(local closed-form evaluator)\",\"error\":null,\"http_status\":200,\"reason\":null},\"data\":{\"name\":\"sigmoid\",\"value\":0.5},\"status\":\"success\",\"tool\":\"szl_formula_evaluate\"}",
+    "binding": {
+      "schema": "urn:szl:hatun:formula-call-binding:v1",
+      "canonicalization": "python-json-finite-v1",
+      "algorithm": "sha256",
+      "request_digest": "81e2307be8068dab49271b6fb64066decfd7419f51aa1f8cf1e1d1ebc1060402",
+      "response_digest": "723c975e06de6a493f4d0f85a85f8fbae6b281169e8e7af54d0148701255391e"
+    }
+  },
+  {
+    "request": {
+      "args": {
+        "__proto__": {
+          "\u00e9": 1e-07
+        },
+        "x": -0.0
+      },
+      "name": "sigmoid",
+      "operation_id": "formula.evaluate",
+      "receipt_challenge": null,
+      "tool": "szl_formula_evaluate"
+    },
+    "response": {
+      "tool": "szl_formula_evaluate",
+      "status": "success",
+      "data": {
+        "name": "sigmoid",
+        "value": 0.5
+      },
+      "backend": {
+        "deployed": true,
+        "http_status": 200,
+        "endpoint": "(local closed-form evaluator)",
+        "error": null,
+        "reason": null
+      }
+    },
+    "request_canonical_utf8": "{\"args\":{\"__proto__\":{\"\\u00e9\":1e-07},\"x\":-0.0},\"name\":\"sigmoid\",\"operation_id\":\"formula.evaluate\",\"receipt_challenge\":null,\"tool\":\"szl_formula_evaluate\"}",
+    "response_canonical_utf8": "{\"backend\":{\"deployed\":true,\"endpoint\":\"(local closed-form evaluator)\",\"error\":null,\"http_status\":200,\"reason\":null},\"data\":{\"name\":\"sigmoid\",\"value\":0.5},\"status\":\"success\",\"tool\":\"szl_formula_evaluate\"}",
+    "binding": {
+      "schema": "urn:szl:hatun:formula-call-binding:v1",
+      "canonicalization": "python-json-finite-v1",
+      "algorithm": "sha256",
+      "request_digest": "93dc6aaf417398b3ae84144269e6c4d8aa69845cac31b3b55d42e71b7a3e81c7",
+      "response_digest": "723c975e06de6a493f4d0f85a85f8fbae6b281169e8e7af54d0148701255391e"
+    }
+  }
+]

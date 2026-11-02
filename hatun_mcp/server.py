@@ -34,6 +34,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 
 from . import backends as B
 from .deployment import PUBLIC_BASE
+from .formula_receipts import bind_formula_call, canonical_bytes, formula_request
 from .governance import (
     DOCTRINE,
     ClientRegistry,
@@ -146,6 +147,7 @@ async def governed(
     latency_budget: Optional[float] = None,
     narrative_axes: bool = False,
     evidence_contract: bool = False,
+    formula_call: Optional[dict] = None,
     backend_coro=None,
 ):
     """Run one tool through the full PURIQ pipeline. Returns the response dict that
@@ -198,11 +200,15 @@ async def governed(
         tripwire = "T09" if decline["reason"] == "yuyay_axis_below_floor" else None
         score = puriq_utility(lam=1.0, yuyay=yuyay, hukla_tripwire=tripwire,
                               khipu_chain_ok=True, hatun_factor=factor)
+        decline_detail = {"decline": decline}
+        if formula_call is not None:
+            decline_detail["formula_call_binding"] = bind_formula_call(
+                formula_call, _response_fields(tool, "declined", None))
         r = KHIPU.emit(
             tool=tool, client_id=client_id or "anonymous", operation_id=operation_id,
             status="declined", tripwire=tripwire,
             yuyay_min_axis=yuyay.min_axis_value, hatun_mcp_factor=factor,
-            puriq_score=score, detail={"decline": decline}, signer=SIGNER,
+            puriq_score=score, detail=decline_detail, signer=SIGNER,
         )
         if client_id:
             CLIENTS.record(client_id, clean=False)
@@ -219,6 +225,10 @@ async def governed(
             backend = await backend_coro
         if not isinstance(backend, dict):
             raise ValueError("invalid backend result")
+        if formula_call is not None:
+            # BackendResult is a dict subclass; normalize only its outer envelope.
+            backend = dict(backend)
+            canonical_bytes(backend)  # Reject non-finite/lossy results before signing.
         if evidence_contract:
             # Bind only validated observation bytes into the receipt. A backend
             # bug must not sign a stale digest or turn missing data into success.
@@ -268,6 +278,9 @@ async def governed(
         "backend": _summ(backend),
         "sovereign_mode": sovereign,
     }
+    if formula_call is not None:
+        detail["formula_call_binding"] = bind_formula_call(
+            formula_call, _response_fields(tool, status, backend))
     r = KHIPU.emit(
         tool=tool, client_id=client_id, operation_id=operation_id,
         status=status, tripwire=tripwire, yuyay_min_axis=yuyay.min_axis_value,
@@ -295,12 +308,18 @@ def _summ(backend: Any) -> Any:
     return str(backend)[:500]
 
 
-def _wrap(*, status, data, gate_transparency, receipt, narrative_axes, tool, sovereign):
-    out = {
+def _response_fields(tool, status, data):
+    return {
         "tool": tool,
         "status": status,
         "data": data.get("data") if isinstance(data, dict) and "data" in data else data,
         "backend": _summ(data),
+    }
+
+
+def _wrap(*, status, data, gate_transparency, receipt, narrative_axes, tool, sovereign):
+    out = {
+        **_response_fields(tool, status, data),
         "khipu_receipt": {
             "receipt_id": receipt.receipt_id,
             "continuum_hash": receipt.continuum_hash,
@@ -620,14 +639,21 @@ async def szl_drone_lookup(model_or_signature: str) -> dict:
 
 
 @mcp.tool()
-async def szl_formula_evaluate(name: str, args: Optional[dict] = None) -> dict:
+async def szl_formula_evaluate(name: str, args: Optional[dict] = None,
+                               receipt_challenge: Optional[str] = None) -> dict:
     """Evaluate a named doctrine formula primitive (real closed-form arithmetic).
     Known: 'puriq' (master operator P(x,t)), 'kl_divergence', 'sigmoid', 'liu_hui_pi'.
-    Unknown names are forwarded to the live lutar-lean kernel /formula-eval route."""
+    Unknown names are forwarded to the live lutar-lean kernel /formula-eval route.
+    Optional receipt_challenge binds a caller-owned challenge to the signed call;
+    this does not consume the challenge or prevent replay."""
+    request = formula_request(name, args, receipt_challenge)
+    # Give the backend its own snapshot so mutation cannot rewrite the binding.
+    backend_args = json.loads(canonical_bytes(request["args"]))
     return await governed(
         tool="szl_formula_evaluate", operation_id="formula.evaluate",
         gate_text=f"{name} {json.dumps(args or {})}"[:5000], needs_scope="read",
-        backend_coro=B.formula_evaluate(name, args or {}),
+        formula_call=request,
+        backend_coro=B.formula_evaluate(name, backend_args),
     )
 
 
