@@ -28,6 +28,7 @@ from hatun_mcp import server as S  # noqa: E402
 # CI enumerates this module explicitly. Re-export the new hermetic regression
 # class here so the existing hosted gate runs it without a workflow change.
 from test_github_estate_snapshot import TestGithubEstateSnapshot  # noqa: E402,F401
+from test_formula_receipts import TestFormulaReceipts  # noqa: E402,F401
 
 
 def setup_module(_):
