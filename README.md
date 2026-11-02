@@ -215,10 +215,17 @@ python -m hatun_mcp.server          # stdio mode for Claude Desktop / Codex
 
 ```bash
 uvicorn hatun_mcp.server_http:app --host 0.0.0.0 --port 7860
-# MCP endpoint:  http://127.0.0.1:7860/mcp   (legacy SSE at /sse)
+# MCP endpoint:  http://127.0.0.1:7860/mcp/   (stateless Streamable HTTP)
 # Process liveness: http://127.0.0.1:7860/healthz
-# Signed-release readiness: http://127.0.0.1:7860/readyz
+# Signed-release and operator-binding readiness: http://127.0.0.1:7860/readyz
 ```
+
+Configure an existing admitted operator key using the explicit scope binding in
+[HTTP operator admission](docs/HTTP_AUTHENTICATION.md). HTTP exposes only the
+three documented read capabilities and the locked-doctrine resource; the full
+local package catalog is not HTTP permission. Legacy SSE and message endpoints
+are disabled: admitted requests to `/sse` or `/messages` return `410`, and
+discovery reports `sse_endpoint: null`. Use `/mcp/` for hosted clients.
 
 The DSSE signing key is injected at runtime via the `HATUN_MCP_SIGNING_KEY` (PEM)
 operator-managed secret; without it the signer runs in honest `PLACEHOLDER` mode (clearly
@@ -226,7 +233,8 @@ labeled, never a fake signature).
 
 `/healthz` proves that the process and local receipt chain can answer. `/readyz`
 is the fail-closed investor/deployment contract: it returns `200` only when the
-receipt chain verifies and a non-placeholder signing key is active; otherwise it
+receipt chain verifies, a non-placeholder signing key is active, and an explicit
+operator scope binding is configured; otherwise it
 returns `503` with the failing check named. The public server card advertises only
 the API-key scheme that this server actually implements.
 
