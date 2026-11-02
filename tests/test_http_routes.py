@@ -38,6 +38,8 @@ from hatun_mcp import server_http  # noqa: E402
 from hatun_mcp.console import CONSOLE_HTML  # noqa: E402
 from hatun_mcp.governance import DsseSigner  # noqa: E402
 from hatun_mcp.deployment import public_base  # noqa: E402
+# CI enumerates this module explicitly; include the HTTP admission regressions.
+from test_http_admission import HttpAdmissionTests  # noqa: E402,F401
 
 BASE = server_http.PUBLIC_BASE
 REPO = "https://github.com/szl-holdings/hatun-mcp"
@@ -100,7 +102,7 @@ def test_fresh_runtime_binds_all_discovery_to_operator_origin(configured, expect
     if configured is not None:
         env["HATUN_MCP_PUBLIC_BASE"] = configured
     code = r'''
-import hashlib, json
+import hashlib, json, os
 from starlette.testclient import TestClient
 from hatun_mcp import server_http as server
 from hatun_mcp.console import CONSOLE_HTML, SPACE_URL
@@ -112,7 +114,11 @@ initialize = {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
     "protocolVersion": "2025-03-26", "capabilities": {},
     "clientInfo": {"name": "deployment-contract-test", "version": "1"},
 }}
-headers = {"accept": "application/json, text/event-stream", "origin": server.PUBLIC_BASE}
+key = "szl_test_deployment_contract"
+fingerprint = hashlib.pbkdf2_hmac("sha256", key.encode(), server._FP_SALT, server._FP_ITERATIONS).hex()[:16]
+os.environ["HATUN_MCP_SCOPE_" + fingerprint] = "read"
+headers = {"accept": "application/json, text/event-stream", "origin": server.PUBLIC_BASE,
+           "authorization": "Bearer " + key}
 with TestClient(server.app, base_url=server.PUBLIC_BASE) as runtime:
     handshake = runtime.post("/mcp/", headers=headers, json=initialize)
     wrong_host = runtime.post("/mcp/", headers={**headers, "host": "attacker.example.org"}, json=initialize)
@@ -141,7 +147,7 @@ print(json.dumps({
     assert observed["base"] == observed["console_base"] == expected
     assert observed["origin_allowed"] is True
     assert observed["connect"]["mcp_endpoint"] == expected + "/mcp/"
-    assert observed["connect"]["sse_endpoint"] == expected + "/sse/"
+    assert observed["connect"]["sse_endpoint"] is None
     assert observed["connect"]["server_card"] == expected + "/.well-known/mcp/server-card.json"
     assert observed["manifest_uri"] == observed["subject_uri"] == expected + "/.well-known/mcp"
     assert observed["digest_matches"] is True

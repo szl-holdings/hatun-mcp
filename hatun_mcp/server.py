@@ -5,8 +5,10 @@ hatun_mcp.server — HATUN-MCP, the doctrine-aware MCP server.
 in the PURIQ Kallpa wires that extends SZL governance — Yuyay-13 gate, HUKLLA
 tripwires, Khipu receipts, the PURIQ master formula — to the world's MCP clients.
 
-Transports: Streamable HTTP (/mcp) + legacy SSE (/sse) for hosted use; stdio for
-local. Every tool invocation:
+Transports: admitted read-only stateless Streamable HTTP (/mcp/) for hosted use;
+stdio for local. The HTTP entrypoint disables legacy SSE and message endpoints;
+see docs/HTTP_AUTHENTICATION.md for its explicit capability and binding contract.
+Every tool invocation:
   1. authenticates the client (API key -> client_id); anonymous => declined.
   2. runs the Yuyay-13 gate on its input (input-as-data; OWASP MCP06 defense).
   3. computes Hatun_MCP(client_id) reputation factor in [0,1].

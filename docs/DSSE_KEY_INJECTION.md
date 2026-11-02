@@ -46,6 +46,15 @@ origins. Reverse proxies forwarding another host must explicitly configure
 `HATUN_MCP_ALLOWED_HOSTS`. These settings do not admit a release or establish
 availability. The public product page is not an MCP transport origin.
 
+For HTTP, configure an existing admitted operator key's explicit
+`HATUN_MCP_SCOPE_<fingerprint>` binding as described in
+[HTTP operator admission](HTTP_AUTHENTICATION.md). The operator credential and
+DSSE private key have separate purposes. A `szl_` prefix alone does not admit a
+caller. Send exactly one credential header through the client's protected
+configuration; never place credentials in source, command-line arguments or
+URLs. Only stateless Streamable HTTP at `/mcp/` is enabled; legacy `/sse` and
+`/messages` return 410 after admission.
+
 Use the deployment's secret injection mechanism to supply either:
 
 - `HATUN_MCP_SIGNING_KEY`: the complete unencrypted P-256 private-key PEM; or
@@ -79,13 +88,85 @@ return HTTP 200 with placeholder text when no key is configured; successful
 HTTP transport alone is insufficient. Do not replace the expected key merely
 because the runtime serves a different one.
 
-`/readyz` returns 200 only for a verified current-process receipt chain and an
-`ECDSA-P256` signer; otherwise it returns 503. It does not probe upstream organs,
-prove durable ledger delivery, or establish that the key is the expected identity.
+`/readyz` returns 200 only for a verified current-process receipt chain, an
+`ECDSA-P256` signer and at least one recognized operator scope binding;
+otherwise it returns 503. It does not validate the inspecting caller's key,
+probe upstream organs, prove durable ledger delivery, or establish that the
+signer has the expected identity.
 
-Use `/connect` configuration for an initialized, authenticated MCP client
-connected to the admitted `/mcp/` endpoint, and
-call `dsse_sign` with an innocuous payload containing a freshly generated nonce,
+## 4. Verify a permitted HTTP read receipt
+
+Use `/connect` configuration for an initialized MCP client at the admitted
+`/mcp/` endpoint, authenticated with the existing operator key. Confirm that
+absent and unadmitted credentials are rejected. For the admitted call, use
+`szl_formula_evaluate` with `{"name":"sigmoid","args":{"x":0}}`; this exact
+formula executes locally and should return `status: "success"` and
+`data.value: 0.5`. Save the decoded tool response as `response.json` (the JSON
+inside the MCP result content, not the outer JSON-RPC response).
+
+HTTP denies `dsse_sign` for every scope, including `write` and `admin`. Do not
+use raw signing or state-changing tools as hosted availability probes.
+`tools/list` is discovery and does not exercise the signer or grant permission.
+
+Record the expected `client_<fingerprint>` identity separately from the
+operator's admitted binding as `expected-client.txt`; do not derive it from the
+returned receipt or include the API key. Verify the receipt under the trusted
+public key (requires `cryptography`):
+
+```bash
+python - expected-public.pem response.json expected-client.txt <<'PY'
+import base64
+import hashlib
+import json
+import sys
+from pathlib import Path
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import ec
+
+key = serialization.load_pem_public_key(Path(sys.argv[1]).read_bytes())
+assert isinstance(key, ec.EllipticCurvePublicKey)
+assert isinstance(key.curve, ec.SECP256R1)
+response = json.loads(Path(sys.argv[2]).read_text())
+envelope = response["dsse"]
+assert envelope["payloadType"] == "application/vnd.szl.hatun-mcp.response+json"
+kind = envelope["payloadType"].encode("utf-8")
+payload = base64.b64decode(envelope["payload"], validate=True)
+assert len(envelope["signatures"]) == 1
+signature = base64.b64decode(envelope["signatures"][0]["sig"], validate=True)
+pae = b"DSSEv1 %d %s %d %s" % (len(kind), kind, len(payload), payload)
+key.verify(signature, pae, ec.ECDSA(hashes.SHA256()))
+signed = json.loads(payload)
+receipt = signed["receipt"]
+assert receipt["client_id"] == Path(sys.argv[3]).read_text().strip()
+assert receipt["tool"] == response["tool"] == "szl_formula_evaluate"
+assert receipt["operation_id"] == "formula.evaluate"
+assert receipt["status"] == response["status"] == "success"
+assert receipt["detail"]["backend_error"] is None
+assert receipt["detail"]["sovereign_mode"] is False
+packet = json.dumps(receipt, sort_keys=True, separators=(",", ":")).encode()
+assert hashlib.sha256(packet).hexdigest() == signed["continuum_hash"]
+assert signed["continuum_hash"] == response["khipu_receipt"]["continuum_hash"]
+assert receipt["receipt_id"] == response["khipu_receipt"]["receipt_id"]
+assert receipt["prev_hash"] == response["khipu_receipt"]["prev_hash"]
+assert response["data"]["value"] == 0.5
+print("Verified the read receipt under the trusted P-256 key.")
+PY
+```
+
+The signed receipt binds the operator, tool, operation, status, detail and
+receipt hash. It does not include the formula arguments, result value or a
+caller nonce; the result check above observes an unsigned response field.
+This verifier alone does not prove freshness, correct computation, a complete
+receipt chain, or an external action. Record the authenticated transport
+observation and exact build revision separately; public readiness is not that
+evidence.
+
+## 5. Optional trusted local signer diagnostic
+
+For a separately authorized local stdio process, `dsse_sign` can test that
+process's signer directly. It is unavailable over HTTP. A local diagnostic
+does not witness the hosted process or authorize copying its private key.
+Call `dsse_sign` with an innocuous payload containing a freshly generated nonce,
 for example `{"readiness_probe":"<fresh random nonce>"}`. Save that exact payload
 as `probe.json` and the returned `envelope` object as `envelope.json`. `tools/list`
 is discovery and does not run the signer. The probe signs the supplied payload;
