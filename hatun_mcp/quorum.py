@@ -8,17 +8,19 @@ quorum across the five SZL organs.
 Model (classic BFT, e.g. PBFT):
   * n participating organs, tolerate f Byzantine (arbitrary-fault) participants.
   * SAFETY requires      n >= 3f + 1.
-  * AGREEMENT requires   >= 2f + 1 matching verdicts (a quorum that necessarily
-    intersects any other quorum in at least one honest node).
+  * AGREEMENT requires q = floor((n+f)/2)+1 matching verdicts. Two q-voter
+    certificates intersect in at least 2q-n > f participants, hence at least
+    one honest participant. The special case n=3f+1 gives q=2f+1.
 
 Default config: n = 5 organs (a11oy, llm, immune, killinchu, companion), f = 1.
   -> min_total() = 3f+1 = 4 reachable organs required.
-  -> agreement_threshold() = 2f+1 = 3 matching verdicts required.
+  -> agreement_threshold() = 4 matching verdicts required.
 
-HONEST DEGRADATION: if only 4 of 5 organs are reachable, n=4,f=1 still satisfies
-n>=3f+1 (4>=4), and 2f+1 = 3 matching verdicts still reaches quorum on the 4 live
-organs. If a second organ drops (n=3 < 4) the quorum returns NO_QUORUM — disclosed,
-never forced.
+HONEST DEGRADATION: the configured population does not shrink when an organ
+is unavailable. With n=5,f=1, four reachable organs must all agree. A 3/1 split
+cannot decide: accepting three votes lets one equivocating voter certify two
+opposite decisions. With an explicitly configured n=4,f=1 group, three agree.
+This is certificate-intersection arithmetic, not a complete consensus protocol.
 
 SPDX-License-Identifier: Apache-2.0
 Author: Yachay (CTO authority) · Built by Perplexity Computer Agent · 2026-06-03
@@ -50,8 +52,10 @@ class QuorumConfig:
         return 3 * self.f + 1 if type(self.f) is int else 0
 
     def agreement_threshold(self) -> int:
-        """Matching-verdict count required to decide: 2f+1."""
-        return 2 * self.f + 1 if type(self.f) is int else 0
+        """Smallest integer q such that 2q-n > f for the configured group."""
+        if type(self.n) is not int or type(self.f) is not int:
+            return 0
+        return (self.n + self.f) // 2 + 1
 
     def is_valid(self) -> bool:
         """True iff this is a well-formed Byzantine config that decide() may act on.
@@ -109,8 +113,9 @@ class QuorumResult:
 def decide(votes: list[OrganVote], config: Optional[QuorumConfig] = None) -> QuorumResult:
     """Run the Byzantine quorum decision over a set of organ votes.
 
-    Returns QUORUM_REACHED with the agreed verdict iff at least 2f+1 reachable
-    organs report the SAME verdict AND at least 3f+1 organs are reachable.
+    Returns QUORUM_REACHED when at least floor((n+f)/2)+1 reachable organs
+    report the SAME verdict AND at least 3f+1 organs are reachable. The
+    threshold uses the configured population, never the observed live subset.
     """
     cfg = config if config is not None else QuorumConfig()
     config_error = _config_error(cfg)
@@ -123,7 +128,7 @@ def decide(votes: list[OrganVote], config: Optional[QuorumConfig] = None) -> Quo
     votes_d = [_safe_vote_dict(vote) for vote in vote_items]
 
     # Participant identity is part of the safety boundary. Without this check,
-    # the same organ can be submitted repeatedly and forge a 2f+1 tally.
+    # the same organ can be submitted repeatedly and forge an agreement tally.
     participant_error = (
         _validate_participants(vote_items, cfg)
         if config_error is None and type(votes) is list
@@ -147,9 +152,8 @@ def decide(votes: list[OrganVote], config: Optional[QuorumConfig] = None) -> Quo
     )
 
     # 0. FAIL-CLOSED on an ill-formed / adversarial config BEFORE any tally.
-    #    A negative fault budget f makes the agreement threshold 2f+1 <= 0, which
-    #    the "top_count >= thr" test below would treat as trivially satisfied —
-    #    letting a SINGLE organ (or none) forge QUORUM_REACHED. We refuse to decide
+    #    A negative fault budget can reduce the agreement threshold and permit
+    #    a forged quorum. We refuse to decide
     #    on such a config and return NO_QUORUM with a disclosed reason; Byzantine
     #    safety is never fabricated from a config that cannot provide it.
     if config_error:
@@ -180,7 +184,7 @@ def decide(votes: list[OrganVote], config: Optional[QuorumConfig] = None) -> Quo
         decided = next(v.verdict for v in reachable_votes if _key(v.verdict) == top_key)
         return QuorumResult(
             outcome="QUORUM_REACHED", decided_verdict=decided, **base,
-            reason=(f"{top_count}/{reachable} organs agree (>= 2f+1 = {thr}); "
+            reason=(f"{top_count}/{reachable} organs agree (>= floor((n+f)/2)+1 = {thr}); "
                     f"{reachable} reachable (>= 3f+1 = {min_total})."),
         )
 

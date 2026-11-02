@@ -45,7 +45,8 @@ DEFAULT_ORGANS = [
 
 def mesh_quorum(organ_ids: list[str], present: Optional[list[str]] = None) -> dict:
     """Byzantine quorum: with n organs the system tolerates f = floor((n-1)/3)
-    faults and needs a threshold of 2f+1 present to reach quorum (n >= 3f+1).
+    faults and needs floor((n+f)/2)+1 present (n >= 3f+1). This is the
+    minimum certificate size whose pairs share more than f configured organs.
 
     This function performs REAL quorum arithmetic but no network or process liveness
     I/O. A supplied ``present`` list is caller-declared input, never evidence of an
@@ -57,7 +58,7 @@ def mesh_quorum(organ_ids: list[str], present: Optional[list[str]] = None) -> di
     organs = list(dict.fromkeys(organ_ids or DEFAULT_ORGANS))  # de-dup, keep order
     n = len(organs)
     f = max(0, (n - 1) // 3)
-    threshold = 2 * f + 1
+    threshold = (n + f) // 2 + 1
     caller_declared = present is not None
     present_set = list(present) if caller_declared else list(organs)
     # Unknown or repeated caller values remain visible in ``present`` for API
@@ -82,7 +83,7 @@ def mesh_quorum(organ_ids: list[str], present: Optional[list[str]] = None) -> di
         "independently_witnessed": False,
         "live_polled": False,
         "note": (
-            "Byzantine n>=3f+1; threshold=2f+1. quorum is arithmetic over "
+            "Byzantine n>=3f+1; threshold=floor((n+f)/2)+1. quorum is arithmetic over "
             f"{presence_source.lower()} input. This function performs no liveness "
             "I/O, so live_polled, independently_witnessed, and operational_quorum "
             "remain false."

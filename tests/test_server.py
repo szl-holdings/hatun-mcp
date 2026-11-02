@@ -135,7 +135,7 @@ def test_lambda_quorum_shape_and_bls(monkeypatch):
     _assert_envelope(out)
     q = out["governance"]["quorum"]
     assert q["config"]["n"] == 5 and q["config"]["f"] == 1
-    assert q["min_total"] == 4 and q["agreement_threshold"] == 3
+    assert q["min_total"] == 4 and q["agreement_threshold"] == 4
     assert q["outcome"] in ("QUORUM_REACHED", "NO_QUORUM", "SPLIT")
     agg = out["governance"]["bls_aggregate"]
     assert agg["mode"] in ("BLS12-381", "MERKLE-AGG")
