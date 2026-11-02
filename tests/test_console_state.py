@@ -21,7 +21,7 @@ from hatun_mcp.server import KHIPU, mcp  # noqa: E402
 # The hosted gate enumerates this file; include the isolated generic regressions.
 from test_generic_validation import GenericValidationTests  # noqa: E402,F401
 
-BASE = "https://szlholdings-hatun-mcp.hf.space"
+BASE = server_http.PUBLIC_BASE
 client = TestClient(server_http.app, base_url=BASE)
 
 
@@ -126,7 +126,9 @@ def test_console_uses_restrained_gateway_palette_and_no_offchain_data_fetch():
     assert "Evidence out." in CONSOLE_HTML
     assert "Decorative weave lines are not telemetry" in CONSOLE_HTML
     assert "SZL Holdings" not in CONSOLE_HTML
-    assert "http://" not in CONSOLE_HTML.replace("http://www.w3.org/2000/svg", "")
+    assert "http://" not in CONSOLE_HTML.replace(
+        "http://www.w3.org/2000/svg", ""
+    ).replace("http://127.0.0.1:7860/mcp/", "")
     for host in (
         "fonts.googleapis.com",
         "cdn.jsdelivr.net",

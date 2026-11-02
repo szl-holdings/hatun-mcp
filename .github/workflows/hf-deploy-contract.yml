@@ -12,6 +12,7 @@ on:
     - hatun_mcp/console_v2.py
     - hatun_mcp/server.py
     - hatun_mcp/server_http.py
+    - hatun_mcp/deployment.py
     - docs/HATUN_SURFACE_CONTRACT.md
     - tests/test_console_state.py
     - tests/test_dependency_contract.py
@@ -30,6 +31,7 @@ on:
     - hatun_mcp/console_v2.py
     - hatun_mcp/server.py
     - hatun_mcp/server_http.py
+    - hatun_mcp/deployment.py
     - docs/HATUN_SURFACE_CONTRACT.md
     - tests/test_console_state.py
     - tests/test_dependency_contract.py

@@ -6,8 +6,7 @@ FROM mirror.gcr.io/library/python:3.15-slim@sha256:f786b2e19cf9bb54e96bfcd4c1b40
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PORT=7860 \
-    HATUN_MCP_ALLOWED_ORIGINS="https://szlholdings-hatun-mcp.hf.space,https://smithery.ai,http://localhost"
+    PORT=7860
 
 WORKDIR /app
 
@@ -21,6 +20,7 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 COPY hatun_mcp/__init__.py        /app/hatun_mcp/__init__.py
 COPY hatun_mcp/server.py          /app/hatun_mcp/server.py
 COPY hatun_mcp/server_http.py     /app/hatun_mcp/server_http.py
+COPY hatun_mcp/deployment.py      /app/hatun_mcp/deployment.py
 COPY hatun_mcp/console.py         /app/hatun_mcp/console.py
 COPY hatun_mcp/console_v2.py      /app/hatun_mcp/console_v2.py
 COPY hatun_mcp/state.py           /app/hatun_mcp/state.py

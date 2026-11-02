@@ -24,13 +24,27 @@ openssl ecparam -name prime256v1 -genkey -noout -out hatun_signing_key.pem
 openssl ec -in hatun_signing_key.pem -pubout -out expected-public.pem
 ```
 
-Never commit, log, or return the private key. Record the expected public key
+Never commit, log, return, or put the private key in command history or an image.
+Record the expected public key
 through a trusted channel before checking the runtime. The repository's
 `PUBKEY_szlholdings-ec-p256.pem` is an expected key only if the deployed private
 key is its matching counterpart. The `szlholdings-ec-p256` key ID is a label,
 not a fingerprint or proof of that match.
 
 ## 2. Configure the admitted runtime before startup
+
+Set `HATUN_MCP_PUBLIC_BASE` to the admitted runtime's HTTPS origin before
+process startup, for example `https://gateway.example.org`. Its `/connect`
+descriptor, console client snippet, manifest identity and attestation public-key
+URL use that fixed origin; request headers cannot rewrite them. Paths such as
+`/mcp/` are mounted at the origin root. Credentials, path prefixes, query strings,
+fragments and malformed origins fail startup. HTTP is accepted only on loopback
+for local development; the unset default is `http://127.0.0.1:7860`.
+
+Set `HATUN_MCP_ALLOWED_ORIGINS` explicitly if browser clients need additional
+origins. Reverse proxies forwarding another host must explicitly configure
+`HATUN_MCP_ALLOWED_HOSTS`. These settings do not admit a release or establish
+availability. The public product page is not an MCP transport origin.
 
 Use the deployment's secret injection mechanism to supply either:
 
@@ -50,11 +64,12 @@ not activate the signing path. An unreadable key file can prevent startup.
 
 ## 3. Observe local readiness and verify the actual identity
 
-Set `HATUN_BASE` to the admitted runtime's origin, then inspect:
+Set `HATUN_MCP_PUBLIC_BASE` in your inspection shell to the same admitted origin
+configured in the runtime, then inspect:
 
 ```bash
-curl --fail --silent --show-error "${HATUN_BASE:?set the admitted runtime origin}/readyz"
-curl --fail --silent --show-error "${HATUN_BASE}/pubkey" --output observed-public.pem
+curl --fail --silent --show-error "${HATUN_MCP_PUBLIC_BASE:?set the admitted runtime origin}/readyz"
+curl --fail --silent --show-error "${HATUN_MCP_PUBLIC_BASE}/pubkey" --output observed-public.pem
 openssl pkey -pubin -in expected-public.pem -outform DER | openssl dgst -sha256
 openssl pkey -pubin -in observed-public.pem -outform DER | openssl dgst -sha256
 ```
@@ -68,7 +83,8 @@ because the runtime serves a different one.
 `ECDSA-P256` signer; otherwise it returns 503. It does not probe upstream organs,
 prove durable ledger delivery, or establish that the key is the expected identity.
 
-Through an initialized MCP client connected to the admitted `/mcp/` endpoint,
+Use `/connect` configuration for an initialized, authenticated MCP client
+connected to the admitted `/mcp/` endpoint, and
 call `dsse_sign` with an innocuous payload containing a freshly generated nonce,
 for example `{"readiness_probe":"<fresh random nonce>"}`. Save that exact payload
 as `probe.json` and the returned `envelope` object as `envelope.json`. `tools/list`
