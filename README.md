@@ -285,6 +285,24 @@ or **UNAVAILABLE**. Never fall back to the sample client configuration.
 
 ## MCP client setup
 
+HTTP tool authentication requires an explicit local key registration. The
+`szl_` prefix alone grants no identity or access. Provision a private,
+high-entropy key and set `HATUN_MCP_SCOPE_<fingerprint>` to exactly `read`,
+`write`, or `admin` in the server's protected environment. The fingerprint is
+the first 16 lowercase hex characters of PBKDF2-HMAC-SHA256 over the UTF-8 key,
+using `HATUN_MCP_FP_SALT` (default `hatun-mcp/api-key-fingerprint/v1`) and
+`HATUN_MCP_FP_ITERATIONS` (default `210000`). The server does not query a portal
+key database. Absent, empty, or unrecognized scope bindings decline tool calls
+before any backend request; removing the binding revokes that local identity.
+
+Existing registered keys keep their fingerprint and scope. Previously unbound
+demo keys must be deliberately registered; the smoke client now requires an
+explicit `HATUN_MCP_TEST_KEY`. Public discovery and health routes remain readable.
+The separate `HATUN_MCP_ALLOW_ANON=true` setting intentionally permits anonymous
+read calls and is unchanged; it must not be enabled when key authentication is
+required. Registration does not prove key entropy, ownership, or an independent
+second approver. No production key or environment is provisioned by this change.
+
 ### Claude Desktop
 The snippets below are **SAMPLE local-server configurations**. Start the HTTP
 server first, configure an accepted API key, and replace `szl_YOUR_KEY`. For a

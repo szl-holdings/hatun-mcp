@@ -75,13 +75,12 @@ _FP_ITERATIONS = int(os.environ.get("HATUN_MCP_FP_ITERATIONS", "210000"))
 def resolve_api_key(raw_key: str | None) -> tuple[str | None, str]:
     """Resolve an SZL API key to (client_id, scope).
 
-    The authoritative store is the customer-portal (customer_surface/API_KEY_SYSTEM.md);
-    this gateway derives a deterministic client_id from a slow KDF over the key and reads
-    scope from the key's env binding. A key shaped 'szl_{env}_{flagship?}_{rand}' is
-    accepted; the client_id is the key fingerprint so the same caller keeps a stable
-    reputation. The fingerprint is computed with PBKDF2-HMAC-SHA256 (a computationally
-    expensive KDF) over a fixed domain-separation salt rather than a bare fast hash, so a
-    captured fingerprint cannot be brute-forced back to the API key.
+    This gateway admits only keys explicitly registered through its fingerprint
+    scope binding. A key prefix or a computed fingerprint is not registration.
+    The fingerprint is computed with PBKDF2-HMAC-SHA256 over the configured
+    domain-separation salt; the same registered key keeps a stable client_id.
+    Portal registration is not queried here: operators must provision the local
+    binding, and missing or malformed bindings fail closed.
     """
     if not raw_key:
         return None, "read"
@@ -93,9 +92,9 @@ def resolve_api_key(raw_key: str | None) -> tuple[str | None, str]:
         _FP_SALT,
         _FP_ITERATIONS,
     ).hex()[:16]
-    # scope: an explicit override env var maps fingerprints -> scope; default read.
-    # admin/write keys are provisioned by the portal; demo keys are read.
-    scope = os.environ.get(f"HATUN_MCP_SCOPE_{fp}", "read")
+    scope = os.environ.get(f"HATUN_MCP_SCOPE_{fp}")
+    if scope not in {"read", "write", "admin"}:
+        return None, "read"
     return f"client_{fp}", scope
 
 

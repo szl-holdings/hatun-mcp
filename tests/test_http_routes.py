@@ -43,6 +43,91 @@ BASE = server_http.PUBLIC_BASE
 REPO = "https://github.com/szl-holdings/hatun-mcp"
 ATTESTATION_PATH = "/.well-known/mcp-manifest-attestation"
 
+
+@pytest.fixture
+def auth_binding(monkeypatch):
+    # Hermetic registration store and fast fixture KDF; production cost stays intact.
+    for name in tuple(os.environ):
+        if name.startswith("HATUN_MCP_SCOPE_"):
+            monkeypatch.delenv(name)
+    monkeypatch.setattr(server_http, "_FP_ITERATIONS", 1)
+
+    def bind(key, scope):
+        fingerprint = hashlib.pbkdf2_hmac(
+            "sha256", key.encode(), server_http._FP_SALT, server_http._FP_ITERATIONS,
+        ).hex()[:16]
+        monkeypatch.setenv(f"HATUN_MCP_SCOPE_{fingerprint}", scope)
+        return f"client_{fingerprint}"
+    return bind
+
+
+@pytest.mark.parametrize("key", [None, "", "not-an-szl-key", "szl_", "szl_unregistered_fixture"])
+def test_auth_binding_rejects_missing_or_unregistered_key(auth_binding, key):
+    assert server_http.resolve_api_key(key) == (None, "read")
+
+
+@pytest.mark.parametrize("scope", ["", "unknown", "READ", " read", "admin "])
+def test_auth_binding_rejects_invalid_registered_scope(auth_binding, scope):
+    key = "szl_registered_fixture"
+    auth_binding(key, scope)
+    assert server_http.resolve_api_key(key) == (None, "read")
+
+
+@pytest.mark.parametrize("scope", ["read", "write", "admin"])
+def test_auth_binding_preserves_explicit_registered_scope(auth_binding, scope):
+    key = "szl_registered_fixture"
+    expected_client = auth_binding(key, scope)
+    assert server_http.resolve_api_key(key) == (expected_client, scope)
+
+
+@pytest.mark.parametrize("header", ["Authorization", "X-Api-Key"])
+@pytest.mark.parametrize("registered,allow_anonymous", [(False, False), (True, False), (False, True)])
+def test_auth_binding_controls_backend_admission(auth_binding, monkeypatch, header, registered, allow_anonymous):
+    from starlette.applications import Starlette
+    from starlette.responses import JSONResponse
+    from starlette.routing import Route
+    from hatun_mcp import server as server
+    from hatun_mcp.governance import ClientRegistry, KhipuChain
+
+    monkeypatch.setattr(server, "ALLOW_ANON", allow_anonymous)
+    monkeypatch.setattr(server, "KHIPU", KhipuChain())
+    monkeypatch.setattr(server, "CLIENTS", ClientRegistry())
+    calls = []
+
+    async def backend():
+        calls.append(True)
+        return {"deployed": True, "error": None, "data": {"fixture": True}}
+
+    async def invoke(request):
+        result = await server.governed(
+            tool="auth_binding_fixture", operation_id="fixture.read", gate_text="read a test record",
+            needs_scope="read", backend_coro=backend(),
+        )
+        return JSONResponse(result)
+
+    app = Starlette(routes=[Route("/invoke", invoke)])
+    app.add_middleware(server_http.GovernanceAuthMiddleware)
+    key = "szl_auth_boundary_fixture"
+    if registered:
+        auth_binding(key, "read")
+    value = f"Bearer {key}" if header == "Authorization" else key
+    result = TestClient(app).get("/invoke", headers={header: value}).json()
+    if registered or allow_anonymous:
+        assert result["status"] == "success"
+        assert calls == [True]
+    else:
+        assert result["status"] == "declined"
+        assert result["gate_transparency"]["reason"] == "no_api_key"
+        assert calls == []
+    assert result["khipu_receipt"]["chain_verified"] is True
+
+
+def test_auth_binding_does_not_hide_public_read_only_routes(auth_binding):
+    public = TestClient(server_http.app, base_url=BASE)
+    for path in ("/healthz", "/connect", "/.well-known/mcp"):
+        response = public.get(path, headers={"Authorization": "Bearer szl_unregistered_fixture"})
+        assert response.status_code == 200
+
 client = TestClient(server_http.app, base_url=BASE)
 
 

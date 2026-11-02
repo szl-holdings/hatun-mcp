@@ -10,10 +10,12 @@ from mcp import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
 
 URL = os.environ.get("HATUN_MCP_URL", "http://127.0.0.1:7860/mcp")
-KEY = os.environ.get("HATUN_MCP_TEST_KEY", "szl_test_demo_smoke0001")
+KEY = os.environ.get("HATUN_MCP_TEST_KEY", "")
 
 
 async def main():
+    if not KEY:
+        raise RuntimeError("Set HATUN_MCP_TEST_KEY to a key explicitly registered by this server's operator.")
     headers = {"Authorization": f"Bearer {KEY}", "X-Api-Key": KEY}
     async with streamablehttp_client(URL, headers=headers) as (read, write, _):
         async with ClientSession(read, write) as session:
