@@ -669,7 +669,7 @@ async def szl_lambda_quorum(action: dict, context: Any = None,
     """Governance-critical Λ verdict under a Byzantine n>=3f+1 quorum (n=5, f=1).
 
     Fans the action out to the five SZL organs' policy/verdict routes, collects each
-    organ's verdict, and decides only if >= 2f+1 (=3) reachable organs AGREE and
+    organ's verdict, and decides only if >= floor((n+f)/2)+1 (=4) organs AGREE and
     >= 3f+1 (=4) organs are reachable. Each organ's contribution mints a Khipu
     receipt; the participating receipts are BLS-aggregated into one signature. The
     full quorum tally + aggregate ride in `governance.quorum`. HONEST: each organ's

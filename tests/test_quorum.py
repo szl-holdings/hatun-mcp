@@ -6,12 +6,14 @@ py_ecc is installed; honest Merkle-root fallback otherwise).
 SPDX-License-Identifier: Apache-2.0
 """
 import json
+from itertools import combinations
 import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from hatun_mcp.quorum import QuorumConfig, OrganVote, decide  # noqa: E402
+from hatun_mcp.quorum import ORGANS, QuorumConfig, OrganVote, decide  # noqa: E402
+from hatun_mcp.puriq import mesh_quorum  # noqa: E402
 from hatun_mcp.dsse import BlsAggregator, _merkle_root  # noqa: E402
 
 
@@ -24,7 +26,7 @@ def test_config_thresholds_n5_f1():
     c = QuorumConfig(n=5, f=1)
     assert c.tolerates_byzantine() is True          # 5 >= 3*1+1
     assert c.min_total() == 4                        # 3f+1
-    assert c.agreement_threshold() == 3              # 2f+1
+    assert c.agreement_threshold() == 4              # 2q-n > f
 
 
 def test_config_too_small_is_not_byzantine_safe():
@@ -117,18 +119,19 @@ def test_split_vote_no_decision():
     assert res.decided_verdict is None
 
 
-def test_exact_threshold_three_of_four():
-    # 4 reachable, 3 ALLOW / 1 DENY -> 3 >= 2f+1 -> QUORUM_REACHED ALLOW.
+def test_three_of_four_cannot_decide_in_configured_five():
+    # Reachability does not resize the configured five-participant group.
     res = decide(_votes([("a11oy", True, "ALLOW"), ("llm", True, "ALLOW"),
                          ("immune", True, "ALLOW"), ("killinchu", True, "DENY"),
                          ("companion", False, None)]))
-    assert res.outcome == "QUORUM_REACHED"
-    assert res.decided_verdict == "ALLOW"
+    assert res.outcome == "SPLIT"
+    assert res.decided_verdict is None
 
 
 def test_dict_verdicts_tally_canonically():
     v = [("a11oy", True, {"x": 1}), ("llm", True, {"x": 1}),
-         ("immune", True, {"x": 1}), ("killinchu", True, {"x": 2})]
+         ("immune", True, {"x": 1}), ("killinchu", True, {"x": 1}),
+         ("companion", True, {"x": 2})]
     res = decide(_votes(v))
     assert res.outcome == "QUORUM_REACHED"
     assert res.decided_verdict == {"x": 1}
@@ -324,3 +327,51 @@ def test_empty_aggregate_is_genesis_merkle():
     out = BlsAggregator().aggregate([])
     assert out.n_organs == 0
     assert out.merkle_root == "0" * 64
+
+
+def test_one_equivocating_voter_cannot_certify_opposite_verdicts():
+    # Four honest voters keep their votes; only companion equivocates.
+    results = []
+    for equivocating_verdict in ("ALLOW", "DENY"):
+        values = ["ALLOW", "ALLOW", "DENY", "DENY", equivocating_verdict]
+        results.append(decide([OrganVote(name, True, value)
+                               for name, value in zip(ORGANS, values)]))
+    assert all(result.outcome == "SPLIT" for result in results)
+    assert all(result.decided_verdict is None for result in results)
+
+
+def test_all_small_quorum_pairs_intersect_in_more_than_the_fault_budget():
+    # Enumerate actual certificate sets, independently of a threshold formula.
+    for n in range(1, 10):
+        for f in range((n - 1) // 3 + 1):
+            names = tuple(str(i) for i in range(n))
+            config = QuorumConfig(n=n, f=f, participants=names)
+            threshold = config.agreement_threshold()
+            sets = [set(items) for items in combinations(names, threshold)]
+            assert all(len(a & b) > f for a in sets for b in sets), (n, f, threshold)
+            assert threshold <= n - f  # all honest participants can still decide
+            smaller = [set(items) for items in combinations(names, threshold - 1)]
+            assert any(len(a & b) <= f for a in smaller for b in smaller)
+
+
+def test_unavailable_voter_does_not_shrink_the_configured_population():
+    values = ["ALLOW", "ALLOW", "ALLOW", "DENY", None]
+    votes = [OrganVote(name, value is not None, value)
+             for name, value in zip(ORGANS, values)]
+    assert decide(votes).outcome == "SPLIT"
+    # Explicitly configuring only these four participants is a different group.
+    configured_four = QuorumConfig(n=4, f=1, participants=ORGANS[:4])
+    assert decide(votes[:4], configured_four).outcome == "QUORUM_REACHED"
+
+
+def test_puriq_arithmetic_uses_the_same_configured_population_bound():
+    for n in range(1, 13):
+        organs = [str(i) for i in range(n)]
+        f = (n - 1) // 3
+        threshold = QuorumConfig(n=n, f=f, participants=tuple(organs)).agreement_threshold()
+        insufficient = mesh_quorum(organs, organs[:threshold - 1])
+        sufficient = mesh_quorum(organs, organs[:threshold])
+        assert insufficient["quorum"] is False
+        assert sufficient["quorum"] is True
+        assert sufficient["threshold"] == threshold
+        assert sufficient["operational_quorum"] is False
