@@ -153,6 +153,7 @@ class GenericValidationTests(unittest.TestCase):
             return verification
         values = dict(SIGNER=signer, KHIPU=SimpleNamespace(verify=verify),
                       DOCTRINE=dict(protocol_revision="synthetic"),
+                      http_auth_configured=lambda: True,
                       JSONResponse=lambda content, **kw: dict(content=content, **kw))
         if hasattr(helper, "observed_signer_mode"):
             values["observed_signer_mode"] = helper.observed_signer_mode

@@ -55,7 +55,10 @@ identity, and attestation public-key URL use that same fixed origin. Request
 With no setting, the development default is `http://127.0.0.1:7860`. HTTP is
 accepted only for loopback; hosted origins require HTTPS. Credentials, path
 prefixes, query strings, fragments and malformed origins fail startup. The
-origin's `/mcp/` and `/sse/` paths are mounted at the root. Set
+origin's admitted stateless Streamable HTTP endpoint is `/mcp/`, mounted at the
+root. Legacy `/sse` and `/messages` transports are disabled; admitted requests
+receive `410`. The operator binding and restricted read capability contract is
+documented in [HTTP operator admission](HTTP_AUTHENTICATION.md). Set
 `HATUN_MCP_ALLOWED_ORIGINS` explicitly if browser clients need additional
 origins; its default includes the configured public origin.
 The MCP transport pins the configured host and port as well. Reverse proxies
