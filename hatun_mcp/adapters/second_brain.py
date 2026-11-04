@@ -361,6 +361,7 @@ def _bound_row(item, allowed_tenant: str) -> bool:
         and _REVISION.fullmatch(revision) is not None
         and isinstance(license_name, str)
         and _LICENSE.fullmatch(license_name) is not None
+        and isinstance(item.get("rights"), str)
         and item.get("rights") in _RIGHTS_OK
         and item.get("tenant") == allowed_tenant
     )
@@ -512,7 +513,7 @@ def _admit(body, allowed_tenant: str) -> dict | None:
             return None
         rights = item.get("rights")
         tenant = item.get("tenant")
-        if rights in _RIGHTS_WITHDRAWN:
+        if isinstance(rights, str) and rights in _RIGHTS_WITHDRAWN:
             hold = hold or "withdrawn"
             continue
         if isinstance(tenant, str) and tenant != allowed_tenant:

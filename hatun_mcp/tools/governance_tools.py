@@ -147,7 +147,7 @@ def _install(mcp, khipu: KhipuChain, signer: DsseSigner, clients) -> None:
     async def mesh_quorum_status(organ_ids: list, present: Optional[list] = None) -> dict:
         """Byzantine n>=3f+1 mesh-quorum status over the named organs.
 
-        Returns n, f, threshold (=2f+1), the input presence set, and the arithmetic
+        Returns n, f, threshold (=floor((n+f)/2)+1), the presence set, and the arithmetic
         quorum boolean. `present` is caller-declared data, not a live cluster probe;
         live_polled and operational_quorum therefore fail closed. Traces to
         lutar-lean KhipuConsensus.lean::khipu_consensus_safety.

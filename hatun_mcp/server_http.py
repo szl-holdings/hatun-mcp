@@ -324,12 +324,6 @@ class GovernanceAuthMiddleware:
 # ── well-known server card (for Smithery / registry scanning) ───────────────────
 def _server_card() -> dict:
     tools = []
-    # FastMCP exposes the registered tools; build a static card from their schemas.
-    try:
-        import anyio
-        listed = anyio.from_thread.run(mcp.list_tools) if False else None  # noqa
-    except Exception:
-        listed = None
     # Static, hand-maintained mirror (authoritative for registries behind auth wall):
     card_tools = [
         ("szl_a11oy_code_chat", "Chat with a11oy.code unified open-LLM router"),

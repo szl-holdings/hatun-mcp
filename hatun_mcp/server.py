@@ -172,8 +172,18 @@ async def governed(
     )
 
     # 3. Hard declines (default-decline; receipted) BEFORE any backend call.
+    chain_ok = KHIPU.verify()
     decline = None
-    if not authenticated:
+    if not chain_ok:
+        decline = {
+            "reason": "receipt_chain_invalid",
+            "owasp_class": "T01",
+            "message": (
+                "The Khipu receipt chain failed verification. The backend call "
+                "was not started."
+            ),
+        }
+    elif not authenticated:
         decline = {"reason": "no_api_key", "owasp_class": "MCP07",
                    "message": "Anonymous tool calls are declined. Provide an SZL API key."}
     elif not scope_ok:
@@ -195,9 +205,12 @@ async def governed(
         # Close the un-awaited backend coroutine to avoid a leak (we decline before calling it).
         if backend_coro is not None and hasattr(backend_coro, "close"):
             backend_coro.close()
-        tripwire = "T09" if decline["reason"] == "yuyay_axis_below_floor" else None
+        tripwire = {
+            "receipt_chain_invalid": "T01",
+            "yuyay_axis_below_floor": "T09",
+        }.get(decline["reason"])
         score = puriq_utility(lam=1.0, yuyay=yuyay, hukla_tripwire=tripwire,
-                              khipu_chain_ok=True, hatun_factor=factor)
+                              khipu_chain_ok=chain_ok, hatun_factor=factor)
         r = KHIPU.emit(
             tool=tool, client_id=client_id or "anonymous", operation_id=operation_id,
             status="declined", tripwire=tripwire,
@@ -669,7 +682,7 @@ async def szl_lambda_quorum(action: dict, context: Any = None,
     """Governance-critical Λ verdict under a Byzantine n>=3f+1 quorum (n=5, f=1).
 
     Fans the action out to the five SZL organs' policy/verdict routes, collects each
-    organ's verdict, and decides only if >= 2f+1 (=3) reachable organs AGREE and
+    organ's verdict, and decides only if >= floor((n+f)/2)+1 (=4) organs AGREE and
     >= 3f+1 (=4) organs are reachable. Each organ's contribution mints a Khipu
     receipt; the participating receipts are BLS-aggregated into one signature. The
     full quorum tally + aggregate ride in `governance.quorum`. HONEST: each organ's

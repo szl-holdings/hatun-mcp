@@ -241,6 +241,7 @@ class KhipuChain:
         signer: Optional[DsseSigner] = None,
     ) -> KhipuReceipt:
         with self._lock:
+            chain_ok = self._verify_unlocked()
             rid = str(uuid.uuid4())
             ts = time.time()
             packet = {
@@ -255,6 +256,7 @@ class KhipuChain:
                 "hatun_mcp_factor": hatun_mcp_factor,
                 "puriq_score": puriq_score,
                 "detail": detail,
+                "chain_verified": chain_ok,
                 "prev_hash": self._last_hash,
             }
             continuum = self._hash_packet(packet)
@@ -266,7 +268,7 @@ class KhipuChain:
                 client_id=client_id,
                 operation_id=operation_id,
                 status=status,
-                chain_verified=True,
+                chain_verified=chain_ok,
                 prev_hash=self._last_hash,
                 continuum_hash=continuum,
                 tripwire=tripwire,
@@ -331,8 +333,8 @@ class KhipuChain:
         except Exception:
             pass
 
-    def verify(self) -> bool:
-        """Recompute the whole chain — auditor-grade ('verify our logs')."""
+    def _verify_unlocked(self) -> bool:
+        """Recompute the chain while the caller holds ``self._lock``."""
         prev = self.GENESIS
         for r in self._receipts:
             packet = {
@@ -342,12 +344,18 @@ class KhipuChain:
                 "yuyay_min_axis": r.yuyay_min_axis,
                 "hatun_mcp_factor": r.hatun_mcp_factor,
                 "puriq_score": r.puriq_score, "detail": r.detail,
+                "chain_verified": r.chain_verified,
                 "prev_hash": prev,
             }
             if r.prev_hash != prev or self._hash_packet(packet) != r.continuum_hash:
                 return False
             prev = r.continuum_hash
-        return True
+        return self._last_hash == prev
+
+    def verify(self) -> bool:
+        """Recompute the whole chain - auditor-grade ('verify our logs')."""
+        with self._lock:
+            return self._verify_unlocked()
 
     def recent(self, n: int = 20) -> list[dict]:
         with self._lock:
