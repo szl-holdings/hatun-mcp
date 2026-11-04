@@ -114,6 +114,80 @@ def _private_key_pem(key) -> str:
     ).decode()
 
 
+def _installed_dsse_tool(signer):
+    from hatun_mcp.tools.governance_tools import _install
+
+    class Registry:
+        def __init__(self):
+            self.tools = {}
+
+        def tool(self):
+            def register(fn):
+                self.tools[fn.__name__] = fn
+                return fn
+            return register
+
+    registry = Registry()
+    _install(registry, KhipuChain(), signer, ClientRegistry())
+    return registry.tools["dsse_sign"]
+
+
+def test_dsse_tool_remediation_names_the_environment_the_signer_reads(monkeypatch):
+    monkeypatch.delenv("HATUN_MCP_SIGNING_KEY", raising=False)
+    monkeypatch.delenv("HATUN_MCP_SIGNING_KEY_PATH", raising=False)
+    pem = _private_key_pem(ec.generate_private_key(ec.SECP256R1()))
+    monkeypatch.setenv("SZL_COSIGN_PRIVATE_PEM", pem)
+    unsigned = asyncio.run(_installed_dsse_tool(DsseSigner())({"probe": True}))
+
+    assert unsigned["honesty"] == "UNSIGNED"
+    assert unsigned["envelope"]["signatures"] == []
+    assert unsigned["key_env_var"] == "HATUN_MCP_SIGNING_KEY"
+    assert "HATUN_MCP_SIGNING_KEY_PATH" in unsigned["note"]
+    assert "SZL_COSIGN_PRIVATE_PEM" not in unsigned["note"]
+
+    # Following the reported remediation configures a real signer at startup.
+    monkeypatch.setenv(unsigned["key_env_var"], pem)
+    signed = asyncio.run(_installed_dsse_tool(DsseSigner())({"probe": True}))
+    assert signed["honesty"] == "REAL"
+    assert signed["signer_mode"] == "ECDSA-P256"
+    assert len(signed["envelope"]["signatures"]) == 1
+
+
+def test_dsse_tool_advisory_key_argument_never_selects_a_different_key(monkeypatch):
+    key = ec.generate_private_key(ec.SECP256R1())
+    monkeypatch.setenv("HATUN_MCP_SIGNING_KEY", _private_key_pem(key))
+    monkeypatch.setenv("OTHER_SIGNING_KEY", _private_key_pem(
+        ec.generate_private_key(ec.SECP256R1())
+    ))
+    result = asyncio.run(_installed_dsse_tool(DsseSigner())(
+        {"probe": True}, key_env_var="OTHER_SIGNING_KEY"
+    ))
+
+    assert result["key_env_var"] == "OTHER_SIGNING_KEY"
+    assert result["key_env_var_is_advisory"] is True
+    assert result["signing_key_sources"] == [
+        "HATUN_MCP_SIGNING_KEY", "HATUN_MCP_SIGNING_KEY_PATH",
+    ]
+    envelope = result["envelope"]
+    key.public_key().verify(
+        base64.b64decode(envelope["signatures"][0]["sig"], validate=True),
+        _pae(envelope["payloadType"], base64.b64decode(envelope["payload"], validate=True)),
+        ec.ECDSA(hashes.SHA256()),
+    )
+
+
+def test_dsse_tool_advisory_argument_cannot_spoof_unsigned_remediation(monkeypatch):
+    monkeypatch.delenv("HATUN_MCP_SIGNING_KEY", raising=False)
+    monkeypatch.delenv("HATUN_MCP_SIGNING_KEY_PATH", raising=False)
+    result = asyncio.run(_installed_dsse_tool(DsseSigner())(
+        {"probe": True}, key_env_var="UNRELATED_SECRET"
+    ))
+    assert result["honesty"] == "UNSIGNED"
+    assert result["key_env_var_is_advisory"] is True
+    assert "UNRELATED_SECRET" not in result["note"]
+    assert "HATUN_MCP_SIGNING_KEY" in result["note"]
+
+
 def test_dsse_accepts_only_usable_p256_key(monkeypatch):
     monkeypatch.setenv(
         "HATUN_MCP_SIGNING_KEY",
