@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Regression tests for the formula-evaluator math defects (Phase A H1-H5)."""
-import sys, unittest
+import math, sys, unittest
 sys.path.insert(0, ".")
 from hatun_mcp import formulas as F
 
@@ -74,3 +74,23 @@ class TestDSSE(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestPinskerSubnormal(unittest.TestCase):
+    def test_subnormal_q_finite_kl(self):
+        # pi normal over qi subnormal previously overflowed the ratio to inf
+        tiny = 5e-324
+        r = F.pinsker_kl_bound({"p": [0.5, 0.5], "q": [1.0 - tiny, tiny]})
+        self.assertIsInstance(r["kl"], float)
+        self.assertTrue(math.isfinite(r["kl"]))
+        self.assertTrue(math.isfinite(r["value"]))
+        # true KL = 0.5*ln(0.5/tiny) + 0.5*ln(0.5/(1-tiny)) ~ 371.9
+        self.assertGreater(r["kl"], 300.0)
+
+    def test_result_always_strict_json(self):
+        import json
+        for args in ({"p": [1, 0], "q": [0, 1]},
+                     {"p": [0.5, 0.5], "q": [1.0 - 5e-324, 5e-324]},
+                     {"p": [0.9, 0.1], "q": [0.5, 0.5]}):
+            r = F.pinsker_kl_bound(args)
+            json.dumps(r, allow_nan=False)  # must never raise
