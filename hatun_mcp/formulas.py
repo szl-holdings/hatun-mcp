@@ -227,7 +227,17 @@ def pinsker_kl_bound(args: dict) -> dict:
                 "note": ("support of P is not contained in support of Q: "
                          "D_KL(P||Q) = +inf, bound is vacuous (TV <= 1 trivially)"),
                 "proof_status": "PROVEN(Pinsker)"}
-    kl = math.fsum(pi * math.log(pi / qi) for pi, qi in zip(p, q) if pi > 0)
+    # log(pi) - log(qi) instead of log(pi/qi): the ratio form overflows to
+    # +inf for finite inputs (normal pi over subnormal qi), producing a raw
+    # non-JSON float. The difference form is exact and finite for all finite
+    # positive inputs; qi == 0 with pi > 0 is handled above.
+    kl = math.fsum(pi * (math.log(pi) - math.log(qi))
+                   for pi, qi in zip(p, q) if pi > 0)
+    if math.isinf(kl) or math.isnan(kl):
+        return {"formula": "TV(P,Q) <= sqrt(D_KL(P||Q)/2)", "kl": "Infinity",
+                "value": "Infinity",
+                "note": "KL diverged from finite inputs; bound is vacuous",
+                "proof_status": "PROVEN(Pinsker)"}
     return {"formula": "TV(P,Q) <= sqrt(D_KL(P||Q)/2)", "kl": kl,
             "value": math.sqrt(kl / 2.0), "proof_status": "PROVEN(Pinsker)"}
 
