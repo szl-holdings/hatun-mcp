@@ -13,8 +13,10 @@ WORKDIR /app
 # Non-root user (HF Spaces best practice; least privilege)
 RUN useradd -m -u 1000 hatun
 
-COPY requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r /app/requirements.txt
+# Hash-pinned install: the same lock CI tests with (requirements/ci/runtime.txt,
+# generated from requirements.txt). pip refuses any artifact whose hash differs.
+COPY requirements/ci/runtime.txt /app/requirements.lock
+RUN pip install --no-cache-dir --disable-pip-version-check --require-hashes -r /app/requirements.lock
 
 # ── Per-file COPY (Doctrine: explicit, auditable, no glob/dir copies) ───────────
 COPY hatun_mcp/__init__.py        /app/hatun_mcp/__init__.py
