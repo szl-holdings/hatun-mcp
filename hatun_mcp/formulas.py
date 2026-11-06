@@ -344,6 +344,75 @@ _EVALUATORS = {
 }
 
 
+
+
+# ── Acoustic physics tools (from acoustic-validation) ─────────────────────
+
+def ns_regularization_pathway(args: dict) -> dict:
+    """The 4-step Aero-FF NS regularization pathway. PROOF-STATUS: HYPOTHESIS_UNVERIFIED."""
+    lam = args.get("lambda", 100e9); mu = args.get("mu", 80e9)
+    A = args.get("A", -100e9); B = args.get("B", -50e9); C = args.get("C", -30e9)
+    sigma = args.get("sigma", 50e6); rho0 = args.get("rho0", 7800)
+    nu = args.get("nu", 0.38); E_eff = args.get("E_eff", 200e9)
+    R_abs = args.get("R_abs", 0.5); m = args.get("m", 1)
+    denom = 3 * lam + 2 * mu
+    if denom <= 0 or rho0 <= 0:
+        raise ValueError("invalid material constants")
+    coeff = (7 * lam + 10 * mu + 2 * A + 10 * B + 6 * C) / denom
+    vL_sq = (lam + 2 * mu - coeff * sigma) / rho0
+    vL = math.sqrt(vL_sq) if vL_sq > 0 else None
+    eps_zz = sigma / E_eff if E_eff > 0 else 0
+    eps_theta = -nu * eps_zz if 0 < nu < 0.5 else 0
+    G = 2.0 / (1.0 - R_abs ** 2) if 0 <= R_abs < 1 else None
+    return {
+        "formula": "Aero-FF 4-step NS regularization pathway",
+        "steps": {
+            "murnaghan_vL": vL,
+            "poisson_eps_theta": eps_theta,
+            "ep_gain_G": G,
+            "chern_Cn": m,
+            "OAM_L_ph": m * 1.054571817e-34,
+        },
+        "hypothesis_status": "HYPOTHESIS_UNVERIFIED",
+        "peer_reviewed_foundation": "Liu et al., Nature Communications 16:2823 (2025)",
+        "ns_millennium_prize_claim": "NOT_ESTABLISHED",
+        "provenance": "szl-holdings/acoustic-validation src/ns_regularization.py",
+        "honesty": "implements the CLAIMED mechanism; does not validate the physical claims",
+    }
+
+
+def schur_concavity_prediction(args: dict) -> dict:
+    """Schur-concavity of Lambda applied to NS stress. PROOF-STATUS: PROVED(Lean)."""
+    dist = args.get("stress_distribution", [1.0, 1.0, 1.0])
+    if not isinstance(dist, list) or not dist or any(d < 0 for d in dist):
+        raise ValueError("stress_distribution must be a non-empty list of non-negative reals")
+    max_s = max(dist) if dist else 1.0
+    axes = [d / max_s if max_s > 0 else 1.0 for d in dist]
+    n = len(axes)
+    if any(a == 0 for a in axes):
+        lam_actual = 0.0
+    else:
+        lam_actual = math.exp(sum(math.log(a) for a in axes) / n)
+    equal = sum(axes) / n
+    lam_equal = equal if equal > 0 else 0.0
+    return {
+        "formula": "Schur-concavity: Lambda_equalized >= Lambda_actual",
+        "lambda_actual": round(lam_actual, 9),
+        "lambda_equalized": round(lam_equal, 9),
+        "schur_gap": round(lam_equal - lam_actual, 9),
+        "schur_concavity_holds": lam_equal >= lam_actual - 1e-12,
+        "prediction": "balanced stress predicts more stable NS regularization",
+        "proof_status": "PROVED(Lean: Lutar/Lambda/SchurConcave.lean, 0 sorry)",
+        "hypothesis_status": "HYPOTHESIS_FROM_PROVED_PROPERTY",
+        "provenance": "szl-holdings/acoustic-validation src/lambda_ns_prediction.py",
+        "honesty": "the Lean proof is real; the physics prediction is a hypothesis",
+    }
+
+_EVALUATORS["ns_regularization_pathway"] = ns_regularization_pathway
+_EVALUATORS["schur_concavity_prediction"] = schur_concavity_prediction
+EXECUTABLE_FORMULAS = frozenset(set(EXECUTABLE_FORMULAS) | {"ns_regularization_pathway", "schur_concavity_prediction"})
+
+
 def evaluate(name: str, args: dict) -> Optional[dict]:
     """Evaluate an admitted formula by name. Returns None for unknown names."""
     fn = _EVALUATORS.get((name or "").strip().lower())
