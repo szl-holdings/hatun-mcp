@@ -23,7 +23,7 @@ the estate's MCP server as its reference implementation.
 |---|---|
 | Agent capabilities disclosed | The server card (`/.well-known/mcp/server-card.json`) discloses: all admitted tools, the governance profile (operator-read-only), the transport policy, the authentication scheme, and the proof status of every formula. |
 | Limitations disclosed | The server card explicitly states: `portal_validation: NOT_IMPLEMENTED`, `write_authorization: UNAVAILABLE`, `approval_headers: NOT_TRUSTED`. What doesn't work is published, not hidden. |
-| Pricing transparent | x402 pricing is machine-readable at the edge (Cloudflare Monetization Gateway rules + the public pricing manifest). |
+| Pricing transparent | When x402 payment admission is on, the server card and `/connect` publish `http_transport_policy.payment_admission`: the scheme, atomic amount, audience and paid tools this origin verifies, and how it reports settlement. When admission is off, the field reads `DISABLED`. The edge rules themselves live in the Cloudflare dashboard. The separately hosted pricing manifest is not generated from this source and is not cited as a control. |
 
 ### 3. Safety (does the system prevent harm)
 
