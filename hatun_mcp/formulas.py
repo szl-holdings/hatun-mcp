@@ -135,6 +135,10 @@ def reidemeister_invariant(args: dict) -> dict:
     move = args.get("move", "R1")
     if not isinstance(s, str) or move not in ("R1", "R2", "R3"):
         raise ValueError("braid_word str; move in R1/R2/R3")
+    if move != "R1":
+        raise ValueError("only R1 (adjacent inverse-pair cancellation) is "
+                         "implemented in this word representation; "
+                         f"move {move} is not supported")
     pairs = lambda a, b: a.swapcase() == b
     out = []
     for ch in s:
@@ -165,13 +169,20 @@ def dsse_envelope(args: dict) -> dict:
     """DSSE envelope digest. PROOF-STATUS: PROVEN(dsse-envelope-struct)."""
     payload = args.get("payload")
     signer = args.get("signer", "")
-    if not isinstance(payload, str) or not isinstance(signer, str):
-        raise ValueError("payload and signer must be strings")
-    pae = b"DSSEv1 " + len(payload.encode()).to_bytes(8, "big") + b" " + payload.encode()
+    payload_type = args.get("payload_type", "application/json")
+    if not isinstance(payload, str) or not isinstance(signer, str) \
+            or not isinstance(payload_type, str):
+        raise ValueError("payload, signer and payload_type must be strings")
+    pt_b, pl_b = payload_type.encode(), payload.encode()
+    pae = b"DSSEv1 " + str(len(pt_b)).encode() + b" " + pt_b \
+        + b" " + str(len(pl_b)).encode() + b" " + pl_b
     dig = hashlib.sha256(pae).hexdigest()
     return {"formula": "DSSEv1 PAE digest", "value": dig,
+            "payload_type": payload_type,
             "signer": signer, "signed": False,
-            "note": "digest computation only; no key material involved"}
+            "note": ("standard DSSEv1 PAE (DSSEv1 || len(type) || type || "
+                     "len(payload) || payload, decimal lengths); digest "
+                     "computation only; no key material involved")}
 
 
 def gleason_quantum_lambda(args: dict) -> dict:
@@ -201,9 +212,22 @@ def pinsker_kl_bound(args: dict) -> dict:
     p, q = _numlist(args, "p"), _numlist(args, "q")
     if p is None or q is None or len(p) != len(q):
         raise ValueError("p and q must be equal-length numeric lists")
+    if not p:
+        raise ValueError("p and q must be non-empty")
     if any(v < 0 for v in p + q):
         raise ValueError("probabilities must be >= 0")
-    kl = math.fsum(pi * math.log(pi / qi) for pi, qi in zip(p, q) if pi > 0 and qi > 0)
+    if any(not math.isfinite(v) for v in p + q):
+        raise ValueError("probabilities must be finite")
+    TOL = 1e-9
+    if abs(math.fsum(p) - 1.0) > TOL or abs(math.fsum(q) - 1.0) > TOL:
+        raise ValueError("p and q must each sum to 1 (probability distributions)")
+    if any(pi > 0 and qi == 0 for pi, qi in zip(p, q)):
+        return {"formula": "TV(P,Q) <= sqrt(D_KL(P||Q)/2)", "kl": "Infinity",
+                "value": "Infinity",
+                "note": ("support of P is not contained in support of Q: "
+                         "D_KL(P||Q) = +inf, bound is vacuous (TV <= 1 trivially)"),
+                "proof_status": "PROVEN(Pinsker)"}
+    kl = math.fsum(pi * math.log(pi / qi) for pi, qi in zip(p, q) if pi > 0)
     return {"formula": "TV(P,Q) <= sqrt(D_KL(P||Q)/2)", "kl": kl,
             "value": math.sqrt(kl / 2.0), "proof_status": "PROVEN(Pinsker)"}
 
@@ -213,6 +237,8 @@ def fisher_rao_distance(args: dict) -> dict:
     p, q = _numlist(args, "p"), _numlist(args, "q")
     if p is None or q is None or len(p) != len(q):
         raise ValueError("p and q must be equal-length numeric lists")
+    if not p:
+        raise ValueError("p and q must be non-empty")
     if any(v <= 0 for v in p + q):
         raise ValueError("Fisher-Rao requires strictly positive probabilities")
     sp, sq = math.sqrt(math.fsum(p)), math.sqrt(math.fsum(q))
