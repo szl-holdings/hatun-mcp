@@ -22,6 +22,7 @@ COPY hatun_mcp/formulas.py        /app/hatun_mcp/formulas.py
 COPY hatun_mcp/server.py          /app/hatun_mcp/server.py
 COPY hatun_mcp/server_http.py     /app/hatun_mcp/server_http.py
 COPY hatun_mcp/deployment.py      /app/hatun_mcp/deployment.py
+COPY hatun_mcp/payment_context.py /app/hatun_mcp/payment_context.py
 COPY hatun_mcp/console.py         /app/hatun_mcp/console.py
 COPY hatun_mcp/console_v2.py      /app/hatun_mcp/console_v2.py
 COPY hatun_mcp/state.py           /app/hatun_mcp/state.py
