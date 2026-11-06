@@ -30,10 +30,11 @@ from starlette.testclient import TestClient  # noqa: E402
 
 from hatun_mcp import payment_context as pc  # noqa: E402
 from hatun_mcp import server_http as http  # noqa: E402
+# Reuse the existing synthetic operator key and its scope binding helper.
+from test_http_admission import KEY, bind  # noqa: E402
 
 AMOUNT = 10_000
 ACCEPT = "application/json, text/event-stream"
-KEY = "szl_test_x402_operator"
 
 
 def rpc(method, params=None, *, notification=False):
@@ -77,13 +78,6 @@ class Gateway:
         verifier = pc.PaymentContextVerifier(
             config.terms, resolver=pc.PaymentKeyResolver(fetch=self.fetch), leeway=config.leeway)
         return patch.multiple(http, _X402=config, _PAYMENT_VERIFIER=verifier)
-
-
-def bind(key=KEY, scope="read"):
-    fingerprint = hashlib.pbkdf2_hmac(
-        "sha256", key.encode(), http._FP_SALT, http._FP_ITERATIONS).hex()[:16]
-    os.environ["HATUN_MCP_SCOPE_" + fingerprint] = scope
-    return "HATUN_MCP_SCOPE_" + fingerprint
 
 
 class X402ConfigTests(unittest.TestCase):
