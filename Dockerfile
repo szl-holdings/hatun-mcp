@@ -18,6 +18,7 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 
 # ── Per-file COPY (Doctrine: explicit, auditable, no glob/dir copies) ───────────
 COPY hatun_mcp/__init__.py        /app/hatun_mcp/__init__.py
+COPY hatun_mcp/formulas.py        /app/hatun_mcp/formulas.py
 COPY hatun_mcp/server.py          /app/hatun_mcp/server.py
 COPY hatun_mcp/server_http.py     /app/hatun_mcp/server_http.py
 COPY hatun_mcp/deployment.py      /app/hatun_mcp/deployment.py

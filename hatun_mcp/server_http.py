@@ -87,7 +87,9 @@ _HTTP_READ_TOOLS = frozenset({
     "szl_yuyay_score",
     "szl_formula_evaluate",
 })
-_HTTP_LOCAL_FORMULAS = frozenset({"puriq", "sigmoid", "liu_hui_pi"})
+_HTTP_LOCAL_FORMULAS = frozenset({
+    "puriq", "sigmoid", "liu_hui_pi",
+}) | __import__("hatun_mcp.formulas", fromlist=["EXECUTABLE_FORMULAS"]).EXECUTABLE_FORMULAS
 _HTTP_READ_RESOURCES = frozenset({"hatun://doctrine/locked-numbers"})
 _HTTP_METADATA_METHODS = frozenset({
     "initialize", "notifications/initialized", "notifications/cancelled", "ping",
