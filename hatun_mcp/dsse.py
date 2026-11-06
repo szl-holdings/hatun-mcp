@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import secrets
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
@@ -87,6 +88,9 @@ class AggregateResult:
     merkle_root: str
     note: str = ""
     organs: list[str] = field(default_factory=list)
+    public_keys: list[str] = field(default_factory=list)
+    key_source: str = "none"
+    ephemeral: bool = False
 
     def to_dict(self) -> dict:
         return {
@@ -97,21 +101,33 @@ class AggregateResult:
             "aggregate_signature": self.aggregate,
             "merkle_root": self.merkle_root,
             "note": self.note,
+            "public_keys": self.public_keys,
+            "key_source": self.key_source,
+            "ephemeral": self.ephemeral,
+            "signer_scope": "aggregator-process" if self.mode == "BLS12-381" else "unsigned",
+            "independent_organ_attestations": False,
         }
 
 
 class BlsAggregator:
     """Aggregate the receipts of N organs that participated in one MCP call.
 
-    Each organ is assigned a deterministic BLS keypair derived from its name and
-    an optional per-process seed (env HATUN_MCP_BLS_SEED). For an MCP call that
-    fanned out to organs [o1..oN], each organ signs its own receipt hash; the N
-    signatures aggregate into a single BLS signature verifiable against the N
-    public keys + N messages (AggregateVerify).
+    The aggregator derives one BLS keypair per organ name. A configured seed
+    (argument or HATUN_MCP_BLS_SEED) preserves an operator-managed identity;
+    otherwise a cryptographically random seed creates an ephemeral identity
+    for this instance. There is no public default signing seed.
+
+    All keys and signatures belong to this aggregator process. They bind its
+    observed receipt hashes, not independently authenticated organ signatures.
+    Returned public keys permit AggregateVerify after this instance exits,
+    but trusting those keys requires an external identity binding.
     """
 
     def __init__(self, seed: Optional[str] = None) -> None:
-        self.seed = seed or os.environ.get("HATUN_MCP_BLS_SEED", "hatun-mcp-doctrine-v11")
+        configured = seed or os.environ.get("HATUN_MCP_BLS_SEED")
+        self.ephemeral = not bool(configured)
+        self.key_source = "ephemeral" if self.ephemeral else "configured"
+        self.seed = configured or secrets.token_hex(32)
         self._sk: dict[str, int] = {}
         self._pk: dict[str, bytes] = {}
 
@@ -154,9 +170,13 @@ class BlsAggregator:
             return AggregateResult(
                 mode="BLS12-381", n_organs=len(organ_receipts), receipt_hashes=hashes,
                 aggregate=agg.hex(), merkle_root=merkle, organs=organs,
-                note=("REAL BLS12-381 aggregate over the N organ receipt hashes "
-                      "(py_ecc G2ProofOfPossession). Verify with AggregateVerify "
-                      "against the N organ public keys + their receipt hashes."),
+                public_keys=[self.public_key(organ) for organ in organs],
+                key_source=self.key_source, ephemeral=self.ephemeral,
+                note=("BLS12-381 aggregate created by this aggregator process over "
+                      "its observed organ receipt hashes (py_ecc G2ProofOfPossession). "
+                      "Not independent organ attestations. Verify with AggregateVerify "
+                      "against the ordered public_keys and receipt_hashes; key trust "
+                      "requires an external identity binding."),
             )
 
         return AggregateResult(
