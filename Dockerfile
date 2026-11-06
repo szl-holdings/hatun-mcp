@@ -49,6 +49,10 @@ COPY README.md                    /app/README.md
 
 # The DSSE signing key is injected at runtime as a Space secret
 # (HATUN_MCP_SIGNING_KEY, PEM contents). Never baked into the image.
+# The exact source commit is not secret: CI passes it so /api/build-info can
+# report it. Without the build argument the route honestly reports UNAVAILABLE.
+ARG SZL_GIT_SHA=""
+ENV SZL_GIT_SHA=${SZL_GIT_SHA}
 USER hatun
 
 EXPOSE 7860

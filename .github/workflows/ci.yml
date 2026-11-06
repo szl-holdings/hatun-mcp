@@ -51,7 +51,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Build pinned Space image
-        run: docker build --tag hatun-mcp-space-ci .
+        run: docker build --build-arg "SZL_GIT_SHA=${GITHUB_SHA}" --tag hatun-mcp-space-ci .
       - name: Start Space image
         run: docker run --detach --name hatun-mcp-space-ci --publish 7860:7860 --env HATUN_MCP_DISABLE_DYNAMIC=true hatun-mcp-space-ci
       - name: Verify live container contract
@@ -60,6 +60,9 @@ jobs:
             if curl --fail --silent --show-error http://127.0.0.1:7860/healthz > health.json; then
               python -c "import json; data=json.load(open('health.json', encoding='utf-8')); assert data['status']=='ok'; assert data['service']=='hatun-mcp'; assert isinstance(data['chain_verified'], bool); assert data['protocol_revision']"
               test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:7860/this-route-must-not-exist)" = "404"
+              # Read back the exact 40-hex commit baked into the image.
+              curl --fail --silent --show-error http://127.0.0.1:7860/api/build-info > build.json
+              python -c "import json, os; data=json.load(open('build.json', encoding='utf-8')); assert data['build']=={'state': 'OBSERVED', 'revision': os.environ['GITHUB_SHA']}, data"
               exit 0
             fi
             sleep 1
@@ -102,6 +105,8 @@ jobs:
           tags: |
             ${{ env.IMAGE }}:latest
             ${{ env.IMAGE }}:${{ github.sha }}
+          build-args: |
+            SZL_GIT_SHA=${{ github.sha }}
           provenance: true       # SLSA provenance attached by buildkit
 
       - name: Attest build provenance (SLSA L2)
