@@ -71,7 +71,9 @@ A **real, operational** Model Context Protocol server built on the official `mcp
 Python SDK (`mcp.server.fastmcp.FastMCP`). Every tool call is governed by the PURIQ
 formula:
 
-1. **Authenticate** the client (SZL API key → `client_id`); anonymous calls are declined.
+1. **Authenticate** the client (SZL API key → `client_id`, or, when the operator enables it,
+   a Cloudflare x402 `PAYMENT-CONTEXT` verified at this origin → `x402:<digest>`); anonymous
+   calls are declined.
 2. **Yuyay-13 gate** on the input (input-as-data; OWASP MCP06 injection defense).
 3. **Reputation** factor `Hatun_MCP(client) ∈ [0,1]`.
 4. **2-person Yuyay gate** for state-changing tools (e.g. `killinchu_cue`, `halt_drone`).
@@ -236,7 +238,15 @@ is the fail-closed investor/deployment contract: it returns `200` only when the
 receipt chain verifies, a non-placeholder signing key is active, and an explicit
 operator scope binding is configured; otherwise it
 returns `503` with the failing check named. The public server card advertises only
-the API-key scheme that this server actually implements.
+the schemes this process accepts: `apiKey`, plus `x402` when payment admission is on.
+
+Optional x402 payment admission lets a request that Cloudflare Monetization Gateway
+charged use the same read-only HTTP profile. Hatun verifies the gateway's Ed25519
+`PAYMENT-CONTEXT` JWT against the pinned JWKS and refuses the request if the keys
+cannot be fetched (fail closed). For `upto` it reports `PAYMENT-SETTLEMENT`. It is off
+unless `HATUN_MCP_X402_SCHEME` is set. The settings, admission rules, settlement
+behaviour and proof boundary are in
+[HTTP operator admission](docs/HTTP_AUTHENTICATION.md#x402-payment-admission-cloudflare-monetization-gateway).
 
 ### MCP manifest attestation
 
@@ -353,6 +363,8 @@ HATUN_MCP_DISABLE_DYNAMIC=true python -m pytest tests/ -q
 # tests/test_adapters.py  — mocked organ endpoints, adapter wiring + honest gaps
 # tests/test_governance.py— Khipu chain, Yuyay gate, PURIQ factor (pre-existing)
 # tests/test_http_routes.py — exact-byte card attestation + public HTTP contracts
+# tests/test_payment_context.py — PAYMENT-CONTEXT verifier, pinned JWKS cache, fail-closed outage
+# tests/test_http_payment_admission.py — x402 admission, refusals and upto settlement over real MCP
 ```
 
 The server tests also import the estate regression class so the existing

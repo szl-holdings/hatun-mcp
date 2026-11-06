@@ -4,6 +4,9 @@ hatun_mcp.server_http — admitted read-only Streamable HTTP entrypoint (/mcp).
 Wraps the FastMCP app in a Starlette application that:
   * authenticates each request via the SZL API key (Authorization: Bearer szl_... ,
     or X-Api-Key). Resolves key -> client_id + scope and sets the request contextvars.
+  * optionally (HATUN_MCP_X402_SCHEME) admits a request that carries a Cloudflare
+    Monetization Gateway PAYMENT-CONTEXT verified by hatun_mcp.payment_context, as
+    the read-only identity x402:<digest>, and reports PAYMENT-SETTLEMENT for upto.
   * validates the Origin header (DNS-rebinding defense; MCP transport requirement).
   * admits only explicit operator-bound credentials and reviewed read-only RPCs.
   * ignores caller-supplied sovereign-mode and second-approver claims.
@@ -20,8 +23,11 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import logging
 import os
 import re
+from dataclasses import dataclass
+from typing import Mapping, Optional
 
 from starlette.applications import Starlette
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -33,7 +39,20 @@ from .deployment import PUBLIC_BASE
 from . import server as _server
 from .server import (
     SIGNER, CLIENTS, KHIPU, mcp,
-    _ctx_client, _ctx_scope, _ctx_sovereign, _ctx_second_approver,
+    _ctx_client, _ctx_scope, _ctx_sovereign, _ctx_second_approver, _ctx_payment,
+)
+from .payment_context import (
+    DEFAULT_LEEWAY_SECONDS,
+    JWKS_URL,
+    MAX_LEEWAY_SECONDS,
+    SCHEMES,
+    PaymentAdmission,
+    PaymentContextInvalid,
+    PaymentContextVerifier,
+    PaymentKeysUnavailable,
+    PaymentTerms,
+    parse_atomic_amount,
+    settlement_header_value,
 )
 from .governance import (
     DOCTRINE,
@@ -96,6 +115,100 @@ _HTTP_METADATA_METHODS = frozenset({
     "tools/list", "resources/list", "resources/templates/list", "prompts/list",
 })
 
+# ── x402 payment admission (Cloudflare Monetization Gateway PAYMENT-CONTEXT) ────
+# Off unless HATUN_MCP_X402_SCHEME is exact or upto. A verified context admits the
+# caller to the same read-only HTTP profile as an operator key, under the identity
+# x402:<first 16 hex of sha256(token)>. The audience is fixed to the operator's
+# public origin plus this one paid path; request Host headers cannot change it.
+X402_PAID_PATH = "/mcp/"
+_LOG = logging.getLogger("hatun_mcp.x402")
+_SCALAR_ENV = re.compile(r"[0-9]{1,2}")
+
+
+@dataclass(frozen=True)
+class X402Config:
+    terms: PaymentTerms
+    paid_tools: frozenset
+    leeway: int
+
+
+def x402_config(environ: Mapping[str, str], *, public_base: str) -> Optional[X402Config]:
+    """Parse the operator's x402 settings; invalid settings fail startup.
+
+    Unset or ``off`` disables payment admission. Error messages exclude the
+    supplied values, like ``deployment.public_base``.
+    """
+    scheme = environ.get("HATUN_MCP_X402_SCHEME", "").strip()
+    if scheme in ("", "off"):
+        return None
+    error = (
+        "HATUN_MCP_X402_* must set SCHEME to exact or upto, AMOUNT_ATOMIC to an "
+        "integer in [1000, 100000000], optional PAID_TOOLS to admitted HTTP read "
+        "tools and optional LEEWAY_SECONDS to 0-30"
+    )
+    if scheme not in SCHEMES:
+        raise ValueError(error)
+    try:
+        amount = parse_atomic_amount(environ.get("HATUN_MCP_X402_AMOUNT_ATOMIC", "").strip())
+    except ValueError:
+        raise ValueError(error) from None
+    raw_tools = environ.get("HATUN_MCP_X402_PAID_TOOLS")
+    if raw_tools is None:
+        paid_tools = _HTTP_READ_TOOLS
+    else:
+        names = frozenset(name.strip() for name in raw_tools.split(",") if name.strip())
+        if not names or not names <= _HTTP_READ_TOOLS:
+            raise ValueError(error)
+        paid_tools = names
+    raw_leeway = environ.get("HATUN_MCP_X402_LEEWAY_SECONDS", str(DEFAULT_LEEWAY_SECONDS)).strip()
+    if _SCALAR_ENV.fullmatch(raw_leeway) is None or int(raw_leeway) > MAX_LEEWAY_SECONDS:
+        raise ValueError(error)
+    return X402Config(
+        terms=PaymentTerms(
+            audience=f"{public_base}{X402_PAID_PATH}", scheme=scheme, amount=amount,
+        ),
+        paid_tools=paid_tools,
+        leeway=int(raw_leeway),
+    )
+
+
+_X402 = x402_config(os.environ, public_base=PUBLIC_BASE)
+_PAYMENT_VERIFIER = (
+    PaymentContextVerifier(_X402.terms, leeway=_X402.leeway) if _X402 is not None else None
+)
+if _X402 is not None and not PUBLIC_BASE.startswith("https://"):
+    # Gateway audiences are the public HTTPS URL; a loopback base refuses them all.
+    _LOG.warning(json.dumps({"event": "x402_audience_not_public",
+                             "audience": _X402.terms.audience}))
+
+
+def _payment_admission_policy() -> dict:
+    """Public description of what this origin accepts as payment, if anything."""
+    if _X402 is None:
+        return {"state": "DISABLED"}
+    upto = _X402.terms.scheme == "upto"
+    return {
+        "state": "ENABLED",
+        "protocol": "x402",
+        "gateway": "cloudflare-monetization-gateway",
+        "header": "PAYMENT-CONTEXT",
+        "verification": "Ed25519 (EdDSA) JWT against the pinned JWKS",
+        "jwks": JWKS_URL,
+        "scheme": _X402.terms.scheme,
+        "amount_atomic": str(_X402.terms.amount),
+        "audience": _X402.terms.audience,
+        "paid_tools": sorted(_X402.paid_tools),
+        "settlement": (
+            "PAYMENT-SETTLEMENT reports amount_atomic for a successful paid tools/call "
+            "and 0 for every other successful response"
+            if upto else
+            "no PAYMENT-SETTLEMENT; the gateway settles the signed amount for every "
+            "matching request"
+        ),
+        "identity": "x402:<first 16 hex of sha256(PAYMENT-CONTEXT)>",
+        "settlement_evidence": False,
+    }
+
 
 def http_auth_configured() -> bool:
     """Observe explicit operator bindings without exposing their fingerprints."""
@@ -118,6 +231,7 @@ def _http_transport_policy() -> dict:
         "catalog_is_authorization": False,
         "transport": "stateless-streamable-http",
         "legacy_sse": "DISABLED",
+        "payment_admission": _payment_admission_policy(),
     }
 
 
@@ -143,11 +257,62 @@ def resolve_api_key(raw_key: str | None) -> tuple[str | None, str]:
     return f"client_{fp}", scope
 
 
-def _transport_error(status: int, code: str) -> JSONResponse:
+def _transport_error(status: int, code: str, reason: Optional[str] = None) -> JSONResponse:
     headers = {"Cache-Control": "no-store"}
     if status == 401:
         headers["WWW-Authenticate"] = 'Bearer realm="hatun-mcp"'
-    return JSONResponse({"error": code}, status_code=status, headers=headers)
+    if status == 503:
+        headers["Retry-After"] = "30"
+    body = {"error": code} if reason is None else {"error": code, "reason": reason}
+    return JSONResponse(body, status_code=status, headers=headers)
+
+
+_SETTLEMENT_HEADERS = (b"payment-settlement", b"payment-response")
+
+
+def _payment_send(send, admission: PaymentAdmission, config: X402Config,
+                  paid_tool: Optional[str]):
+    """Add the upto settlement to the response start; never forward a downstream one.
+
+    The JSON-RPC response is produced after the governed call has finished, so the
+    outcome is known when headers start. ``exact`` and any status >= 400 set no
+    header. ``upto`` reports the configured amount only when the one governed call
+    was the paid tool and it succeeded; every other successful response reports 0,
+    which settles nothing.
+    """
+    started = False
+
+    async def wrapped(message):
+        nonlocal started
+        if message["type"] == "http.response.start" and not started:
+            started = True
+            # Frameworks pass http.HTTPStatus (an IntEnum); settle on the plain code.
+            status = int(message["status"])
+            headers = [
+                (name, value) for name, value in message.get("headers", [])
+                if name.lower() not in _SETTLEMENT_HEADERS
+            ]
+            actual = (
+                config.terms.amount
+                if paid_tool is not None and admission.succeeded(paid_tool) else 0
+            )
+            value = settlement_header_value(
+                scheme=config.terms.scheme, status_code=status,
+                actual=actual, authorized=admission.payment.amount,
+            )
+            if value is not None:
+                headers.append((b"payment-settlement", value.encode("ascii")))
+            _LOG.info(json.dumps({
+                "event": "x402_response",
+                "identity": "x402:" + admission.payment.context_sha256[:16],
+                "status": status,
+                "scheme": config.terms.scheme,
+                "settlement_atomic": None if value is None else str(actual),
+            }, separators=(",", ":")))
+            message = {**message, "headers": headers}
+        await send(message)
+
+    return wrapped
 
 
 def _admit_http_rpc(message) -> JSONResponse | None:
@@ -250,22 +415,53 @@ class GovernanceAuthMiddleware:
             return
         authorization = request.headers.getlist("authorization")
         api_keys = request.headers.getlist("x-api-key")
-        if len(authorization) > 1 or len(api_keys) > 1 or (authorization and api_keys):
+        x402 = _X402
+        # With payment admission off, PAYMENT-CONTEXT is never parsed or trusted.
+        payments = request.headers.getlist("payment-context") if x402 is not None else []
+        if (
+            len(authorization) > 1 or len(api_keys) > 1 or (authorization and api_keys)
+            or len(payments) > 1 or (payments and (authorization or api_keys))
+        ):
             await _transport_error(401, "ambiguous_credentials")(scope, receive, send)
             return
-        auth = authorization[0] if authorization else ""
-        raw = auth[7:] if auth.lower().startswith("bearer ") else (
-            api_keys[0] if api_keys and not authorization else None
-        )
-        client_id, key_scope = resolve_api_key(raw)
-        if client_id is None:
-            await _transport_error(401, "operator_key_required")(scope, receive, send)
-            return
+        admission = None
+        if payments:
+            if scope["path"] != X402_PAID_PATH:
+                await _transport_error(403, "payment_context_not_accepted_for_path")(
+                    scope, receive, send)
+                return
+            try:
+                payment = await _PAYMENT_VERIFIER.verify(payments[0])
+            except PaymentContextInvalid as exc:
+                _LOG.warning(json.dumps({"event": "x402_rejected", "reason": exc.reason}))
+                await _transport_error(403, "payment_context_invalid", exc.reason)(
+                    scope, receive, send)
+                return
+            except PaymentKeysUnavailable as exc:
+                # Fail closed: no fresh pinned keys means no paid request is served.
+                _LOG.error(json.dumps({"event": "x402_keys_unavailable", "reason": exc.reason}))
+                await _transport_error(503, "payment_verification_unavailable", exc.reason)(
+                    scope, receive, send)
+                return
+            admission = PaymentAdmission(payment)
+            client_id, key_scope = "x402:" + payment.context_sha256[:16], "read"
+        else:
+            auth = authorization[0] if authorization else ""
+            raw = auth[7:] if auth.lower().startswith("bearer ") else (
+                api_keys[0] if api_keys and not authorization else None
+            )
+            client_id, key_scope = resolve_api_key(raw)
+            if client_id is None:
+                code = ("payment_or_operator_key_required" if x402 is not None
+                        else "operator_key_required")
+                await _transport_error(401, code)(scope, receive, send)
+                return
         if scope["path"].startswith(("/sse", "/messages")):
             await _transport_error(410, "legacy_transport_disabled")(scope, receive, send)
             return
 
         downstream_receive = receive
+        paid_tool = None
         if scope["method"] == "POST":
             content_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
             if content_type != "application/json":
@@ -300,6 +496,9 @@ class GovernanceAuthMiddleware:
             if error is not None:
                 await error(scope, receive, send)
                 return
+            if admission is not None and message["method"] == "tools/call":
+                name = message["params"]["name"]
+                paid_tool = name if name in x402.paid_tools else None
             replayed = False
 
             async def downstream_receive():
@@ -309,18 +508,23 @@ class GovernanceAuthMiddleware:
                     return {"type": "http.request", "body": bytes(body), "more_body": False}
                 return await receive()
 
+        downstream_send = send
+        if admission is not None:
+            downstream_send = _payment_send(send, admission, x402, paid_tool)
         tok_client = _ctx_client.set(client_id)
         tok_scope = _ctx_scope.set(key_scope)
         # Unverified request headers are not approval or sovereign authority.
         tok_sov = _ctx_sovereign.set(False)
         tok_sec = _ctx_second_approver.set(None)
+        tok_pay = _ctx_payment.set(admission)
         try:
-            await self.app(scope, downstream_receive, send)
+            await self.app(scope, downstream_receive, downstream_send)
         finally:
             _ctx_client.reset(tok_client)
             _ctx_scope.reset(tok_scope)
             _ctx_sovereign.reset(tok_sov)
             _ctx_second_approver.reset(tok_sec)
+            _ctx_payment.reset(tok_pay)
 
 
 # ── well-known server card (for Smithery / registry scanning) ───────────────────
@@ -376,9 +580,13 @@ def _server_card() -> dict:
                                       "(Yuyay-13 gate, Khipu receipts, DSSE-signed "
                                       "responses) extended to the world's agents."},
         "authentication": {"required": True,
-                            "schemes": ["apiKey"],
+                            "schemes": ["apiKey"] + (["x402"] if _X402 is not None else []),
                             "note": "Provide an SZL API key as Authorization: Bearer szl_... "
-                                    "An explicit operator scope binding is required."},
+                                    "An explicit operator scope binding is required."
+                                    + (" Alternatively, a Cloudflare Monetization Gateway "
+                                       "PAYMENT-CONTEXT verified at this origin admits "
+                                       "the read-only profile on /mcp/."
+                                       if _X402 is not None else "")},
         "http_transport_policy": _http_transport_policy(),
         "tools": tools, "resources": [
             {"uri": "hatun://khipu/recent", "description": "Recent Khipu receipts"},

@@ -1,0 +1,5 @@
+# Runner for .github/workflows/hf-deploy-contract.yml (Python 3.12). The contract
+# test reads repository files only, so it needs pytest and nothing else.
+# Regenerate surface-contract.txt with:
+#   uv pip compile --generate-hashes --python-version 3.12 requirements/ci/surface-contract.in -o requirements/ci/surface-contract.txt
+pytest

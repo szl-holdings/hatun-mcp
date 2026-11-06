@@ -9,7 +9,9 @@ Transports: admitted read-only stateless Streamable HTTP (/mcp/) for hosted use;
 stdio for local. The HTTP entrypoint disables legacy SSE and message endpoints;
 see docs/HTTP_AUTHENTICATION.md for its explicit capability and binding contract.
 Every tool invocation:
-  1. authenticates the client (API key -> client_id); anonymous => declined.
+  1. authenticates the client (API key -> client_id, or, when the operator enables
+     it, a verified Cloudflare x402 PAYMENT-CONTEXT -> x402:<digest>); anonymous
+     => declined.
   2. runs the Yuyay-13 gate on its input (input-as-data; OWASP MCP06 defense).
   3. computes Hatun_MCP(client_id) reputation factor in [0,1].
   4. requires a 2-person Yuyay gate if the tool is state-changing.
@@ -57,6 +59,11 @@ _ctx_client: ContextVar[Optional[str]] = ContextVar("client_id", default=None)
 _ctx_scope: ContextVar[str] = ContextVar("scope", default="read")
 _ctx_sovereign: ContextVar[bool] = ContextVar("sovereign", default=False)
 _ctx_second_approver: ContextVar[Optional[str]] = ContextVar("second_approver", default=None)
+# Verified x402 payment for this request (a payment_context.PaymentAdmission), set
+# only by the HTTP layer after it verified PAYMENT-CONTEXT. None for every other
+# caller. governed() binds its public facts into the receipt and records the
+# outcome so the HTTP layer can report an upto settlement.
+_ctx_payment: ContextVar[Optional[Any]] = ContextVar("payment", default=None)
 
 DEFAULT_LATENCY_BUDGET = float(os.environ.get("HATUN_MCP_LATENCY_BUDGET", "5.0"))
 ALLOW_ANON = os.environ.get("HATUN_MCP_ALLOW_ANON", "false").lower() == "true"
@@ -101,7 +108,8 @@ mcp = FastMCP(
         "HATUN-MCP — the doctrine-aware MCP server for SZL Holdings. Every tool call "
         "is governed by the PURIQ formula: a Yuyay-13 gate runs on the input, a Khipu "
         "receipt is emitted on success and failure, and the response is DSSE-signed. "
-        "An API key is required; anonymous calls are declined. State-changing tools "
+        "A credential is required: an operator API key, or a verified x402 payment "
+        "where the operator enables it. Anonymous calls are declined. State-changing tools "
         "(e.g. szl_killinchu_cue) require a 2-person Yuyay approval."
     ),
 )
@@ -156,6 +164,7 @@ async def governed(
     scope = _ctx_scope.get()
     sovereign = _ctx_sovereign.get()
     second = _ctx_second_approver.get()
+    payment = _ctx_payment.get()
 
     authenticated = bool(client_id) or ALLOW_ANON
     scope_ok = _scope_ok(scope, needs_scope)
@@ -211,12 +220,17 @@ async def governed(
         }.get(decline["reason"])
         score = puriq_utility(lam=1.0, yuyay=yuyay, hukla_tripwire=tripwire,
                               khipu_chain_ok=chain_ok, hatun_factor=factor)
+        decline_detail = {"decline": decline}
+        if payment is not None:
+            decline_detail["payment"] = payment.receipt_fields()
         r = KHIPU.emit(
             tool=tool, client_id=client_id or "anonymous", operation_id=operation_id,
             status="declined", tripwire=tripwire,
             yuyay_min_axis=yuyay.min_axis_value, hatun_mcp_factor=factor,
-            puriq_score=score, detail={"decline": decline}, signer=SIGNER,
+            puriq_score=score, detail=decline_detail, signer=SIGNER,
         )
+        if payment is not None:
+            payment.record(tool=tool, status="declined")
         if client_id:
             CLIENTS.record(client_id, clean=False)
         return _wrap(
@@ -281,11 +295,15 @@ async def governed(
         "backend": _summ(backend),
         "sovereign_mode": sovereign,
     }
+    if payment is not None:
+        detail["payment"] = payment.receipt_fields()
     r = KHIPU.emit(
         tool=tool, client_id=client_id, operation_id=operation_id,
         status=status, tripwire=tripwire, yuyay_min_axis=yuyay.min_axis_value,
         hatun_mcp_factor=factor, puriq_score=score, detail=detail, signer=SIGNER,
     )
+    if payment is not None:
+        payment.record(tool=tool, status=status)
     CLIENTS.record(client_id, clean=(tripwire is None and status == "success"))
 
     return _wrap(
