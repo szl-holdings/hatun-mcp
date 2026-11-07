@@ -13,8 +13,10 @@ WORKDIR /app
 # Non-root user (HF Spaces best practice; least privilege)
 RUN useradd -m -u 1000 hatun
 
-COPY requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r /app/requirements.txt
+# Hash-pinned install: the same lock CI tests with (requirements/ci/runtime.txt,
+# generated from requirements.txt). pip refuses any artifact whose hash differs.
+COPY requirements/ci/runtime.txt /app/requirements.lock
+RUN pip install --no-cache-dir --disable-pip-version-check --require-hashes -r /app/requirements.lock
 
 # ── Per-file COPY (Doctrine: explicit, auditable, no glob/dir copies) ───────────
 COPY hatun_mcp/__init__.py        /app/hatun_mcp/__init__.py
@@ -22,6 +24,7 @@ COPY hatun_mcp/formulas.py        /app/hatun_mcp/formulas.py
 COPY hatun_mcp/server.py          /app/hatun_mcp/server.py
 COPY hatun_mcp/server_http.py     /app/hatun_mcp/server_http.py
 COPY hatun_mcp/deployment.py      /app/hatun_mcp/deployment.py
+COPY hatun_mcp/payment_context.py /app/hatun_mcp/payment_context.py
 COPY hatun_mcp/console.py         /app/hatun_mcp/console.py
 COPY hatun_mcp/console_v2.py      /app/hatun_mcp/console_v2.py
 COPY hatun_mcp/state.py           /app/hatun_mcp/state.py
@@ -46,6 +49,10 @@ COPY README.md                    /app/README.md
 
 # The DSSE signing key is injected at runtime as a Space secret
 # (HATUN_MCP_SIGNING_KEY, PEM contents). Never baked into the image.
+# The exact source commit is not secret: CI passes it so /api/build-info can
+# report it. Without the build argument the route honestly reports UNAVAILABLE.
+ARG SZL_GIT_SHA=""
+ENV SZL_GIT_SHA=${SZL_GIT_SHA}
 USER hatun
 
 EXPOSE 7860
