@@ -416,3 +416,5 @@ Signed-off-by: Yachay &lt;yachay@szlholdings.ai&gt;
 Co-Authored-By: Perplexity Computer Agent &lt;agent@perplexity.ai&gt;
 
 </sub>
+
+Estate on Hugging Face: models, datasets and Spaces are published under the [SZLHOLDINGS](https://huggingface.co/SZLHOLDINGS) org.
