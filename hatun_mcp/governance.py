@@ -19,6 +19,7 @@ SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import base64
+from copy import deepcopy
 import hashlib
 import json
 import os
@@ -205,7 +206,7 @@ class KhipuReceipt:
     dsse: Optional[dict] = None
 
     def to_dict(self) -> dict:
-        return {k: v for k, v in self.__dict__.items()}
+        return deepcopy(self.__dict__)
 
 
 class KhipuChain:
@@ -213,6 +214,9 @@ class KhipuChain:
 
     Receipt rule (Doctrine v11 §4): packet -> json.dumps(sort_keys=True) -> sha256
     -> hexdigest -> append. prevHash links each receipt to its predecessor.
+    The process owns retained receipt snapshots; callers receive detached
+    copies. This in-memory chain and its best-effort sink do not establish
+    durable delivery or restart recovery.
     """
 
     GENESIS = "0" * 64
@@ -240,6 +244,9 @@ class KhipuChain:
         detail: dict,
         signer: Optional[DsseSigner] = None,
     ) -> KhipuReceipt:
+        # The chain owns its history. Callers may reuse or mutate their input
+        # after emission without changing an already hashed/signed packet.
+        detail = deepcopy(detail)
         with self._lock:
             chain_ok = self._verify_unlocked()
             rid = str(uuid.uuid4())
@@ -281,7 +288,7 @@ class KhipuChain:
             self._receipts.append(r)
             self._last_hash = continuum
         self._forward_to_ledger(r)
-        return r
+        return deepcopy(r)
 
     def _forward_to_ledger(self, r: "KhipuReceipt") -> None:
         """Best-effort, non-blocking forward of a receipt to the unified ledger.
@@ -314,10 +321,15 @@ class KhipuChain:
             # No energy meter in hatun-mcp — honest label, never fabricated.
             "energy": {"label": "UNAVAILABLE", "joules": None},
         }
+        try:
+            # Capture bytes before handing work to another thread. A deferred
+            # sender must never retain caller-owned mutable evidence.
+            data = json.dumps(payload).encode("utf-8")
+        except Exception:
+            return  # best-effort sink failure must not affect the chain
 
         def _send() -> None:
             try:
-                data = json.dumps(payload).encode("utf-8")
                 req = urllib.request.Request(
                     sink.rstrip("/") + "/receipts",
                     data=data,

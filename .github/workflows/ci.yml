@@ -40,6 +40,7 @@ jobs:
           python -m pytest tests/test_server.py tests/test_quorum.py \
             tests/test_adapters.py tests/test_owned_models.py \
             tests/test_owned_model_preflight.py tests/test_governance.py tests/test_http_routes.py \
+            tests/test_chain_gate.py tests/test_ledger_forward.py tests/test_receipt_ownership.py \
             tests/test_console_state.py tests/test_dependency_contract.py \
             tests/test_second_brain_bounded.py tests/test_payment_context.py \
             tests/test_http_payment_admission.py -q
