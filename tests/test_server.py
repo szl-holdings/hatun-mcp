@@ -345,3 +345,18 @@ class TestGithubEstateEnvelope:
                 assert len(calls) == 1
 
         asyncio.run(exercise())
+
+
+def test_server_info_reports_package_version():
+    """serverInfo.version on the wire equals hatun_mcp.__version__ (never empty)."""
+    import asyncio
+    from mcp import Client
+    import hatun_mcp
+
+    async def probe():
+        async with Client(S.mcp) as client:
+            return client.server_info.name, client.server_info.version
+
+    name, version = asyncio.run(probe())
+    assert name == "hatun-mcp"
+    assert version == hatun_mcp.__version__ and version

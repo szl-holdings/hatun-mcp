@@ -34,6 +34,7 @@ from urllib.parse import urlsplit
 from mcp.server.mcpserver import MCPServer
 from mcp.server.transport_security import TransportSecuritySettings
 
+from . import __version__
 from . import backends as B
 from .deployment import PUBLIC_BASE
 from .governance import (
@@ -108,6 +109,9 @@ STREAMABLE_HTTP_SETTINGS = dict(
 
 mcp = MCPServer(
     "hatun-mcp",
+    # serverInfo.version: the package version (bound to the release tag and
+    # server.json by publish-mcp.yml). SDK 2.x defaults it to "".
+    version=__version__,
     instructions=(
         "HATUN-MCP — the doctrine-aware MCP server for SZL Holdings. Every tool call "
         "is governed by the PURIQ formula: a Yuyay-13 gate runs on the input, a Khipu "
