@@ -42,7 +42,7 @@ try:
         from hatun_mcp import adapters as A, server as S
         from hatun_mcp.governance import ClientRegistry, DsseSigner, KhipuChain
         from hatun_mcp.dsse import BlsAggregator
-        from mcp.shared.memory import create_connected_server_and_client_session as connect
+        from mcp import Client as connect
 finally:
     NETWORK_GUARD_ACTIVE = False
 
@@ -343,22 +343,20 @@ class QuorumPreflightTests(unittest.TestCase):
         S._ctx_client.set(None)
 
         async def invoke():
-            async with connect(S.mcp._mcp_server) as client:
-                await client.initialize()
+            async with connect(S.mcp) as client:
                 listed = await client.list_tools()
                 self.assertEqual(1, sum(t.name == "szl_lambda_quorum" for t in listed.tools))
                 result = await client.call_tool("szl_lambda_quorum", {"action": {"op": "check"}})
-                self.assertFalse(result.isError)
+                self.assertFalse(result.is_error)
                 return json.loads(result.content[0].text)
 
         self.assert_declined_before_effects(asyncio.run(invoke()), "no_api_key")
 
     def test_inmemory_mcp_authorized_fake_adapter_calls(self):
         async def invoke():
-            async with connect(S.mcp._mcp_server) as client:
-                await client.initialize()
+            async with connect(S.mcp) as client:
                 result = await client.call_tool("szl_lambda_quorum", {"action": {"op": "check"}})
-                self.assertFalse(result.isError)
+                self.assertFalse(result.is_error)
                 return json.loads(result.content[0].text)
 
         out = asyncio.run(invoke())
