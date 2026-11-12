@@ -29,21 +29,27 @@ jobs:
       - name: Install Syft (pinned, with retry)
         env:
           SYFT_VERSION: v1.45.1
+          # SHA-256 of syft_1.45.1_linux_amd64.tar.gz, copied from the release's
+          # syft_1.45.1_checksums.txt (SCPIN-CURL-1); bumping SYFT_VERSION needs a new value.
+          SYFT_SHA256: "20c84195e24927f50a3b2269946be51f4c4abc9d2f145fee7388b4199149f716"
         run: |
           set -euo pipefail
           ok=""
           for i in 1 2 3 4 5; do
-            if curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh \
-                 | sh -s -- -b /usr/local/bin "${SYFT_VERSION}"; then
+            if curl -sSfLo /tmp/syft.tar.gz \
+                 "https://github.com/anchore/syft/releases/download/${SYFT_VERSION}/syft_${SYFT_VERSION#v}_linux_amd64.tar.gz"; then
               ok="1"; break
             fi
-            echo "syft install attempt ${i} failed; retrying in $((i*5))s"
+            echo "syft download attempt ${i} failed; retrying in $((i*5))s"
             sleep $((i*5))
           done
           if [ -z "${ok}" ]; then
-            echo "::error::failed to install syft ${SYFT_VERSION} after 5 attempts"
+            echo "::error::failed to download syft ${SYFT_VERSION} after 5 attempts"
             exit 1
           fi
+          echo "${SYFT_SHA256}  /tmp/syft.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/syft.tar.gz -C /usr/local/bin syft
+          rm -f /tmp/syft.tar.gz
           syft version
 
       - name: Generate SBOM (SPDX JSON)
