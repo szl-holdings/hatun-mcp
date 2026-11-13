@@ -915,6 +915,7 @@ _INDEX_JSON = {
     "service": "hatun-mcp", "tagline": "the great context protocol",
     "mcp_endpoint": "/mcp/", "sse_endpoint": None,
     "server_card": "/.well-known/mcp/server-card.json",
+    "oauth_protected_resource": OAUTH_PROTECTED_RESOURCE_PATH,
     "manifest_attestation": MCP_MANIFEST_ATTESTATION_PATH,
     "connect": "/connect",
     "healthz": "/healthz", "readyz": "/readyz", "build_info": "/api/build-info",
