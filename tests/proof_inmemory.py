@@ -23,7 +23,7 @@ os.environ["HATUN_MCP_DISABLE_DYNAMIC"] = "true"
 os.environ.pop("SZL_RECEIPT_SINK", None)
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from mcp.shared.memory import create_connected_server_and_client_session as connect
+from mcp import Client as connect
 
 # import the real server module; set a demo authenticated context for local proof
 from hatun_mcp import server as S
@@ -33,11 +33,11 @@ S._set_test_context(client_id="szl_proof_demo", scope="admin")
 
 
 async def main():
-    async with connect(S.mcp._mcp_server) as client:
-        init = await client.initialize()
+    async with connect(S.mcp) as client:
+        # MCP SDK 2.x: Client connects (initialize/discover) on enter.
         print("== initialize ==")
-        print("  serverInfo:", init.serverInfo.name, init.serverInfo.version)
-        print("  protocolVersion:", init.protocolVersion)
+        print("  serverInfo:", client.server_info.name, client.server_info.version)
+        print("  protocolVersion:", client.protocol_version)
 
         listed = await client.list_tools()
         names = [t.name for t in listed.tools]
@@ -46,8 +46,8 @@ async def main():
             print(f"  - {t.name}")
         # show one full schema (the new tool) to prove real inputSchema
         fe = next(t for t in listed.tools if t.name == "szl_formula_evaluate")
-        print("\n  szl_formula_evaluate.inputSchema:")
-        print("   ", json.dumps(fe.inputSchema, separators=(",", ":")))
+        print("\n  szl_formula_evaluate.input_schema:")
+        print("   ", json.dumps(fe.input_schema, separators=(",", ":")))
 
         print("\n== tools/call szl_formula_evaluate (PURIQ master operator) ==")
         r = await client.call_tool(

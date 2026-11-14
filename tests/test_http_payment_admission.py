@@ -255,8 +255,8 @@ class X402AdmissionTests(unittest.TestCase):
     def test_settlement_relies_on_json_responses_sent_after_the_tool_returns(self):
         # With SSE streaming the response would start before the governed call ends,
         # and every paid call would report 0. Keep that dependency explicit.
-        self.assertIs(http.mcp.settings.json_response, True)
-        self.assertIs(http.mcp.settings.stateless_http, True)
+        self.assertIs(http.mcp.session_manager.json_response, True)
+        self.assertIs(http.mcp.session_manager.stateless, True)
 
     def test_real_mcp_protocol_with_payment_admission(self):
         env = dict(os.environ, HATUN_MCP_DISABLE_DYNAMIC="true",

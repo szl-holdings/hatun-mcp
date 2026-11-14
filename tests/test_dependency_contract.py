@@ -1,4 +1,4 @@
-"""Fail-closed tests for Hatun's FastMCP dependency contract."""
+"""Fail-closed tests for Hatun's MCP SDK (MCPServer, 2.x) dependency contract."""
 
 import re
 from importlib import metadata
@@ -18,18 +18,18 @@ def _mcp_requirement() -> str:
     raise AssertionError("requirements.txt must declare the mcp runtime dependency")
 
 
-def test_mcp_runtime_stays_on_the_fastmcp_compatible_major() -> None:
+def test_mcp_runtime_stays_on_the_mcpserver_compatible_major() -> None:
     requirement = _mcp_requirement()
-    assert re.search(r"<\s*2(?:\D|$)", requirement), (
-        "Hatun imports mcp.server.fastmcp and must fail closed before mcp 2.x"
+    assert re.search(r">=\s*2\.", requirement) and re.search(r"<\s*3(?:\D|$)", requirement), (
+        "Hatun imports mcp.server.mcpserver (SDK 2.x) and must fail closed before mcp 3.x"
     )
 
     installed_version = metadata.version("mcp")
-    assert installed_version.split(".", 1)[0] == "1", installed_version
+    assert installed_version.split(".", 1)[0] == "2", installed_version
 
-    from mcp.server.fastmcp import FastMCP
+    from mcp.server.mcpserver import MCPServer
 
-    assert FastMCP is not None
+    assert MCPServer is not None
 
 
 def test_dependabot_cannot_reopen_the_mcp_major_version_outage() -> None:
