@@ -72,6 +72,7 @@ ALLOWED_ORIGINS = set(
 )
 
 MCP_MANIFEST_PATH = "/.well-known/mcp"
+OAUTH_PROTECTED_RESOURCE_PATH = "/.well-known/oauth-protected-resource"
 MCP_MANIFEST_URI = f"{PUBLIC_BASE}{MCP_MANIFEST_PATH}"
 MCP_MANIFEST_ATTESTATION_PATH = "/.well-known/mcp-manifest-attestation"
 MCP_MANIFEST_ATTESTATION_URI = f"{PUBLIC_BASE}{MCP_MANIFEST_ATTESTATION_PATH}"
@@ -883,6 +884,30 @@ async def pubkey(request: Request):
     return PlainTextResponse(pem, media_type="application/x-pem-file")
 
 
+async def oauth_protected_resource(request: Request):
+    """RFC 9728 Protected Resource Metadata (MCP OAuth 2.1 discovery).
+
+    Advertises this process as an OAuth protected resource. No authorization
+    server is configured in-repo yet — operator HTTP admission remains static
+    bearer keys and optional x402 (see docs/HTTP_AUTHENTICATION.md) — so
+    ``authorization_servers`` is empty. ``protocol_revision`` is not bumped
+    until an authorization server actually fronts this endpoint.
+    """
+    del request
+    return JSONResponse(
+        {
+            "resource": f"{PUBLIC_BASE}/mcp/",
+            "authorization_servers": [],
+            "bearer_methods_supported": ["header"],
+            "resource_documentation": (
+                "https://github.com/szl-holdings/hatun-mcp/blob/main/"
+                "docs/HTTP_AUTHENTICATION.md"
+            ),
+        },
+        headers={"Cache-Control": "no-store"},
+    )
+
+
 # The canonical JSON service descriptor.
 # Returned to API/MCP clients (Accept: application/json, or no text/html). MCP
 # transport handshakes never see HTML.
@@ -890,6 +915,7 @@ _INDEX_JSON = {
     "service": "hatun-mcp", "tagline": "the great context protocol",
     "mcp_endpoint": "/mcp/", "sse_endpoint": None,
     "server_card": "/.well-known/mcp/server-card.json",
+    "oauth_protected_resource": OAUTH_PROTECTED_RESOURCE_PATH,
     "manifest_attestation": MCP_MANIFEST_ATTESTATION_PATH,
     "connect": "/connect",
     "healthz": "/healthz", "readyz": "/readyz", "build_info": "/api/build-info",
@@ -953,6 +979,7 @@ app = Starlette(
         Route("/pubkey", pubkey),
         Route("/connect", connect),
         Route("/.well-known/mcp/server-card.json", server_card),
+        Route(OAUTH_PROTECTED_RESOURCE_PATH, oauth_protected_resource),
         Route("/.well-known/mcp", server_card_alias),
         Route("/.well-known/mcp/", server_card_alias),
         Route(MCP_MANIFEST_ATTESTATION_PATH, manifest_attestation),

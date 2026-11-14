@@ -343,6 +343,19 @@ def test_index_json_advertises_trailing_slash_mcp():
     assert j["connect"] == "/connect"
     assert j["readyz"] == "/readyz"
     assert j["docs"] == REPO
+    assert j["oauth_protected_resource"] == "/.well-known/oauth-protected-resource"
+
+
+def test_oauth_protected_resource_metadata_is_rfc9728_discovery():
+    r = client.get("/.well-known/oauth-protected-resource")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["resource"] == f"{BASE}/mcp/"
+    assert body["authorization_servers"] == []
+    assert body["bearer_methods_supported"] == ["header"]
+    assert body["resource_documentation"].endswith("docs/HTTP_AUTHENTICATION.md")
+    assert r.headers["cache-control"] == "no-store"
+    assert r.headers["content-type"].startswith("application/json")
 
 
 def test_healthz_and_pubkey_resolve():
@@ -422,6 +435,7 @@ def test_security_headers_on_every_route():
         ("/", "text/html"),
         ("/healthz", "application/json"),
         ("/readyz", "application/json"),
+        ("/.well-known/oauth-protected-resource", "application/json"),
     ):
         r = client.get(path, headers={"accept": accept})
         assert r.status_code in {200, 503}, path
