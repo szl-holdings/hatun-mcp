@@ -95,6 +95,9 @@ def test_emit_reports_actual_pre_append_chain_state() -> None:
     assert first.chain_verified is True
     assert chain.verify() is True
 
+    # Public receipt snapshots are detached; deliberately corrupt private
+    # storage here to exercise the independent chain-integrity gate.
+    first = chain._receipts[0]
     first.chain_verified = False
     assert chain.verify() is False
     first.chain_verified = True
@@ -116,6 +119,7 @@ def test_corrupt_chain_declines_before_state_changing_backend(monkeypatch) -> No
 
     chain = KhipuChain()
     first = _emit(chain, operation_id="first")
+    first = chain._receipts[0]
     first.continuum_hash = "f" * 64
     assert chain.verify() is False
 
