@@ -6,8 +6,9 @@ import json
 import os
 import sys
 
+import httpx2
 from mcp import ClientSession
-from mcp.client.streamable_http import streamablehttp_client
+from mcp.client.streamable_http import streamable_http_client
 
 URL = os.environ.get("HATUN_MCP_URL", "http://127.0.0.1:7860/mcp")
 KEY = os.environ.get("HATUN_MCP_TEST_KEY", "szl_test_demo_smoke0001")
@@ -15,7 +16,9 @@ KEY = os.environ.get("HATUN_MCP_TEST_KEY", "szl_test_demo_smoke0001")
 
 async def main():
     headers = {"Authorization": f"Bearer {KEY}", "X-Api-Key": KEY}
-    async with streamablehttp_client(URL, headers=headers) as (read, write, _):
+    # MCP SDK 2.x: headers ride on a caller-supplied httpx2 client.
+    async with httpx2.AsyncClient(headers=headers) as http_client, \
+            streamable_http_client(URL, http_client=http_client) as (read, write):
         async with ClientSession(read, write) as session:
             await session.initialize()
             tools = await session.list_tools()
