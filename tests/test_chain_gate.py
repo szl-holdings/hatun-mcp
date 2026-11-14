@@ -24,7 +24,7 @@ def _install_mcp_import_stub(monkeypatch) -> bool:
     """Provide only the decorators needed to import the offline server module."""
 
     try:
-        __import__("mcp.server.fastmcp")
+        __import__("mcp.server.mcpserver")
         return False
     except ModuleNotFoundError:
         pass
@@ -52,7 +52,7 @@ def _install_mcp_import_stub(monkeypatch) -> bool:
         def get_tool(self, name):
             return self._tools[name]
 
-    class FastMCP:
+    class MCPServer:
         def __init__(self, *args, **kwargs):
             self._tool_manager = _ToolManager()
 
@@ -75,16 +75,16 @@ def _install_mcp_import_stub(monkeypatch) -> bool:
 
     mcp_module = types.ModuleType("mcp")
     server_module = types.ModuleType("mcp.server")
-    fastmcp_module = types.ModuleType("mcp.server.fastmcp")
+    mcpserver_module = types.ModuleType("mcp.server.mcpserver")
     transport_module = types.ModuleType("mcp.server.transport_security")
-    fastmcp_module.FastMCP = FastMCP
+    mcpserver_module.MCPServer = MCPServer
     transport_module.TransportSecuritySettings = TransportSecuritySettings
     mcp_module.server = server_module
-    server_module.fastmcp = fastmcp_module
+    server_module.mcpserver = mcpserver_module
     server_module.transport_security = transport_module
     monkeypatch.setitem(sys.modules, "mcp", mcp_module)
     monkeypatch.setitem(sys.modules, "mcp.server", server_module)
-    monkeypatch.setitem(sys.modules, "mcp.server.fastmcp", fastmcp_module)
+    monkeypatch.setitem(sys.modules, "mcp.server.mcpserver", mcpserver_module)
     monkeypatch.setitem(sys.modules, "mcp.server.transport_security", transport_module)
     return True
 

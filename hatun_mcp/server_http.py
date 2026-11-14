@@ -38,7 +38,7 @@ from starlette.routing import Mount, Route
 from .deployment import PUBLIC_BASE
 from . import server as _server
 from .server import (
-    SIGNER, CLIENTS, KHIPU, mcp,
+    SIGNER, CLIENTS, KHIPU, mcp, STREAMABLE_HTTP_SETTINGS,
     _ctx_client, _ctx_scope, _ctx_sovereign, _ctx_second_approver, _ctx_payment,
 )
 from .payment_context import (
@@ -931,7 +931,7 @@ async def index(request: Request):
 # at "/mcp" maps cleanly (no trailing-slash redirect), and we pass its lifespan up.
 import contextlib
 
-http_app = mcp.streamable_http_app()
+http_app = mcp.streamable_http_app(**STREAMABLE_HTTP_SETTINGS)
 
 
 @contextlib.asynccontextmanager

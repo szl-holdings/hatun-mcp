@@ -70,7 +70,7 @@ is configured; without one the signer runs in explicit `PLACEHOLDER` mode and
 ## What this is
 
 A **real, operational** Model Context Protocol server built on the official `mcp`
-Python SDK (`mcp.server.fastmcp.FastMCP`). Every tool call is governed by the PURIQ
+Python SDK 2.x (`mcp.server.mcpserver.MCPServer`, formerly `FastMCP`). Every tool call is governed by the PURIQ
 formula:
 
 1. **Authenticate** the client (SZL API key → `client_id`, or, when the operator enables it,

@@ -31,9 +31,10 @@ from contextvars import ContextVar
 from typing import Any, Optional
 from urllib.parse import urlsplit
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 from mcp.server.transport_security import TransportSecuritySettings
 
+from . import __version__
 from . import backends as B
 from .deployment import PUBLIC_BASE
 from .governance import (
@@ -91,19 +92,26 @@ _transport_security = TransportSecuritySettings(
     allowed_origins=_allowed_origins if not _disable_host_pin else ["*"],
 )
 
-mcp = FastMCP(
-    "hatun-mcp",
+# MCP SDK 2.x: transport settings are no longer constructor arguments; they are
+# passed to ``streamable_http_app()`` (see hatun_mcp.server_http). Keep them here,
+# next to the server definition, so the transport contract has one source.
+STREAMABLE_HTTP_SETTINGS = dict(
     transport_security=_transport_security,
     # Serve the MCP endpoints at the mount root so a Starlette Mount("/mcp") maps to
     # the actual MCP endpoint with no double-prefix and no trailing-slash 404.
     streamable_http_path="/",
-    sse_path="/",
-    message_path="/messages/",
     # Stateless Streamable HTTP: each POST is self-contained (no server-held session
     # id). Required behind the HF Spaces reverse proxy, which does not guarantee
     # worker affinity — a stateful session manager would 400 on the follow-up call.
     stateless_http=True,
     json_response=True,
+)
+
+mcp = MCPServer(
+    "hatun-mcp",
+    # serverInfo.version: the package version (bound to the release tag and
+    # server.json by publish-mcp.yml). SDK 2.x defaults it to "".
+    version=__version__,
     instructions=(
         "HATUN-MCP — the doctrine-aware MCP server for SZL Holdings. Every tool call "
         "is governed by the PURIQ formula: a Yuyay-13 gate runs on the input, a Khipu "
@@ -496,7 +504,7 @@ async def szl_github_estate_snapshot() -> dict:
     )
 
 
-# FastMCP v1 normally ignores extra arguments. Enforce this tool's parameterless
+# MCPServer (FastMCP in SDK 1.x) normally ignores extra arguments. Enforce this tool's parameterless
 # contract in its Pydantic argument validator as well as its discovery schema.
 # Keep this scoped to the observer; existing tool argument behavior is unchanged.
 _estate_tool = mcp._tool_manager.get_tool("szl_github_estate_snapshot")

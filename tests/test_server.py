@@ -314,7 +314,7 @@ class TestGithubEstateEnvelope:
         assert result["khipu_receipt"]["chain_verified"] is True
 
     def test_mcp_protocol_catalog_call_and_rejection(self, monkeypatch):
-        from mcp.shared.memory import create_connected_server_and_client_session as connect
+        from mcp import Client as connect
         from hatun_mcp import server_http
 
         calls = []
@@ -326,23 +326,37 @@ class TestGithubEstateEnvelope:
         monkeypatch.setattr(S.B, "github_estate_snapshot", backend)
 
         async def exercise():
-            async with connect(S.mcp._mcp_server) as client:
-                await client.initialize()
+            async with connect(S.mcp) as client:
                 listed = await client.list_tools()
                 assert len(listed.tools) == 26
                 tool = next(t for t in listed.tools if t.name == "szl_github_estate_snapshot")
-                assert tool.inputSchema["properties"] == {}
-                assert tool.inputSchema["additionalProperties"] is False
+                assert tool.input_schema["properties"] == {}
+                assert tool.input_schema["additionalProperties"] is False
                 card_tool = next(t for t in server_http._server_card()["tools"] if t["name"] == tool.name)
                 assert card_tool["inputSchema"]["properties"] == {}
                 assert card_tool["inputSchema"]["additionalProperties"] is False
                 rejected = await client.call_tool(tool.name, {"url": "https://invalid.example"})
-                assert rejected.isError is True
+                assert rejected.is_error is True
                 assert calls == []
                 result = await client.call_tool(tool.name, {})
-                assert result.isError is False
+                assert result.is_error is False
                 body = json.loads(result.content[0].text)
                 _assert_envelope(body, "success")
                 assert len(calls) == 1
 
         asyncio.run(exercise())
+
+
+def test_server_info_reports_package_version():
+    """serverInfo.version on the wire equals hatun_mcp.__version__ (never empty)."""
+    import asyncio
+    from mcp import Client
+    import hatun_mcp
+
+    async def probe():
+        async with Client(S.mcp) as client:
+            return client.server_info.name, client.server_info.version
+
+    name, version = asyncio.run(probe())
+    assert name == "hatun-mcp"
+    assert version == hatun_mcp.__version__ and version
