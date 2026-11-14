@@ -5,9 +5,13 @@ hatun_mcp.server — HATUN-MCP, the doctrine-aware MCP server.
 in the PURIQ Kallpa wires that extends SZL governance — Yuyay-13 gate, HUKLLA
 tripwires, Khipu receipts, the PURIQ master formula — to the world's MCP clients.
 
-Transports: Streamable HTTP (/mcp) + legacy SSE (/sse) for hosted use; stdio for
-local. Every tool invocation:
-  1. authenticates the client (API key -> client_id); anonymous => declined.
+Transports: admitted read-only stateless Streamable HTTP (/mcp/) for hosted use;
+stdio for local. The HTTP entrypoint disables legacy SSE and message endpoints;
+see docs/HTTP_AUTHENTICATION.md for its explicit capability and binding contract.
+Every tool invocation:
+  1. authenticates the client (API key -> client_id, or, when the operator enables
+     it, a verified Cloudflare x402 PAYMENT-CONTEXT -> x402:<digest>); anonymous
+     => declined.
   2. runs the Yuyay-13 gate on its input (input-as-data; OWASP MCP06 defense).
   3. computes Hatun_MCP(client_id) reputation factor in [0,1].
   4. requires a 2-person Yuyay gate if the tool is state-changing.
@@ -25,11 +29,13 @@ import os
 import time
 from contextvars import ContextVar
 from typing import Any, Optional
+from urllib.parse import urlsplit
 
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 
 from . import backends as B
+from .deployment import PUBLIC_BASE
 from .governance import (
     DOCTRINE,
     ClientRegistry,
@@ -53,24 +59,29 @@ _ctx_client: ContextVar[Optional[str]] = ContextVar("client_id", default=None)
 _ctx_scope: ContextVar[str] = ContextVar("scope", default="read")
 _ctx_sovereign: ContextVar[bool] = ContextVar("sovereign", default=False)
 _ctx_second_approver: ContextVar[Optional[str]] = ContextVar("second_approver", default=None)
+# Verified x402 payment for this request (a payment_context.PaymentAdmission), set
+# only by the HTTP layer after it verified PAYMENT-CONTEXT. None for every other
+# caller. governed() binds its public facts into the receipt and records the
+# outcome so the HTTP layer can report an upto settlement.
+_ctx_payment: ContextVar[Optional[Any]] = ContextVar("payment", default=None)
 
 DEFAULT_LATENCY_BUDGET = float(os.environ.get("HATUN_MCP_LATENCY_BUDGET", "5.0"))
 ALLOW_ANON = os.environ.get("HATUN_MCP_ALLOW_ANON", "false").lower() == "true"
 
-# DNS-rebinding / Host-header validation. Behind the HF Spaces reverse proxy the
-# forwarded Host is the public hostname, which the SDK's default (localhost-only)
-# policy rejects with HTTP 421 "Invalid Host header". We explicitly allow the
-# hosted hostname (and operator-supplied extras via env) while keeping our own
+# DNS-rebinding / Host-header validation. Pin the configured runtime origin's
+# authority (including its port) so the SDK admits the endpoint advertised by
+# /connect. Additional reverse-proxy hosts require operator configuration.
+# Keep our own
 # Origin validation in GovernanceAuthMiddleware as the primary DNS-rebinding
 # defense. Set HATUN_MCP_ALLOWED_HOSTS="*" to disable host pinning entirely.
 _hosts_env = os.environ.get(
     "HATUN_MCP_ALLOWED_HOSTS",
-    "szlholdings-hatun-mcp.hf.space,*.hf.space,localhost,127.0.0.1",
+    f"{urlsplit(PUBLIC_BASE).netloc},localhost,127.0.0.1",
 )
 _allowed_hosts = [h.strip() for h in _hosts_env.split(",") if h.strip()]
 _origins_env = os.environ.get(
     "HATUN_MCP_ALLOWED_ORIGINS",
-    "https://szlholdings-hatun-mcp.hf.space,https://smithery.ai,http://localhost",
+    f"{PUBLIC_BASE},https://smithery.ai,http://localhost",
 )
 _allowed_origins = [o.strip() for o in _origins_env.split(",") if o.strip()]
 _disable_host_pin = ("*" in _allowed_hosts) or ("*" in _allowed_origins)
@@ -97,7 +108,8 @@ mcp = FastMCP(
         "HATUN-MCP — the doctrine-aware MCP server for SZL Holdings. Every tool call "
         "is governed by the PURIQ formula: a Yuyay-13 gate runs on the input, a Khipu "
         "receipt is emitted on success and failure, and the response is DSSE-signed. "
-        "An API key is required; anonymous calls are declined. State-changing tools "
+        "A credential is required: an operator API key, or a verified x402 payment "
+        "where the operator enables it. Anonymous calls are declined. State-changing tools "
         "(e.g. szl_killinchu_cue) require a 2-person Yuyay approval."
     ),
 )
@@ -152,6 +164,7 @@ async def governed(
     scope = _ctx_scope.get()
     sovereign = _ctx_sovereign.get()
     second = _ctx_second_approver.get()
+    payment = _ctx_payment.get()
 
     authenticated = bool(client_id) or ALLOW_ANON
     scope_ok = _scope_ok(scope, needs_scope)
@@ -168,8 +181,18 @@ async def governed(
     )
 
     # 3. Hard declines (default-decline; receipted) BEFORE any backend call.
+    chain_ok = KHIPU.verify()
     decline = None
-    if not authenticated:
+    if not chain_ok:
+        decline = {
+            "reason": "receipt_chain_invalid",
+            "owasp_class": "T01",
+            "message": (
+                "The Khipu receipt chain failed verification. The backend call "
+                "was not started."
+            ),
+        }
+    elif not authenticated:
         decline = {"reason": "no_api_key", "owasp_class": "MCP07",
                    "message": "Anonymous tool calls are declined. Provide an SZL API key."}
     elif not scope_ok:
@@ -191,15 +214,23 @@ async def governed(
         # Close the un-awaited backend coroutine to avoid a leak (we decline before calling it).
         if backend_coro is not None and hasattr(backend_coro, "close"):
             backend_coro.close()
-        tripwire = "T09" if decline["reason"] == "yuyay_axis_below_floor" else None
+        tripwire = {
+            "receipt_chain_invalid": "T01",
+            "yuyay_axis_below_floor": "T09",
+        }.get(decline["reason"])
         score = puriq_utility(lam=1.0, yuyay=yuyay, hukla_tripwire=tripwire,
-                              khipu_chain_ok=True, hatun_factor=factor)
+                              khipu_chain_ok=chain_ok, hatun_factor=factor)
+        decline_detail = {"decline": decline}
+        if payment is not None:
+            decline_detail["payment"] = payment.receipt_fields()
         r = KHIPU.emit(
             tool=tool, client_id=client_id or "anonymous", operation_id=operation_id,
             status="declined", tripwire=tripwire,
             yuyay_min_axis=yuyay.min_axis_value, hatun_mcp_factor=factor,
-            puriq_score=score, detail={"decline": decline}, signer=SIGNER,
+            puriq_score=score, detail=decline_detail, signer=SIGNER,
         )
+        if payment is not None:
+            payment.record(tool=tool, status="declined")
         if client_id:
             CLIENTS.record(client_id, clean=False)
         return _wrap(
@@ -264,11 +295,15 @@ async def governed(
         "backend": _summ(backend),
         "sovereign_mode": sovereign,
     }
+    if payment is not None:
+        detail["payment"] = payment.receipt_fields()
     r = KHIPU.emit(
         tool=tool, client_id=client_id, operation_id=operation_id,
         status=status, tripwire=tripwire, yuyay_min_axis=yuyay.min_axis_value,
         hatun_mcp_factor=factor, puriq_score=score, detail=detail, signer=SIGNER,
     )
+    if payment is not None:
+        payment.record(tool=tool, status=status)
     CLIENTS.record(client_id, clean=(tripwire is None and status == "success"))
 
     return _wrap(
@@ -665,7 +700,7 @@ async def szl_lambda_quorum(action: dict, context: Any = None,
     """Governance-critical Λ verdict under a Byzantine n>=3f+1 quorum (n=5, f=1).
 
     Fans the action out to the five SZL organs' policy/verdict routes, collects each
-    organ's verdict, and decides only if >= 2f+1 (=3) reachable organs AGREE and
+    organ's verdict, and decides only if >= floor((n+f)/2)+1 (=4) organs AGREE and
     >= 3f+1 (=4) organs are reachable. Each organ's contribution mints a Khipu
     receipt; the participating receipts are BLS-aggregated into one signature. The
     full quorum tally + aggregate ride in `governance.quorum`. HONEST: each organ's

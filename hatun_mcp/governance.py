@@ -19,6 +19,7 @@ SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import base64
+from copy import deepcopy
 import hashlib
 import json
 import os
@@ -205,7 +206,7 @@ class KhipuReceipt:
     dsse: Optional[dict] = None
 
     def to_dict(self) -> dict:
-        return {k: v for k, v in self.__dict__.items()}
+        return deepcopy(self.__dict__)
 
 
 class KhipuChain:
@@ -213,6 +214,9 @@ class KhipuChain:
 
     Receipt rule (Doctrine v11 §4): packet -> json.dumps(sort_keys=True) -> sha256
     -> hexdigest -> append. prevHash links each receipt to its predecessor.
+    The process owns retained receipt snapshots; callers receive detached
+    copies. This in-memory chain and its best-effort sink do not establish
+    durable delivery or restart recovery.
     """
 
     GENESIS = "0" * 64
@@ -240,7 +244,11 @@ class KhipuChain:
         detail: dict,
         signer: Optional[DsseSigner] = None,
     ) -> KhipuReceipt:
+        # The chain owns its history. Callers may reuse or mutate their input
+        # after emission without changing an already hashed/signed packet.
+        detail = deepcopy(detail)
         with self._lock:
+            chain_ok = self._verify_unlocked()
             rid = str(uuid.uuid4())
             ts = time.time()
             packet = {
@@ -255,6 +263,7 @@ class KhipuChain:
                 "hatun_mcp_factor": hatun_mcp_factor,
                 "puriq_score": puriq_score,
                 "detail": detail,
+                "chain_verified": chain_ok,
                 "prev_hash": self._last_hash,
             }
             continuum = self._hash_packet(packet)
@@ -266,7 +275,7 @@ class KhipuChain:
                 client_id=client_id,
                 operation_id=operation_id,
                 status=status,
-                chain_verified=True,
+                chain_verified=chain_ok,
                 prev_hash=self._last_hash,
                 continuum_hash=continuum,
                 tripwire=tripwire,
@@ -279,7 +288,7 @@ class KhipuChain:
             self._receipts.append(r)
             self._last_hash = continuum
         self._forward_to_ledger(r)
-        return r
+        return deepcopy(r)
 
     def _forward_to_ledger(self, r: "KhipuReceipt") -> None:
         """Best-effort, non-blocking forward of a receipt to the unified ledger.
@@ -312,10 +321,15 @@ class KhipuChain:
             # No energy meter in hatun-mcp — honest label, never fabricated.
             "energy": {"label": "UNAVAILABLE", "joules": None},
         }
+        try:
+            # Capture bytes before handing work to another thread. A deferred
+            # sender must never retain caller-owned mutable evidence.
+            data = json.dumps(payload).encode("utf-8")
+        except Exception:
+            return  # best-effort sink failure must not affect the chain
 
         def _send() -> None:
             try:
-                data = json.dumps(payload).encode("utf-8")
                 req = urllib.request.Request(
                     sink.rstrip("/") + "/receipts",
                     data=data,
@@ -331,8 +345,8 @@ class KhipuChain:
         except Exception:
             pass
 
-    def verify(self) -> bool:
-        """Recompute the whole chain — auditor-grade ('verify our logs')."""
+    def _verify_unlocked(self) -> bool:
+        """Recompute the chain while the caller holds ``self._lock``."""
         prev = self.GENESIS
         for r in self._receipts:
             packet = {
@@ -342,12 +356,18 @@ class KhipuChain:
                 "yuyay_min_axis": r.yuyay_min_axis,
                 "hatun_mcp_factor": r.hatun_mcp_factor,
                 "puriq_score": r.puriq_score, "detail": r.detail,
+                "chain_verified": r.chain_verified,
                 "prev_hash": prev,
             }
             if r.prev_hash != prev or self._hash_packet(packet) != r.continuum_hash:
                 return False
             prev = r.continuum_hash
-        return True
+        return self._last_hash == prev
+
+    def verify(self) -> bool:
+        """Recompute the whole chain - auditor-grade ('verify our logs')."""
+        with self._lock:
+            return self._verify_unlocked()
 
     def recent(self, n: int = 20) -> list[dict]:
         with self._lock:

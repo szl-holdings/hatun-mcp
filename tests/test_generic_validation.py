@@ -74,7 +74,8 @@ class GenericValidationTests(unittest.TestCase):
         )
         return module.console_state(mcp=mcp, khipu=chain, signer=signer, doctrine=doctrine)
 
-    def backend(self, result=None, *, raises=False, evidence=False, authenticated=True):
+    def backend(self, result=None, *, raises=False, evidence=False, authenticated=True,
+                payment=None, gate_passes=True):
         receipts, recorded = [], []
 
         def emit(**kwargs):
@@ -87,9 +88,14 @@ class GenericValidationTests(unittest.TestCase):
             DEFAULT_LATENCY_BUDGET=1, ALLOW_ANON=False,
             _ctx_client=context("synthetic-client" if authenticated else None),
             _ctx_scope=context("read"), _ctx_sovereign=context(False), _ctx_second_approver=context(None),
+            _ctx_payment=context(payment),
             CLIENTS=SimpleNamespace(reputation=lambda _: 1, record=lambda _, **kw: recorded.append(kw)),
             KHIPU=SimpleNamespace(verify=lambda: True, emit=emit), SIGNER=object(),
-            yuyay_gate=lambda _: SimpleNamespace(passed=True, min_axis_value=1, scores={}),
+            yuyay_gate=lambda _: SimpleNamespace(
+                passed=gate_passes, min_axis_value=1,
+                scores={} if gate_passes else {"axis": 0.0},
+                blocked_axis=None if gate_passes else "axis"),
+            YUYAY_FLOORS={"axis": 0.9},
             hatun_mcp_factor=lambda **_: 1, puriq_utility=lambda **_: 1,
             hukla_check=lambda **_: None, _wrap=lambda **kw: kw,
             B=SimpleNamespace(GITHUB_ESTATE_SCHEMA="synthetic/v1", _github_canonical_digest=lambda _: "digest"),
@@ -153,6 +159,7 @@ class GenericValidationTests(unittest.TestCase):
             return verification
         values = dict(SIGNER=signer, KHIPU=SimpleNamespace(verify=verify),
                       DOCTRINE=dict(protocol_revision="synthetic"),
+                      http_auth_configured=lambda: True,
                       JSONResponse=lambda content, **kw: dict(content=content, **kw))
         if hasattr(helper, "observed_signer_mode"):
             values["observed_signer_mode"] = helper.observed_signer_mode
@@ -238,6 +245,34 @@ class GenericValidationTests(unittest.TestCase):
         self.assertEqual(out["status"], "declined")
         self.assertEqual(receipts[0]["status"], "declined")
         self.assertEqual(called, [])
+
+    def payment(self):
+        outcomes = []
+        fields = {"protocol": "x402", "context_sha256": "a" * 64, "settlement_evidence": False}
+        stub = SimpleNamespace(
+            receipt_fields=lambda: dict(fields),
+            record=lambda **kw: outcomes.append((kw["tool"], kw["status"])),
+        )
+        return stub, fields, outcomes
+
+    def test_payment_facts_are_receipted_and_outcomes_recorded(self):
+        ok = dict(deployed=True, error=None, http_status=200)
+        for result, gate, expected in ((ok, True, "success"), (dict(ok, error="x"), True, "failure"),
+                                       (ok, False, "declined")):
+            with self.subTest(expected=expected):
+                stub, fields, outcomes = self.payment()
+                out, receipts, _, called = self.backend(result, payment=stub, gate_passes=gate)
+                self.assertEqual(out["status"], expected)
+                self.assertEqual(receipts[0]["detail"]["payment"], fields)
+                self.assertEqual(outcomes, [("audit_echo", expected)])
+                self.assertEqual(called, [] if expected == "declined" else [True])
+
+    def test_operator_receipts_carry_no_payment_facts(self):
+        out, receipts, _, _ = self.backend(dict(deployed=True, error=None, http_status=200))
+        self.assertEqual(out["status"], "success")
+        self.assertNotIn("payment", receipts[0]["detail"])
+        out, receipts, _, _ = self.backend(authenticated=False)
+        self.assertNotIn("payment", receipts[0]["detail"])
 
     def test_evidence_contract_retains_stricter_classification(self):
         for state in ("COMPLETE", "INCOMPLETE", "UNAVAILABLE"):

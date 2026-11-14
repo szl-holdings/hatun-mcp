@@ -331,6 +331,42 @@ def test_missing_rights_abstain_without_releasing_handles():
     assert result["data"]["execution_authority"] == "NONE"
 
 
+@pytest.mark.parametrize("rights", [[], {}, ["public_handles"], {"value": "public_handles"}])
+def test_malformed_rights_abstain_without_releasing_handles(rights):
+    payload = grounded()
+    payload["evidence"][0]["rights"] = rights
+    transport = Transport(post=Response(200, payload))
+    result = asyncio.run(adapter(transport).call("retrieve_handles", {"query": "coherence"}))
+
+    assert len(transport.posts) == 1
+    assert result["deployed"] is True
+    assert result["data"]["state"] == "ABSTAIN"
+    assert result["data"]["reason"] == "RIGHTS_UNBOUND"
+    assert result["data"]["handles"] == []
+    assert result["data"]["evidence"] == []
+    assert result["data"]["hydrated"] is False
+    assert result["data"]["execution_authority"] == "NONE"
+
+
+@pytest.mark.parametrize("rights", [[], {}, ["public_handles"], {"value": "public_handles"}])
+def test_egress_abstains_when_rights_have_malformed_type(rights):
+    transport = Transport(post=Response(200, grounded()))
+    ad = adapter(transport)
+    admitted = asyncio.run(ad.call("retrieve_handles", {"query": "coherence"}))
+    assert admitted["data"]["state"] == "AVAILABLE"
+    admitted["data"]["evidence"][0]["rights"] = rights
+
+    released = ad.release_for_egress(admitted["data"])
+
+    assert len(transport.posts) == 1
+    assert released["state"] == "ABSTAIN"
+    assert released["reason"] == "RIGHTS_UNBOUND"
+    assert released["handles"] == []
+    assert released["evidence"] == []
+    assert released["hydrated"] is False
+    assert released["execution_authority"] == "NONE"
+
+
 def test_withdrawn_source_is_not_released():
     payload = grounded()
     payload["evidence"][0]["rights"] = "withdrawn"

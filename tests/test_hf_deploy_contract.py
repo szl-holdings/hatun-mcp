@@ -199,6 +199,7 @@ def test_consolidated_contract_runs_for_runtime_and_surface_changes():
         "requirements.txt",
         "hatun_mcp/server.py",
         "hatun_mcp/console_v2.py",
+        "hatun_mcp/deployment.py",
         "docs/HATUN_SURFACE_CONTRACT.md",
         "tests/test_dependency_contract.py",
         ".github/workflows/hf-drift-check.yml",

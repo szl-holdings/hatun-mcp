@@ -18,6 +18,10 @@ import base64
 import hashlib
 import json
 import os
+import subprocess
+import sys
+
+import pytest
 
 os.environ.setdefault("HATUN_MCP_DISABLE_DYNAMIC", "true")
 os.environ.setdefault("HATUN_MCP_BACKEND_TIMEOUT", "1.0")
@@ -33,12 +37,126 @@ from starlette.testclient import TestClient  # noqa: E402
 from hatun_mcp import server_http  # noqa: E402
 from hatun_mcp.console import CONSOLE_HTML  # noqa: E402
 from hatun_mcp.governance import DsseSigner  # noqa: E402
+from hatun_mcp.deployment import public_base  # noqa: E402
+# CI enumerates this module explicitly; include the HTTP admission regressions.
+from test_http_admission import HttpAdmissionTests  # noqa: E402,F401
 
-BASE = "https://szlholdings-hatun-mcp.hf.space"
+BASE = server_http.PUBLIC_BASE
 REPO = "https://github.com/szl-holdings/hatun-mcp"
 ATTESTATION_PATH = "/.well-known/mcp-manifest-attestation"
 
 client = TestClient(server_http.app, base_url=BASE)
+
+
+@pytest.mark.parametrize("origin", [
+    "https://gateway.example.org",
+    "https://gateway.example.org:8443",
+    "http://127.0.0.1:7860",
+    "http://localhost:7860",
+    "http://[::1]:7860",
+])
+def test_public_origin_accepts_https_or_local_development(origin):
+    assert public_base(origin) == origin
+    assert public_base(origin + "/") == origin
+
+
+def test_public_origin_normalizes_to_browser_origin():
+    assert public_base("https://GATEWAY.example.org:443/") == "https://gateway.example.org"
+    assert public_base("http://LOCALHOST:80/") == "http://localhost"
+    assert public_base("http://[0:0:0:0:0:0:0:1]:7860") == "http://[::1]:7860"
+    assert public_base("https://[2001:0DB8:0:0:0:0:0:1]:443/") == "https://[2001:db8::1]"
+
+
+@pytest.mark.parametrize("origin", [
+    "", "/relative", "ftp://gateway.example.org", "http://gateway.example.org",
+    "https://user:private@gateway.example.org", "https://gateway.example.org/mcp",
+    "https://gateway.example.org?token=private", "https://gateway.example.org#fragment",
+    "https://gateway.example.org?", "https://gateway.example.org#",
+    "https://gateway.example.org:\n443", "https://gateway.example.org:invalid",
+    "https://gateway.example.org:70000", "https://gateway.example.org:0",
+    "https://gateway.example.org:", "https://gateway.example.org\\evil",
+    "https://gateway.example.org/<script>", "https://gateway%2Fexample.org",
+    "https://gateway..example.org", "https://-gateway.example.org",
+    "https://gateway.example-.org", "http://[::1%25eth0]:7860",
+    "https://2130706433", "https://127.000.000.001", "https://0x7f000001",
+    "https://999.999.999.999", "https://[v1.example]",
+    "https://0x", "https://1.0x",
+])
+def test_public_origin_rejects_unsafe_or_misleading_endpoints(origin):
+    with pytest.raises(ValueError, match="HATUN_MCP_PUBLIC_BASE") as error:
+        public_base(origin)
+    assert "private" not in str(error.value)
+
+
+@pytest.mark.parametrize(("configured", "expected"), [
+    (None, "http://127.0.0.1:7860"),
+    ("https://gateway.example.org:8443/", "https://gateway.example.org:8443"),
+    ("http://[0:0:0:0:0:0:0:1]:7860", "http://[::1]:7860"),
+])
+def test_fresh_runtime_binds_all_discovery_to_operator_origin(configured, expected):
+    env = os.environ.copy()
+    for key in ("HATUN_MCP_PUBLIC_BASE", "HATUN_MCP_ALLOWED_ORIGINS",
+                "HATUN_MCP_ALLOWED_HOSTS", "HATUN_MCP_SIGNING_KEY"):
+        env.pop(key, None)
+    env["HATUN_MCP_DISABLE_DYNAMIC"] = "true"
+    if configured is not None:
+        env["HATUN_MCP_PUBLIC_BASE"] = configured
+    code = r'''
+import hashlib, json, os
+from starlette.testclient import TestClient
+from hatun_mcp import server_http as server
+from hatun_mcp.console import CONSOLE_HTML, SPACE_URL
+client = TestClient(server.app, base_url="https://untrusted.example.org")
+connect = client.get("/connect", headers={"X-Forwarded-Host": "attacker.example.org"}).json()
+manifest = client.get("/.well-known/mcp").content
+attestation = client.get("/.well-known/mcp-manifest-attestation").json()
+initialize = {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
+    "protocolVersion": "2025-03-26", "capabilities": {},
+    "clientInfo": {"name": "deployment-contract-test", "version": "1"},
+}}
+key = "szl_test_deployment_contract"
+fingerprint = hashlib.pbkdf2_hmac("sha256", key.encode(), server._FP_SALT, server._FP_ITERATIONS).hex()[:16]
+os.environ["HATUN_MCP_SCOPE_" + fingerprint] = "read"
+headers = {"accept": "application/json, text/event-stream", "origin": server.PUBLIC_BASE,
+           "authorization": "Bearer " + key}
+with TestClient(server.app, base_url=server.PUBLIC_BASE) as runtime:
+    handshake = runtime.post("/mcp/", headers=headers, json=initialize)
+    wrong_host = runtime.post("/mcp/", headers={**headers, "host": "attacker.example.org"}, json=initialize)
+    wrong_origin = runtime.post("/mcp/", headers={**headers, "origin": "https://attacker.example.org"}, json=initialize)
+print(json.dumps({
+    "base": server.PUBLIC_BASE,
+    "console_base": SPACE_URL,
+    "origin_allowed": server.PUBLIC_BASE in server.ALLOWED_ORIGINS,
+    "connect": connect,
+    "manifest_uri": attestation["manifest"]["uri"],
+    "subject_uri": attestation["statement"]["subject"][0]["name"],
+    "digest_matches": attestation["manifest"]["digest"]["sha256"] == hashlib.sha256(manifest).hexdigest(),
+    "console_endpoint": server.PUBLIC_BASE + "/mcp/" in CONSOLE_HTML,
+    "retired_host": "szlholdings-hatun-mcp.hf.space" in CONSOLE_HTML + json.dumps(connect) + json.dumps(attestation),
+    "handshake_status": handshake.status_code,
+    "handshake_server": handshake.json().get("result", {}).get("serverInfo", {}).get("name"),
+    "wrong_host_status": wrong_host.status_code,
+    "wrong_origin_status": wrong_origin.status_code,
+}))
+'''
+    result = subprocess.run(
+        [sys.executable, "-c", code], env=env, text=True,
+        capture_output=True, check=True, timeout=30,
+    )
+    observed = json.loads(result.stdout)
+    assert observed["base"] == observed["console_base"] == expected
+    assert observed["origin_allowed"] is True
+    assert observed["connect"]["mcp_endpoint"] == expected + "/mcp/"
+    assert observed["connect"]["sse_endpoint"] is None
+    assert observed["connect"]["server_card"] == expected + "/.well-known/mcp/server-card.json"
+    assert observed["manifest_uri"] == observed["subject_uri"] == expected + "/.well-known/mcp"
+    assert observed["digest_matches"] is True
+    assert observed["console_endpoint"] is True
+    assert observed["retired_host"] is False
+    assert observed["handshake_status"] == 200
+    assert observed["handshake_server"] == "hatun-mcp"
+    assert observed["wrong_host_status"] == 421
+    assert observed["wrong_origin_status"] == 403
 
 # Every path a human or registry might poke for "the server card".
 CARD_PATHS = [
