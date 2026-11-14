@@ -7,7 +7,7 @@ sdk: docker
 app_port: 7860
 pinned: false
 license: apache-2.0
-short_description: Source-bound MCP gateway with signed governance receipts
+short_description: Source-bound MCP gateway with governance receipts
 ---
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
@@ -21,10 +21,12 @@ short_description: Source-bound MCP gateway with signed governance receipts
 
 **The great context protocol** — *hatun* (Quechua) = "big / great".
 
-The **one signed MCP endpoint** that aggregates the SZL backend services — the
+The **one MCP endpoint** that aggregates the SZL backend services — the
 **a11oy** command platform (and its live immune, companion and llm-router organs)
 plus **killinchu** (drones & vessels) — under PURIQ governance and re-exposes their
-tools to any MCP client.
+tools to any MCP client. Receipts are DSSE-signed only when an operator signing key
+is configured; without one the signer runs in explicit `PLACEHOLDER` mode and
+`/readyz` reports `not_ready` (see [signing](docs/DSSE_KEY_INJECTION.md)).
 
 [Hatun Gateway](https://a-11-oy.com/wires) ·
 [GitHub Org](https://github.com/szl-holdings) ·
@@ -416,3 +418,5 @@ Signed-off-by: Yachay &lt;yachay@szlholdings.ai&gt;
 Co-Authored-By: Perplexity Computer Agent &lt;agent@perplexity.ai&gt;
 
 </sub>
+
+Estate on Hugging Face: models, datasets and Spaces are published under the [SZLHOLDINGS](https://huggingface.co/SZLHOLDINGS) org.
