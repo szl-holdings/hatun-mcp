@@ -11,7 +11,7 @@ Wraps the FastMCP app in a Starlette application that:
   * admits only explicit operator-bound credentials and reviewed read-only RPCs.
   * ignores caller-supplied sovereign-mode and second-approver claims.
   * serves the draft server-card discovery extension so registries can enumerate
-    the 29 static tools even behind the auth wall.
+    the 37 static tools even behind the auth wall.
   * binds the exact card bytes to a cached in-toto Statement v1 / DSSE artifact.
   * serves /healthz, /readyz, and /pubkey (DSSE verification key).
 
@@ -556,6 +556,14 @@ def _server_card() -> dict:
         ("szl_frontier_chain_read", "Bounded fixed-endpoint read of the public frontier-54-runs dataset tree"),
         ("szl_battery_score", "Estate-battery receipt score AS MEASURED (typed contract enforced)"),
         ("szl_holo_cells", "Deterministic Lambda-HOLO cell placement (FNV-1a + trefoil spine; local port)"),
+        ("szl_axle_status", "AXLE secondary-oracle health probe (corroborates, never authorizes)"),
+        ("szl_axle_environments", "List AXLE managed Lean environments (secondary oracle)"),
+        ("szl_axle_verify_proof", "Verify a Lean proof vs a formal statement, SECONDARY oracle (strict: no permitted sorries by default)"),
+        ("szl_axle_check", "Check Lean code for errors, SECONDARY oracle"),
+        ("szl_axle_disprove", "Attempt to disprove theorems, SECONDARY oracle (adversarial probe)"),
+        ("szl_axle_sorry2lemma", "Extract sorries/errors to standalone lemma targets (sorry-gate ratchet hook)"),
+        ("szl_axle_extract_proof_states", "Extract per-line proof states (self-proving lane feed)"),
+        ("szl_axle_call", "Allowlisted passthrough for any of the 16 AXLE endpoints (secondary oracle)"),
         ("yuyay_gate_check", "Run the 13-axis Yuyay gate over input (input-as-data defense) + Khipu receipt"),
         ("khipu_append_and_verify", "Append a Khipu link and recompute-verify the append-only chain"),
         ("dsse_sign", "Real ECDSA P-256 DSSE envelope (honesty=UNSIGNED when no key in process)"),

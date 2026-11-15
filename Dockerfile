@@ -35,8 +35,10 @@ COPY hatun_mcp/puriq.py           /app/hatun_mcp/puriq.py
 COPY hatun_mcp/dsse.py            /app/hatun_mcp/dsse.py
 COPY hatun_mcp/quorum.py          /app/hatun_mcp/quorum.py
 COPY hatun_mcp/loop.py            /app/hatun_mcp/loop.py
+COPY hatun_mcp/axle.py            /app/hatun_mcp/axle.py
 COPY hatun_mcp/tools/__init__.py          /app/hatun_mcp/tools/__init__.py
 COPY hatun_mcp/tools/governance_tools.py  /app/hatun_mcp/tools/governance_tools.py
+COPY hatun_mcp/tools/axle_bridge.py       /app/hatun_mcp/tools/axle_bridge.py
 COPY hatun_mcp/adapters/__init__.py    /app/hatun_mcp/adapters/__init__.py
 COPY hatun_mcp/adapters/base.py        /app/hatun_mcp/adapters/base.py
 COPY hatun_mcp/adapters/a11oy.py       /app/hatun_mcp/adapters/a11oy.py

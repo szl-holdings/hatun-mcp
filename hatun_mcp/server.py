@@ -751,9 +751,13 @@ def locked_numbers() -> str:
 # ── PURIQ governance tools (WU-5): register the five gates as first-class MCP tools.
 # Reuses the SAME live KHIPU chain / SIGNER / CLIENTS singletons (no parallel state),
 # so puriq_master shares the audit trail with the 15 backend tools above.
-from .tools import register_governance_tools  # noqa: E402
+from .tools import register_axle_bridge, register_governance_tools  # noqa: E402
 
 register_governance_tools(mcp, KHIPU, SIGNER, CLIENTS)
+
+# v9 (2026-11-15): AxiomMath's AXLE MCP surface consolidated as eight
+# SECONDARY-oracle tools (corroborate, never authorize; fail-closed abstain).
+register_axle_bridge(mcp, KHIPU, SIGNER, CLIENTS)
 
 
 # ════════════════════════════════════════════════════════════════════════════════

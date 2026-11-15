@@ -42,11 +42,12 @@ hatun-mcp/
 
 ## Tools exposed
 
-**29 static tools** registered at import (verifiable: `tools/list` returns 29 with
-`HATUN_MCP_DISABLE_DYNAMIC=true`), including 23 `szl_*` tools plus six governance
-tools. The `szl_*` group includes the public GitHub estate observer and
-drone/doctrine/anatomy tools. Additional tools may register dynamically when the
-backends are reachable.
+**37 static tools** registered at import (verifiable: `tools/list` returns 37 with
+`HATUN_MCP_DISABLE_DYNAMIC=true`), including 31 `szl_*` tools plus six governance
+tools. The `szl_*` group includes the public GitHub estate observer,
+drone/doctrine/anatomy tools, and — since v9 (2026-11-15) — eight `szl_axle_*`
+SECONDARY-oracle bridge tools over AxiomMath's AXLE Lean-verification API.
+Additional tools may register dynamically when the backends are reachable.
 
 ## GitHub observer trust boundary
 
@@ -84,6 +85,27 @@ attestation. The response explicitly excludes private data, default-branch SHA
 resolution, legacy statuses, reviews/protection, deployments, and training.
 Multi-request observations are not atomic. The public tool is not a substitute
 for an authenticated administrative audit or a fresh exact-head merge check.
+
+## AXLE secondary-oracle trust boundary (v9, 2026-11-15)
+
+`szl_axle_*` tools consolidate AxiomMath's AXLE Lean-verification API (16
+endpoints) as SECONDARY-oracle tools. `hatun_mcp.axle` pins one base URL, an
+exact endpoint allowlist, `follow_redirects=False`, `trust_env=False`, request
+(256 KiB) and response (4 MiB) byte caps, and per-call timeouts clamped to the
+upstream 900 s maximum. The bearer key is read from `AXLE_API_KEY` /
+`HATUN_MCP_AXLE_API_KEY` and is placed only in the Authorization header; it is
+never logged, echoed, or receipted. Transport exceptions and third-party bodies
+are never forwarded as error text; outcomes are classified to stable codes.
+
+Every result carries {oracle: "axle", role: "secondary_corroborating",
+authorizing: false, local_kernel_primary: true}. AXLE corroborates; the estate's
+local Lean kernel (`szl_lean_verify`) remains the authorizing oracle. No key,
+unreachable service, non-200 status, oversized payload, or in-band error
+produces an honest ABSTAIN — never a pass. Corroboration is not human review,
+and verifying untrusted Lean through metaprogramming-rich services is not
+adversarially sound (AXLE's own disclosure); the bridge inherits that boundary.
+Lean source sent through the bridge leaves the estate boundary — operators
+enable the key knowingly.
 
 ## Keys & secrets
 
