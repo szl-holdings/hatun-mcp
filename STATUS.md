@@ -19,10 +19,10 @@
 
 - **MCP server** — real, operational Model Context Protocol server on the official
   `mcp` Python SDK (`FastMCP`). Streamable HTTP `/mcp` + legacy SSE `/sse` + stdio.
-- **25 static tools** (19 `szl_*` incl. `szl_lambda_quorum` + 6 governance tools);
+- **29 static tools** (23 `szl_*` incl. `szl_lambda_quorum` + 6 governance tools);
   verify with `HATUN_MCP_DISABLE_DYNAMIC=true python -m hatun_mcp.server` → `tools/list`
-  returns 25. **Dynamic service-derived tools** are added at startup from each reachable
-  service's catalog — the live total is probe-dependent (25 + reachable-service tools).
+  returns 29. **Dynamic service-derived tools** are added at startup from each reachable
+  service's catalog — the live total is probe-dependent (29 + reachable-service tools).
 - **PURIQ governance per call** — Yuyay-13 gate, Khipu receipt (success AND failure),
   ECDSA-P256 DSSE envelope, reputation factor, 2-person gate for state-changing tools.
 - **Byzantine quorum** (`szl_lambda_quorum`, n=5 / f=1) + **BLS12-381 aggregate** of

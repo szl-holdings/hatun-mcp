@@ -11,7 +11,7 @@ Wraps the FastMCP app in a Starlette application that:
   * admits only explicit operator-bound credentials and reviewed read-only RPCs.
   * ignores caller-supplied sovereign-mode and second-approver claims.
   * serves the draft server-card discovery extension so registries can enumerate
-    the 26 static tools even behind the auth wall.
+    the 29 static tools even behind the auth wall.
   * binds the exact card bytes to a cached in-toto Statement v1 / DSSE artifact.
   * serves /healthz, /readyz, and /pubkey (DSSE verification key).
 
@@ -553,6 +553,9 @@ def _server_card() -> dict:
         ("szl_drone_lookup", "Canonical drone DB entry from killinchu"),
         ("szl_formula_evaluate", "Evaluate a doctrine formula primitive (PURIQ P(x,t), KL, sigmoid, Liu Hui pi)"),
         ("szl_lambda_quorum", "Governance-critical Λ verdict under Byzantine n>=3f+1 quorum (n=5,f=1) + BLS aggregate"),
+        ("szl_frontier_chain_read", "Bounded fixed-endpoint read of the public frontier-54-runs dataset tree"),
+        ("szl_battery_score", "Estate-battery receipt score AS MEASURED (typed contract enforced)"),
+        ("szl_holo_cells", "Deterministic Lambda-HOLO cell placement (FNV-1a + trefoil spine; local port)"),
         ("yuyay_gate_check", "Run the 13-axis Yuyay gate over input (input-as-data defense) + Khipu receipt"),
         ("khipu_append_and_verify", "Append a Khipu link and recompute-verify the append-only chain"),
         ("dsse_sign", "Real ECDSA P-256 DSSE envelope (honesty=UNSIGNED when no key in process)"),
