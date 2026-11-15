@@ -19,12 +19,15 @@
 
 - **MCP server** — real, operational Model Context Protocol server on the official
   `mcp` Python SDK (`FastMCP`). Streamable HTTP `/mcp` + legacy SSE `/sse` + stdio.
-- **29 static tools** (23 `szl_*` incl. `szl_lambda_quorum` + 6 governance tools);
+- **37 static tools** (31 `szl_*` incl. `szl_lambda_quorum` + 8 `szl_axle_*` bridge + 6 governance tools);
   verify with `HATUN_MCP_DISABLE_DYNAMIC=true python -m hatun_mcp.server` → `tools/list`
-  returns 29. **Dynamic service-derived tools** are added at startup from each reachable
-  service's catalog — the live total is probe-dependent (29 + reachable-service tools).
+  returns 37. **Dynamic service-derived tools** are added at startup from each reachable
+  service's catalog — the live total is probe-dependent (37 + reachable-service tools).
 - **PURIQ governance per call** — Yuyay-13 gate, Khipu receipt (success AND failure),
   ECDSA-P256 DSSE envelope, reputation factor, 2-person gate for state-changing tools.
+- **AXLE secondary-oracle bridge (v9, 2026-11-15)** — 8 `szl_axle_*` tools over AxiomMath's
+  AXLE Lean-verification API: corroborate, never authorize; fail-closed abstain; live only when
+  `AXLE_API_KEY` is configured (without it every tool honestly discloses `axle_not_configured`).
 - **Byzantine quorum** (`szl_lambda_quorum`, n=5 / f=1) + **BLS12-381 aggregate** of
   participating organ receipts.
 - **Organ adapters** — llm (tiers), killinchu (4), companion (ask/act/recommend),
