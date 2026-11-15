@@ -106,11 +106,11 @@ formula:
 
 ### Tools exposed
 
-- **26 static tools** registered at import (verifiable: `tools/list` returns 26 with
+- **29 static tools** registered at import (verifiable: `tools/list` returns 29 with
   `HATUN_MCP_DISABLE_DYNAMIC=true`):
-  - **20 `szl_*` tools** — `szl_a11oy_code_chat`, `szl_a11oy_operator_reason`, `szl_a11oy_sentinel_scan`,
+  - **23 `szl_*` tools** — `szl_a11oy_code_chat`, `szl_a11oy_operator_reason`, `szl_a11oy_sentinel_scan`,
     `szl_anatomy_3d_render`, `szl_doctrine_lookup`, `szl_drone_lookup`,
-    `szl_formula_evaluate`, `szl_github_estate_snapshot`, `szl_khipu_verify`, `szl_killinchu_cue`,
+    `szl_battery_score`, `szl_formula_evaluate`, `szl_frontier_chain_read`, `szl_github_estate_snapshot`, `szl_holo_cells`, `szl_khipu_verify`, `szl_killinchu_cue`,
     `szl_killinchu_detect`, `szl_lean_verify`, `szl_puriq_evaluate`,
     `szl_companion_reason`, `szl_immune_scan`, `szl_thesis_query`, `szl_wayra_recent`,
     `szl_yachay_dome_predict`, `szl_yuyay_score`, and **`szl_lambda_quorum`** (Byzantine Λ verdict).
@@ -123,9 +123,26 @@ formula:
     `dsse_sign`, `mesh_quorum_status`, `puriq_master_tool`, `governance_pacbayes_bound`.
 - **Service-derived tools** registered *dynamically* at startup from each backend
   service's live catalog at `/api/<service>/v1/mcp/tools`, named `<service>_<tool>`. The
-  dynamic count is **probe-dependent**: it equals 26 + (whatever the reachable services
+  dynamic count is **probe-dependent**: it equals 29 + (whatever the reachable services
   publish), and is 0 extra when dynamic registration is disabled or all services are
   unreachable.
+
+### Frontier chain + receipt organism (v8)
+
+Three fixed-endpoint frontier tools (2026-11-15):
+
+- **`szl_frontier_chain_read`** — bounded GET against the fixed public
+  `SZLHOLDINGS/frontier-54-runs` dataset tree API (path-validated sub-tree,
+  byte budget, canonical digest). Accepts no URL, token, or mutation.
+- **`szl_battery_score`** — reads one estate-battery receipt from the same fixed
+  dataset and returns the score **AS MEASURED** under a typed contract
+  (`kind: szl.estate-battery/mass-training`, `state: MEASURED`, string score).
+  A receipt that fails the contract is an honest mismatch, never a guess.
+- **`szl_holo_cells`** — pure local deterministic port of the anatomy v4 Λ·HOLO
+  cell math (FNV-1a hash onto the declared trefoil spine; Λ = Conjecture 1
+  stays a conjecture). No network call: the same chain renders the same
+  organism — the picture is the hash. The port is pinned by a parity test
+  against the deployed `v4_holo.js` executed under node.
 
 ### Public GitHub estate evidence
 

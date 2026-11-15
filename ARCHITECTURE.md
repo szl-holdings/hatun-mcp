@@ -42,8 +42,8 @@ hatun-mcp/
 
 ## Tools exposed
 
-**26 static tools** registered at import (verifiable: `tools/list` returns 26 with
-`HATUN_MCP_DISABLE_DYNAMIC=true`), including 20 `szl_*` tools plus six governance
+**29 static tools** registered at import (verifiable: `tools/list` returns 29 with
+`HATUN_MCP_DISABLE_DYNAMIC=true`), including 23 `szl_*` tools plus six governance
 tools. The `szl_*` group includes the public GitHub estate observer and
 drone/doctrine/anatomy tools. Additional tools may register dynamically when the
 backends are reachable.

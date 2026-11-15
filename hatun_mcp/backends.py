@@ -924,3 +924,303 @@ async def formula_evaluate(name: str, args: dict) -> BackendResult:
                              data={"name": name, **local})
     return await _post("lean", ["/formula-eval", "/lean-verify"],
                        {"formula": name, "args": args})
+
+
+# ==============================================================================
+# v8 frontier tools: the receipt organism (fixed-endpoint HF dataset observer).
+# Doctrine: fixed origin, fixed dataset, path-validated sub-trees, bounded
+# bytes, honest miss envelopes, canonical digests. No arbitrary URLs, tokens,
+# or mutations. Plus a pure local deterministic port of the anatomy v4_holo.js
+# cellFor(): same chain -> same organism; the picture is the hash.
+# ==============================================================================
+import math as _holo_math  # noqa: E402  (v8 local holo port)
+import struct as _holo_struct  # noqa: E402  (v8: UTF-16 code units, JS-exact fnv1a)
+
+FRONTIER_CHAIN_ORIGIN = "https://huggingface.co"
+FRONTIER_CHAIN_DATASET = "SZLHOLDINGS/frontier-54-runs"
+FRONTIER_CHAIN_SCHEMA = "szl.hatun.frontier-chain-read/v1"
+BATTERY_RECEIPT_SCHEMA = "szl.hatun.battery-score/v1"
+BATTERY_RECEIPT_KIND = "szl.estate-battery/mass-training"
+BATTERY_RECEIPT_MEASURED_STATE = "MEASURED"
+FRONTIER_CHAIN_TIMEOUT_S = 12.0
+FRONTIER_CHAIN_MAX_RESPONSE_BYTES = 262_144
+FRONTIER_CHAIN_MAX_ENTRIES = 500
+HOLO_CELL_MAX_NAMES = 256
+
+_FRONTIER_TREE_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_\-/]{0,120}\Z")
+_FRONTIER_PATH_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_\-/.]{0,180}\Z")
+
+
+def _frontier_tree_allowed(tree) -> bool:
+    if tree is None:
+        return False
+    t = str(tree)
+    if t == "":
+        return True
+    return bool(_FRONTIER_TREE_RE.match(t) and ".." not in t)
+
+
+def _frontier_path_allowed(path) -> bool:
+    p = str(path or "")
+    return bool(p and _FRONTIER_PATH_RE.match(p) and ".." not in p)
+
+
+async def frontier_chain_read(tree: str = "", limit: int = 100) -> BackendResult:
+    """Bounded fixed-endpoint read of one sub-tree of the public frontier
+    dataset (the receipt organism's chain). Honest miss on any failure."""
+    if not _frontier_tree_allowed(tree):
+        return BackendResult(
+            deployed=False, http_status=None, endpoint="(frontier chain read)",
+            error="invalid_tree",
+            reason="Sub-tree failed the fixed path policy (bounded charset, no traversal).",
+            data=None)
+    try:
+        limit_i = max(1, min(int(limit), FRONTIER_CHAIN_MAX_ENTRIES))
+    except (TypeError, ValueError):
+        return BackendResult(
+            deployed=False, http_status=None, endpoint="(frontier chain read)",
+            error="invalid_limit", reason="limit must be an integer.", data=None)
+    url = (FRONTIER_CHAIN_ORIGIN + "/api/datasets/" + FRONTIER_CHAIN_DATASET
+           + "/tree/main/" + (str(tree) if tree else ""))
+    async with httpx.AsyncClient(timeout=FRONTIER_CHAIN_TIMEOUT_S,
+                                  follow_redirects=True) as client:
+        try:
+            r = await client.get(url)
+        except (httpx.TimeoutException, httpx.TransportError) as e:
+            return BackendResult(
+                deployed=False, http_status=None, endpoint=url,
+                error="transport_error", reason=type(e).__name__, data=None)
+    if r.status_code != 200:
+        return BackendResult(
+            deployed=True, http_status=r.status_code, endpoint=url,
+            error="http_" + str(r.status_code),
+            reason="Fixed tree route not readable; honest miss, never sampled.",
+            data=None)
+    if len(r.content) > FRONTIER_CHAIN_MAX_RESPONSE_BYTES:
+        return BackendResult(
+            deployed=True, http_status=r.status_code, endpoint=url,
+            error="response_too_large",
+            reason="Tree response exceeded the declared byte budget.", data=None)
+    try:
+        entries_raw = r.json()
+    except Exception:
+        return BackendResult(
+            deployed=True, http_status=r.status_code, endpoint=url,
+            error="malformed_response",
+            reason="Tree route returned non-JSON.", data=None)
+    if not isinstance(entries_raw, list):
+        return BackendResult(
+            deployed=True, http_status=r.status_code, endpoint=url,
+            error="malformed_response",
+            reason="Tree route did not return a list.", data=None)
+    files = []
+    for e in entries_raw:
+        if isinstance(e, dict) and e.get("type") == "file":
+            name = str(e.get("path", "")).split("/")[-1]
+            if name:
+                size = e.get("size")
+                files.append({"name": name,
+                              "size": size if isinstance(size, int) else None})
+    truncated = len(files) > limit_i
+    kept = files[:limit_i]
+    return BackendResult(
+        deployed=True, http_status=200, endpoint=url, error=None,
+        data={"schema": FRONTIER_CHAIN_SCHEMA, "dataset": FRONTIER_CHAIN_DATASET,
+              "tree": str(tree), "count": len(files), "returned": len(kept),
+              "truncated": truncated, "entries": kept,
+              "digest_sha256": _github_canonical_digest({"entries": kept})})
+
+
+def validate_battery_receipt(payload) -> tuple:
+    """Typed estate-battery receipt contract. Returns (ok, reason)."""
+    if not isinstance(payload, dict):
+        return False, "not_an_object"
+    if payload.get("kind") != BATTERY_RECEIPT_KIND:
+        return False, "receipt_contract_mismatch"
+    if payload.get("state") != BATTERY_RECEIPT_MEASURED_STATE:
+        return False, "receipt_not_measured"
+    score = payload.get("score")
+    if not isinstance(score, str) or not score.strip():
+        return False, "score_not_a_measured_string"
+    if not isinstance(payload.get("model"), str) or not payload.get("model", "").strip():
+        return False, "model_missing"
+    return True, None
+
+
+async def battery_receipt_read(receipt_path: str) -> BackendResult:
+    """Bounded fixed-endpoint read of one estate-battery receipt; the score is
+    returned AS MEASURED under the typed contract, never guessed."""
+    if not _frontier_path_allowed(receipt_path):
+        return BackendResult(
+            deployed=False, http_status=None, endpoint="(battery receipt read)",
+            error="invalid_receipt_path",
+            reason="Receipt path failed the fixed path policy.", data=None)
+    url = (FRONTIER_CHAIN_ORIGIN + "/datasets/" + FRONTIER_CHAIN_DATASET
+           + "/resolve/main/" + str(receipt_path))
+    async with httpx.AsyncClient(timeout=FRONTIER_CHAIN_TIMEOUT_S,
+                                  follow_redirects=True) as client:
+        try:
+            r = await client.get(url)
+        except (httpx.TimeoutException, httpx.TransportError) as e:
+            return BackendResult(
+                deployed=False, http_status=None, endpoint=url,
+                error="transport_error", reason=type(e).__name__, data=None)
+    if r.status_code != 200:
+        return BackendResult(
+            deployed=True, http_status=r.status_code, endpoint=url,
+            error="http_" + str(r.status_code),
+            reason="Fixed receipt route not readable; honest miss, never sampled.",
+            data=None)
+    if len(r.content) > FRONTIER_CHAIN_MAX_RESPONSE_BYTES:
+        return BackendResult(
+            deployed=True, http_status=r.status_code, endpoint=url,
+            error="response_too_large",
+            reason="Receipt exceeded the declared byte budget.", data=None)
+    try:
+        body = r.json()
+    except Exception:
+        return BackendResult(
+            deployed=True, http_status=r.status_code, endpoint=url,
+            error="malformed_response",
+            reason="Receipt route returned non-JSON.", data=None)
+    ok, reason = validate_battery_receipt(body)
+    if not ok:
+        kind = body.get("kind") if isinstance(body, dict) and isinstance(body.get("kind"), str) else None
+        state = body.get("state") if isinstance(body, dict) and isinstance(body.get("state"), str) else None
+        return BackendResult(
+            deployed=True, http_status=r.status_code, endpoint=url,
+            error=reason,
+            reason="Receipt failed the typed battery contract; disclosed, never guessed.",
+            data={"schema": BATTERY_RECEIPT_SCHEMA,
+                  "receipt_path": str(receipt_path),
+                  "kind": kind, "state": state})
+    rows = body.get("rows")
+    verdicts = {"total": 0, "pass": 0, "fail": 0}
+    if isinstance(rows, list):
+        verdicts["total"] = len(rows)
+        for row in rows:
+            if isinstance(row, dict):
+                v = row.get("verdict")
+                if v == "PASS":
+                    verdicts["pass"] += 1
+                elif v == "FAIL":
+                    verdicts["fail"] += 1
+
+    def _s(key):
+        val = body.get(key)
+        return val if isinstance(val, str) else None
+
+    return BackendResult(
+        deployed=True, http_status=r.status_code, endpoint=url, error=None,
+        data={"schema": BATTERY_RECEIPT_SCHEMA,
+              "receipt_path": str(receipt_path),
+              "kind": body["kind"], "state": body["state"],
+              "score": body["score"], "score_as_measured": True,
+              "model": body["model"], "base": _s("base"),
+              "battery_definition": _s("battery_definition"),
+              "harness": _s("harness"), "ts": _s("ts"),
+              "rows": verdicts,
+              "digest_sha256": _github_canonical_digest(
+                  {"receipt_path": str(receipt_path), "kind": body["kind"],
+                   "state": body["state"], "score": body["score"],
+                   "model": body["model"]})})
+
+
+def _holo_to_int32(x: int) -> int:
+    x &= 0xFFFFFFFF
+    return x - 0x100000000 if x >= 0x80000000 else x
+
+
+def _holo_fnv1a(name) -> int:
+    """JS-exact FNV-1a over UTF-16 code units, replicating the deployed
+    v4_holo.js semantics exactly: the ^= result is a signed 32-bit Number and
+    the multiply is an IEEE-754 float64 product that >>> 0 (ToUint32)
+    truncates. The organism IS this hash; do not simplify it."""
+    h = 0x811C9DC5
+    raw = str(name).encode("utf-16-le")
+    for (w,) in _holo_struct.iter_unpack("<H", raw):
+        r = _holo_to_int32(h ^ w)
+        h = int(float(r * 0x01000193)) & 0xFFFFFFFF
+    return h
+
+
+def _holo_imul(a: int, b: int) -> int:
+    return (a * b) & 0xFFFFFFFF
+
+
+def _holo_h01(h: int, salt: int) -> float:
+    x = (h ^ _holo_imul(salt, 0x9E3779B1)) & 0xFFFFFFFF
+    x = (x ^ (x >> 16)) & 0xFFFFFFFF
+    x = _holo_imul(x, 0x21F0AAAD)
+    x = (x ^ (x >> 15)) & 0xFFFFFFFF
+    x = _holo_imul(x, 0x735A2D97)
+    # JS parity: x ^= x >>> 15 leaves x SIGNED int32; the deployed v4_holo.js
+    # divides the signed value, so h01 lands in [-0.5, 0.5). Replicate exactly.
+    x = _holo_to_int32(x ^ (x >> 15))
+    return x / 4294967296.0
+
+
+def _holo_trefoil(t: float):
+    s = 0.62
+    return [s * (_holo_math.sin(t) + 2.0 * _holo_math.sin(2.0 * t)),
+            s * (_holo_math.cos(t) - 2.0 * _holo_math.cos(2.0 * t)),
+            s * (-_holo_math.sin(3.0 * t))]
+
+
+def holo_cell_for(name: str, tree: str) -> dict:
+    """Deterministic cell placement - exact port of anatomy v4_holo.js
+    cellFor(): FNV-1a hash onto the declared trefoil spine."""
+    h = _holo_fnv1a(name)
+    t = _holo_h01(h, 1) * _holo_math.pi * 2.0
+    base = _holo_trefoil(t)
+    spread = 0.17 if tree == "benchmark" else (0.34 if tree == "receipts" else 0.62)
+    pos = [base[0] + (_holo_h01(h, 2) - 0.5) * spread,
+           base[1] + (_holo_h01(h, 3) - 0.5) * spread,
+           base[2] + (_holo_h01(h, 4) - 0.5) * spread]
+    if tree == "mesh":
+        grow = 1.0 + _holo_h01(h, 5) * 0.35
+        pos = [c * grow for c in pos]
+    b = 0.55 + 0.45 * _holo_h01(h, 6)
+    if tree == "benchmark":
+        col = [0.16 * b + 0.10, 0.85 * b, 0.95 * b]
+    elif tree == "receipts":
+        col = [0.25 * b, 0.95 * b, 0.55 * b]
+    else:
+        col = [0.55 * b, 0.38 * b, 0.98 * b]
+    size = 1.5 + _holo_h01(h, 7) * 1.3
+    return {"name": str(name), "tree": tree, "pos": pos, "col": col,
+            "size": size, "pulse": 0.06, "hash": h}
+
+
+def holo_cells(names, tree: str = "benchmark") -> BackendResult:
+    """Pure local deterministic port of the anatomy v4_holo.js cell math.
+    No network call: the same names + tree render the same organism, forever."""
+    if not isinstance(names, list) or any(not isinstance(n, str) for n in names):
+        return BackendResult(
+            deployed=False, http_status=None,
+            endpoint="(local deterministic holo port)",
+            error="invalid_names",
+            reason="names must be a list of strings.", data=None)
+    if len(names) > HOLO_CELL_MAX_NAMES:
+        return BackendResult(
+            deployed=False, http_status=None,
+            endpoint="(local deterministic holo port)",
+            error="too_many_names",
+            reason="At most " + str(HOLO_CELL_MAX_NAMES) + " names per call.",
+            data=None)
+    if tree not in ("benchmark", "receipts", "mesh"):
+        return BackendResult(
+            deployed=False, http_status=None,
+            endpoint="(local deterministic holo port)",
+            error="invalid_tree",
+            reason="tree must be one of: benchmark, receipts, mesh.", data=None)
+    cells = [holo_cell_for(n, tree) for n in names]
+    return BackendResult(
+        deployed=True, http_status=200,
+        endpoint="(local deterministic port of anatomy v4_holo.js cellFor)",
+        error=None,
+        data={"schema": "szl.hatun.holo-cells/v1", "tree": tree,
+              "count": len(cells), "deterministic": True,
+              "reference": "anatomy v4_holo.js cellFor: FNV-1a + trefoil spine; "
+                           "same chain -> same organism",
+              "cells": cells})

@@ -37,7 +37,7 @@
       "environmentVariables": [
         {
           "name": "HATUN_MCP_DISABLE_DYNAMIC",
-          "description": "Set to true to skip live organ discovery at startup (hermetic local mode; 25 static tools).",
+          "description": "Set to true to skip live organ discovery at startup (hermetic local mode; 29 static tools).",
           "default": "false",
           "isRequired": false
         },

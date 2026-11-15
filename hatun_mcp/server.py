@@ -695,6 +695,46 @@ async def szl_formula_evaluate(name: str, args: Optional[dict] = None,
     )
 
 
+# v8 frontier tools: the receipt organism, readable from any MCP client ──────
+@mcp.tool()
+async def szl_frontier_chain_read(tree: str = "", limit: int = 100) -> dict:
+    """Observe one sub-tree of the fixed public SZLHOLDINGS/frontier-54-runs
+    dataset (bounded GET, fixed origin, path-validated tree). Returns file
+    names/sizes and a canonical digest. Accepts no URL, token, or mutation."""
+    return await governed(
+        tool="szl_frontier_chain_read", operation_id="frontier.chain.read",
+        gate_text=f"tree={tree} limit={limit}", needs_scope="read",
+        backend_coro=B.frontier_chain_read(tree, limit),
+    )
+
+
+@mcp.tool()
+async def szl_battery_score(receipt_path: str) -> dict:
+    """Read one estate-battery receipt from the fixed public frontier dataset
+    and return its score AS MEASURED (typed contract enforced: kind
+    szl.estate-battery/mass-training, state MEASURED; anything else is an
+    honest contract mismatch, never a guess)."""
+    return await governed(
+        tool="szl_battery_score", operation_id="battery.score",
+        gate_text=str(receipt_path), needs_scope="read",
+        backend_coro=B.battery_receipt_read(receipt_path),
+    )
+
+
+@mcp.tool()
+async def szl_holo_cells(names: list, tree: str = "benchmark") -> dict:
+    """Pure local deterministic port of the anatomy v4 Λ·HOLO cell math: each
+    name is placed by its FNV-1a hash on the declared trefoil spine. Same chain
+    renders the same organism; the picture is the hash. No network call."""
+    async def _local():
+        return B.holo_cells(names, tree)
+    return await governed(
+        tool="szl_holo_cells", operation_id="holo.cells",
+        gate_text=json.dumps({"names": names, "tree": tree})[:5000],
+        needs_scope="read", backend_coro=_local(),
+    )
+
+
 # ── Resources: live Khipu chain + server card ───────────────────────────────────
 @mcp.resource("hatun://khipu/recent")
 def khipu_recent() -> str:
