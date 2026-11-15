@@ -3,7 +3,7 @@
   "name": "io.github.szl-holdings/hatun-mcp",
   "title": "Hatun MCP - Governed Agent Gateway",
   "description": "Governed MCP gateway: policy gate on every tool call, hash-chained DSSE receipt on every result.",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "websiteUrl": "https://a-11-oy.com/wires",
   "repository": {
     "url": "https://github.com/szl-holdings/hatun-mcp",
@@ -12,7 +12,7 @@
   "packages": [
     {
       "registryType": "oci",
-      "identifier": "ghcr.io/szl-holdings/hatun-mcp:1.0.2",
+      "identifier": "ghcr.io/szl-holdings/hatun-mcp:1.0.3",
       "runtimeHint": "docker",
       "transport": {
         "type": "stdio"
