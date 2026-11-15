@@ -9,7 +9,7 @@ Honest interface contract:
   * mesh_quorum_status returns REAL n>=3f+1 arithmetic; live cluster polling is the
     disclosed boundary. A `present` set is caller-declared input, so live_polled and
     operational_quorum remain false until an independent observer is wired in.
-  * dsse_sign returns honesty="REAL" only when a signing key is present in the env;
+  * dsse_sign returns honesty="REAL" only when the process signer has a usable key;
     otherwise honesty="UNSIGNED" with an empty signatures[] (disclosed, never faked).
 
 Kept under 300 LOC. SPDX-License-Identifier: Apache-2.0
@@ -115,13 +115,13 @@ def _install(mcp, khipu: KhipuChain, signer: DsseSigner, clients) -> None:
         }
 
     @mcp.tool()
-    async def dsse_sign(payload: dict, key_env_var: str = "SZL_COSIGN_PRIVATE_PEM") -> dict:
+    async def dsse_sign(payload: dict, key_env_var: str = "HATUN_MCP_SIGNING_KEY") -> dict:
         """Sign `payload` with a real ECDSA P-256 DSSE envelope.
 
-        Uses the server's live signer (loaded from HATUN_MCP_SIGNING_KEY). When no key
-        is present in this process, returns honesty='UNSIGNED' with an empty
-        signatures[] (disclosed, never faked). key_env_var documents which env var the
-        Cosign Bootstrap squad will populate (SZL_COSIGN_PRIVATE_PEM).
+        Uses the server's live signer, initialized from HATUN_MCP_SIGNING_KEY or
+        HATUN_MCP_SIGNING_KEY_PATH. An unusable or absent key returns
+        honesty='UNSIGNED' with empty signatures[]. key_env_var is retained as an
+        advisory compatibility argument; it never selects or reloads a key.
         """
         env = signer.sign(payload)
         signed = bool(env.get("signatures"))
@@ -130,11 +130,16 @@ def _install(mcp, khipu: KhipuChain, signer: DsseSigner, clients) -> None:
             "honesty": "REAL" if signed else "UNSIGNED",
             "signer_mode": signer.mode,
             "key_env_var": key_env_var,
+            "key_env_var_is_advisory": True,
+            "signing_key_sources": [
+                "HATUN_MCP_SIGNING_KEY", "HATUN_MCP_SIGNING_KEY_PATH",
+            ],
             "note": (
                 "Real ECDSA P-256 over DSSE PAE."
                 if signed else
-                f"No signing key in process; set {key_env_var} (Cosign Bootstrap) "
-                "to produce real signatures. Disclosed, not faked."
+                "No usable signing key in process; configure HATUN_MCP_SIGNING_KEY "
+                "(P-256 private PEM) or HATUN_MCP_SIGNING_KEY_PATH before process "
+                "startup. The key_env_var argument does not configure the signer."
             ),
         }
 

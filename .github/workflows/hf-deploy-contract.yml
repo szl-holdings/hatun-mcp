@@ -8,6 +8,7 @@ on:
     - README.md
     - Dockerfile
     - requirements.txt
+    - requirements/ci/surface-contract.txt
     - hatun_mcp/console.py
     - hatun_mcp/console_v2.py
     - hatun_mcp/server.py
@@ -27,6 +28,7 @@ on:
     - README.md
     - Dockerfile
     - requirements.txt
+    - requirements/ci/surface-contract.txt
     - hatun_mcp/console.py
     - hatun_mcp/console_v2.py
     - hatun_mcp/server.py
@@ -65,8 +67,8 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.12'
-      - name: Install contract runner
-        run: python -m pip install --disable-pip-version-check pytest
+      - name: Install contract runner (hash-pinned)
+        run: python -m pip install --disable-pip-version-check --require-hashes -r requirements/ci/surface-contract.txt
       - name: Enforce the consolidated surface authority contract
         run: |
           set -euo pipefail

@@ -15,7 +15,9 @@ It is a real, operational server built on the official `mcp` Python SDK
 
 Every tool call flows through:
 
-1. **Authenticate** — SZL API key → `client_id`; anonymous calls are declined.
+1. **Authenticate** — SZL API key → `client_id`, or, when the operator enables it, a
+   verified Cloudflare x402 `PAYMENT-CONTEXT` → `x402:<digest>`
+   ([HTTP operator admission](docs/HTTP_AUTHENTICATION.md)); anonymous calls are declined.
 2. **Yuyay-13 gate** on the input (input-as-data; OWASP MCP06 injection defense).
 3. **Reputation** factor `Hatun_MCP(client) ∈ [0,1]`.
 4. **2-person Yuyay gate** for state-changing tools (e.g. `killinchu_cue`, `halt_drone`).

@@ -7,7 +7,7 @@ sdk: docker
 app_port: 7860
 pinned: false
 license: apache-2.0
-short_description: Source-bound MCP gateway with signed governance receipts
+short_description: Source-bound MCP gateway with governance receipts
 ---
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
@@ -21,10 +21,12 @@ short_description: Source-bound MCP gateway with signed governance receipts
 
 **The great context protocol** — *hatun* (Quechua) = "big / great".
 
-The **one signed MCP endpoint** that aggregates the SZL backend services — the
+The **one MCP endpoint** that aggregates the SZL backend services — the
 **a11oy** command platform (and its live immune, companion and llm-router organs)
 plus **killinchu** (drones & vessels) — under PURIQ governance and re-exposes their
-tools to any MCP client.
+tools to any MCP client. Receipts are DSSE-signed only when an operator signing key
+is configured; without one the signer runs in explicit `PLACEHOLDER` mode and
+`/readyz` reports `not_ready` (see [signing](docs/DSSE_KEY_INJECTION.md)).
 
 [Hatun Gateway](https://a-11-oy.com/wires) ·
 [GitHub Org](https://github.com/szl-holdings) ·
@@ -68,10 +70,12 @@ tools to any MCP client.
 ## What this is
 
 A **real, operational** Model Context Protocol server built on the official `mcp`
-Python SDK (`mcp.server.fastmcp.FastMCP`). Every tool call is governed by the PURIQ
+Python SDK 2.x (`mcp.server.mcpserver.MCPServer`, formerly `FastMCP`). Every tool call is governed by the PURIQ
 formula:
 
-1. **Authenticate** the client (SZL API key → `client_id`); anonymous calls are declined.
+1. **Authenticate** the client (SZL API key → `client_id`, or, when the operator enables it,
+   a Cloudflare x402 `PAYMENT-CONTEXT` verified at this origin → `x402:<digest>`); anonymous
+   calls are declined.
 2. **Yuyay-13 gate** on the input (input-as-data; OWASP MCP06 injection defense).
 3. **Reputation** factor `Hatun_MCP(client) ∈ [0,1]`.
 4. **2-person Yuyay gate** for state-changing tools (e.g. `killinchu_cue`, `halt_drone`).
@@ -202,6 +206,17 @@ honest sha256 Merkle-root fallback if the BLS backend is absent). If any organ's
 policy route is not live, quorum degrades gracefully (n=4 still satisfies n ≥ 3f+1)
 and discloses the degradation in `governance.quorum`.
 
+The BLS keys are held by the **gateway process**, which signs its observations
+under per-organ key labels. This is not a collection of independently signed
+organ attestations. Without `HATUN_MCP_BLS_SEED`, each aggregator instance uses
+a random ephemeral seed; its identity changes on restart. Responses include
+ordered `public_keys`, `key_source`, and `ephemeral` so consumers can distinguish
+signature verification from trusted identity. Pin or authenticate the public
+keys separately before relying on origin claims. For a persistent identity,
+supply a private, high-entropy seed through the secret store; never use the
+retired public default `hatun-mcp-doctrine-v11` as a configured secret. Receipts
+made with that historical default cannot establish an exclusive signer identity.
+
 ---
 
 ## Run locally (stdio)
@@ -236,7 +251,15 @@ is the fail-closed investor/deployment contract: it returns `200` only when the
 receipt chain verifies, a non-placeholder signing key is active, and an explicit
 operator scope binding is configured; otherwise it
 returns `503` with the failing check named. The public server card advertises only
-the API-key scheme that this server actually implements.
+the schemes this process accepts: `apiKey`, plus `x402` when payment admission is on.
+
+Optional x402 payment admission lets a request that Cloudflare Monetization Gateway
+charged use the same read-only HTTP profile. Hatun verifies the gateway's Ed25519
+`PAYMENT-CONTEXT` JWT against the pinned JWKS and refuses the request if the keys
+cannot be fetched (fail closed). For `upto` it reports `PAYMENT-SETTLEMENT`. It is off
+unless `HATUN_MCP_X402_SCHEME` is set. The settings, admission rules, settlement
+behaviour and proof boundary are in
+[HTTP operator admission](docs/HTTP_AUTHENTICATION.md#x402-payment-admission-cloudflare-monetization-gateway).
 
 ### MCP manifest attestation
 
@@ -353,6 +376,8 @@ HATUN_MCP_DISABLE_DYNAMIC=true python -m pytest tests/ -q
 # tests/test_adapters.py  — mocked organ endpoints, adapter wiring + honest gaps
 # tests/test_governance.py— Khipu chain, Yuyay gate, PURIQ factor (pre-existing)
 # tests/test_http_routes.py — exact-byte card attestation + public HTTP contracts
+# tests/test_payment_context.py — PAYMENT-CONTEXT verifier, pinned JWKS cache, fail-closed outage
+# tests/test_http_payment_admission.py — x402 admission, refusals and upto settlement over real MCP
 ```
 
 The server tests also import the estate regression class so the existing
@@ -404,3 +429,5 @@ Signed-off-by: Yachay &lt;yachay@szlholdings.ai&gt;
 Co-Authored-By: Perplexity Computer Agent &lt;agent@perplexity.ai&gt;
 
 </sub>
+
+Estate on Hugging Face: models, datasets and Spaces are published under the [SZLHOLDINGS](https://huggingface.co/SZLHOLDINGS) org.

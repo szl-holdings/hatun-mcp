@@ -9,7 +9,9 @@ Transports: admitted read-only stateless Streamable HTTP (/mcp/) for hosted use;
 stdio for local. The HTTP entrypoint disables legacy SSE and message endpoints;
 see docs/HTTP_AUTHENTICATION.md for its explicit capability and binding contract.
 Every tool invocation:
-  1. authenticates the client (API key -> client_id); anonymous => declined.
+  1. authenticates the client (API key -> client_id, or, when the operator enables
+     it, a verified Cloudflare x402 PAYMENT-CONTEXT -> x402:<digest>); anonymous
+     => declined.
   2. runs the Yuyay-13 gate on its input (input-as-data; OWASP MCP06 defense).
   3. computes Hatun_MCP(client_id) reputation factor in [0,1].
   4. requires a 2-person Yuyay gate if the tool is state-changing.
@@ -29,9 +31,10 @@ from contextvars import ContextVar
 from typing import Any, Optional
 from urllib.parse import urlsplit
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 from mcp.server.transport_security import TransportSecuritySettings
 
+from . import __version__
 from . import backends as B
 from .deployment import PUBLIC_BASE
 from .formula_receipts import bind_formula_call, canonical_bytes, formula_request
@@ -58,6 +61,11 @@ _ctx_client: ContextVar[Optional[str]] = ContextVar("client_id", default=None)
 _ctx_scope: ContextVar[str] = ContextVar("scope", default="read")
 _ctx_sovereign: ContextVar[bool] = ContextVar("sovereign", default=False)
 _ctx_second_approver: ContextVar[Optional[str]] = ContextVar("second_approver", default=None)
+# Verified x402 payment for this request (a payment_context.PaymentAdmission), set
+# only by the HTTP layer after it verified PAYMENT-CONTEXT. None for every other
+# caller. governed() binds its public facts into the receipt and records the
+# outcome so the HTTP layer can report an upto settlement.
+_ctx_payment: ContextVar[Optional[Any]] = ContextVar("payment", default=None)
 
 DEFAULT_LATENCY_BUDGET = float(os.environ.get("HATUN_MCP_LATENCY_BUDGET", "5.0"))
 ALLOW_ANON = os.environ.get("HATUN_MCP_ALLOW_ANON", "false").lower() == "true"
@@ -85,24 +93,32 @@ _transport_security = TransportSecuritySettings(
     allowed_origins=_allowed_origins if not _disable_host_pin else ["*"],
 )
 
-mcp = FastMCP(
-    "hatun-mcp",
+# MCP SDK 2.x: transport settings are no longer constructor arguments; they are
+# passed to ``streamable_http_app()`` (see hatun_mcp.server_http). Keep them here,
+# next to the server definition, so the transport contract has one source.
+STREAMABLE_HTTP_SETTINGS = dict(
     transport_security=_transport_security,
     # Serve the MCP endpoints at the mount root so a Starlette Mount("/mcp") maps to
     # the actual MCP endpoint with no double-prefix and no trailing-slash 404.
     streamable_http_path="/",
-    sse_path="/",
-    message_path="/messages/",
     # Stateless Streamable HTTP: each POST is self-contained (no server-held session
     # id). Required behind the HF Spaces reverse proxy, which does not guarantee
     # worker affinity — a stateful session manager would 400 on the follow-up call.
     stateless_http=True,
     json_response=True,
+)
+
+mcp = MCPServer(
+    "hatun-mcp",
+    # serverInfo.version: the package version (bound to the release tag and
+    # server.json by publish-mcp.yml). SDK 2.x defaults it to "".
+    version=__version__,
     instructions=(
         "HATUN-MCP — the doctrine-aware MCP server for SZL Holdings. Every tool call "
         "is governed by the PURIQ formula: a Yuyay-13 gate runs on the input, a Khipu "
         "receipt is emitted on success and failure, and the response is DSSE-signed. "
-        "An API key is required; anonymous calls are declined. State-changing tools "
+        "A credential is required: an operator API key, or a verified x402 payment "
+        "where the operator enables it. Anonymous calls are declined. State-changing tools "
         "(e.g. szl_killinchu_cue) require a 2-person Yuyay approval."
     ),
 )
@@ -158,6 +174,7 @@ async def governed(
     scope = _ctx_scope.get()
     sovereign = _ctx_sovereign.get()
     second = _ctx_second_approver.get()
+    payment = _ctx_payment.get()
 
     authenticated = bool(client_id) or ALLOW_ANON
     scope_ok = _scope_ok(scope, needs_scope)
@@ -174,8 +191,18 @@ async def governed(
     )
 
     # 3. Hard declines (default-decline; receipted) BEFORE any backend call.
+    chain_ok = KHIPU.verify()
     decline = None
-    if not authenticated:
+    if not chain_ok:
+        decline = {
+            "reason": "receipt_chain_invalid",
+            "owasp_class": "T01",
+            "message": (
+                "The Khipu receipt chain failed verification. The backend call "
+                "was not started."
+            ),
+        }
+    elif not authenticated:
         decline = {"reason": "no_api_key", "owasp_class": "MCP07",
                    "message": "Anonymous tool calls are declined. Provide an SZL API key."}
     elif not scope_ok:
@@ -197,19 +224,26 @@ async def governed(
         # Close the un-awaited backend coroutine to avoid a leak (we decline before calling it).
         if backend_coro is not None and hasattr(backend_coro, "close"):
             backend_coro.close()
-        tripwire = "T09" if decline["reason"] == "yuyay_axis_below_floor" else None
+        tripwire = {
+            "receipt_chain_invalid": "T01",
+            "yuyay_axis_below_floor": "T09",
+        }.get(decline["reason"])
         score = puriq_utility(lam=1.0, yuyay=yuyay, hukla_tripwire=tripwire,
-                              khipu_chain_ok=True, hatun_factor=factor)
+                              khipu_chain_ok=chain_ok, hatun_factor=factor)
         decline_detail = {"decline": decline}
         if formula_call is not None:
             decline_detail["formula_call_binding"] = bind_formula_call(
                 formula_call, _response_fields(tool, "declined", None))
+        if payment is not None:
+            decline_detail["payment"] = payment.receipt_fields()
         r = KHIPU.emit(
             tool=tool, client_id=client_id or "anonymous", operation_id=operation_id,
             status="declined", tripwire=tripwire,
             yuyay_min_axis=yuyay.min_axis_value, hatun_mcp_factor=factor,
             puriq_score=score, detail=decline_detail, signer=SIGNER,
         )
+        if payment is not None:
+            payment.record(tool=tool, status="declined")
         if client_id:
             CLIENTS.record(client_id, clean=False)
         return _wrap(
@@ -281,11 +315,15 @@ async def governed(
     if formula_call is not None:
         detail["formula_call_binding"] = bind_formula_call(
             formula_call, _response_fields(tool, status, backend))
+    if payment is not None:
+        detail["payment"] = payment.receipt_fields()
     r = KHIPU.emit(
         tool=tool, client_id=client_id, operation_id=operation_id,
         status=status, tripwire=tripwire, yuyay_min_axis=yuyay.min_axis_value,
         hatun_mcp_factor=factor, puriq_score=score, detail=detail, signer=SIGNER,
     )
+    if payment is not None:
+        payment.record(tool=tool, status=status)
     CLIENTS.record(client_id, clean=(tripwire is None and status == "success"))
 
     return _wrap(
@@ -484,7 +522,7 @@ async def szl_github_estate_snapshot() -> dict:
     )
 
 
-# FastMCP v1 normally ignores extra arguments. Enforce this tool's parameterless
+# MCPServer (FastMCP in SDK 1.x) normally ignores extra arguments. Enforce this tool's parameterless
 # contract in its Pydantic argument validator as well as its discovery schema.
 # Keep this scoped to the observer; existing tool argument behavior is unchanged.
 _estate_tool = mcp._tool_manager.get_tool("szl_github_estate_snapshot")

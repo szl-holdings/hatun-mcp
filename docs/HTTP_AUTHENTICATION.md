@@ -70,6 +70,82 @@ read deadline before dispatch. Oversize and slow requests return 413 and 408.
 The SDK receives the same inspected bytes. Host and Origin protection remains
 enabled under the existing deployment configuration.
 
+## x402 payment admission (Cloudflare Monetization Gateway)
+
+Payment admission is off by default. When it is off, a `PAYMENT-CONTEXT` header
+is never parsed or trusted, and an operator key is still required. To turn it
+on, set these variables before process start. Invalid values fail startup.
+
+| Variable | Value |
+|---|---|
+| `HATUN_MCP_X402_SCHEME` | `upto` (recommended for MCP) or `exact`. Unset or `off` disables admission. |
+| `HATUN_MCP_X402_AMOUNT_ATOMIC` | The gateway rule's price in atomic USDC units (1 unit = $0.000001), from 1000 to 100000000. For `upto`, this is the rule's authorised maximum. |
+| `HATUN_MCP_X402_PAID_TOOLS` | Optional. A comma-separated subset of the three HTTP read tools. Default: all three. |
+| `HATUN_MCP_X402_LEEWAY_SECONDS` | Optional clock leeway from 0 to 30. Default: 5. |
+| `HATUN_MCP_PUBLIC_BASE` | The public HTTPS origin the gateway charges, for example `https://mcp.a-11-oy.com`. The audience is exactly `<PUBLIC_BASE>/mcp/`. A loopback base refuses every real token and logs `x402_audience_not_public`. |
+
+How a request is admitted:
+
+- Only requests to exactly `/mcp/` may carry `PAYMENT-CONTEXT`. Any other
+  transport path returns `403 payment_context_not_accepted_for_path`. Health,
+  discovery and `/api/*` routes never read the header and stay free.
+- Send exactly one credential: an operator key or one `PAYMENT-CONTEXT`. A
+  request with both, or with two contexts, gets `401 ambiguous_credentials`. A
+  request with neither is unpaid and gets
+  `401 payment_or_operator_key_required`.
+- [`hatun_mcp/payment_context.py`](../hatun_mcp/payment_context.py) checks the
+  JOSE header before it retrieves any key. `alg` must be `EdDSA`, and a
+  token-supplied `jku`, `jwk`, `x5u` or `x5c`, `crit` or `b64` is refused. The
+  Ed25519 key comes only from the pinned JWKS at
+  `https://payments.cloudflare.com/certs`. That retrieval follows no redirects,
+  inherits no environment proxies, and is bounded to 5 seconds and 64 KiB. Keys
+  are cached for the time the `Cache-Control` header allows, corrected by `Age`
+  and `Date` and capped at 24 hours. Expired keys are never used, even if the
+  refetch fails. An unknown `kid` forces at most one refetch per 60 seconds.
+  `aud` must equal the audience string exactly, and `scheme` and `amount` must
+  equal the configured terms, so a payment made under a cheaper rule is refused.
+  `iat`, `nbf` and `exp` must be integers inside the leeway.
+- An invalid context gets `403 payment_context_invalid` with a reason code such
+  as `EXPIRED`, `WRONG_AUDIENCE`, `BAD_SIGNATURE` or `WRONG_AMOUNT`. If no fresh
+  key set can be obtained, the request gets
+  `503 payment_verification_unavailable` (fail closed). Neither response runs a
+  tool or mints a receipt.
+- A valid context admits the identity `x402:<first 16 hex of SHA-256(token)>`
+  with scope `read`, on the same read-only HTTP profile described above. Write,
+  admin and dynamic tools stay denied. The receipt detail records the
+  payment's public facts: scheme, authorised amount, audience, `kid`,
+  `iat`/`nbf`/`exp` and the token's SHA-256, with `settlement_evidence: false`.
+  The raw token is never stored, logged or echoed.
+
+How settlement is reported:
+
+- `upto`: `PAYMENT-SETTLEMENT: {"amount":"<AMOUNT_ATOMIC>"}` is set only when
+  the request was a single `tools/call` of a paid tool and its governed result
+  was `success`. Every other response below 400 reports `{"amount":"0"}`, which
+  settles nothing. That covers `initialize`, notifications, `tools/list`,
+  `resources/read`, unpaid tools, and declined or failed calls. A response of 400
+  or above carries no header. A downstream `PAYMENT-SETTLEMENT` or
+  `PAYMENT-RESPONSE` is dropped.
+- `exact`: no `PAYMENT-SETTLEMENT` is set, because the gateway settles the
+  signed amount for every matching request. An MCP session sends `initialize`,
+  `notifications/initialized`, `tools/list` and `tools/call` as separate POSTs,
+  so an `exact` rule on `/mcp/*` charges each one. Use `upto` for MCP.
+
+What this does not prove:
+
+- A verified context is not evidence of settlement, of who paid, or that the
+  request is unique. The documented claims carry no nonce or `jti`, and
+  identical authorisations are identical tokens, so no replay cache is kept.
+- Cloudflare does not document whether an `exact` payment settles when the
+  origin answers 400 or above, or what an `upto` 2xx without the header
+  settles. This origin always sets the header on `upto` 2xx and 3xx responses.
+- The live tokens' `alg`, `kid` and the JWKS `Cache-Control` were not observed
+  from the build environment, which cannot reach the JWKS host. Before claiming
+  the paid path works, run one controlled paid canary and record the receipt.
+- A caller that bypasses the gateway, for example through a User-Agent
+  exemption in an edge rule, reaches this origin without a context and is
+  refused.
+
 ## Readiness and deployment evidence
 
 Public discovery, health, key and console-state routes remain readable without

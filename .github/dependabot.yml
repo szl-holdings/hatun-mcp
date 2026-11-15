@@ -67,6 +67,35 @@ updates:
       semver-minor-days: 7
       semver-patch-days: 3
 
+  # Hash-pinned CI and image locks (requirements/ci/*.in -> *.txt with
+  # `uv pip compile --generate-hashes`). Keeps hashes current after root bumps.
+  - package-ecosystem: "pip"
+    directory: "/requirements/ci"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+      timezone: "America/New_York"
+    labels:
+      - "dependencies"
+    open-pull-requests-limit: 5
+    groups:
+      python-locks:
+        patterns:
+        - '*'
+        update-types:
+        - minor
+        - patch
+    ignore:
+      - dependency-name: "mcp"
+        update-types:
+          - "version-update:semver-major"
+    cooldown:
+      default-days: 7
+      semver-major-days: 21
+      semver-minor-days: 7
+      semver-patch-days: 3
+
   # Docker base images
   - package-ecosystem: "docker"
     directory: "/"

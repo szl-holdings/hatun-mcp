@@ -878,6 +878,11 @@ import math as _math
 
 
 def _eval_known_formula(name: str, args: dict) -> Optional[dict]:
+    from . import formulas as _szl_formulas
+    _atlas = _szl_formulas.evaluate(name, args)
+    if _atlas is not None:
+        return _atlas
+
     n = (name or "").strip().lower()
     a = args or {}
     def _f(k, d=0.0):

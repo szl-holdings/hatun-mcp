@@ -1,5 +1,15 @@
 # STATUS.md — hatun-mcp (MCP Server)
 
+> Historical implementation notes and observations, not current deployment
+> evidence. The standalone publisher was subsequently retired; see the
+> [surface contract](docs/HATUN_SURFACE_CONTRACT.md). For current signer
+> configuration and independent verification, use the
+> [signing runbook](docs/DSSE_KEY_INJECTION.md). In current source,
+> `SZL_COSIGN_PRIVATE_PEM` alone does not configure `DsseSigner`; it reads
+> `HATUN_MCP_SIGNING_KEY` or `HATUN_MCP_SIGNING_KEY_PATH` at startup. Earlier
+> live-response and sink observations below do not establish present signing,
+> durable receipt delivery, or upstream readiness.
+
 **Updated:** 2026-06-03
 **Doctrine v11 — 749 / 14 / 163 — replay hash c7c0ba17**
 
