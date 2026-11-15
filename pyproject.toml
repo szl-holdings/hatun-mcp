@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: Apache-2.0
 # Packaging metadata for the hatun_mcp package (PEP 517 / PEP 621).
 #
-# Runtime dependencies stay in requirements.txt, which CI and the Dockerfile
-# install. This file declares none and does not change how either installs.
-# The version is read from hatun_mcp.__version__, which publish-mcp.yml already
-# binds to the release tag and server.json.
+# Runtime dependency RANGES are declared below, mirroring requirements.txt
+# (which stays the operational pin source for CI and the Dockerfile — that
+# does not change). The version is read from hatun_mcp.__version__, which
+# publish-mcp.yml already binds to the release tag and server.json.
 
 [build-system]
 # 77 is the first setuptools that accepts an SPDX string for project.license.
@@ -15,12 +15,29 @@ build-backend = "setuptools.build_meta"
 name = "hatun-mcp"
 dynamic = ["version"]
 description = "Governed MCP gateway: policy gate on every tool call, hash-chained DSSE receipt on every result."
+readme = "README.md"
 requires-python = ">=3.12"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
+dependencies = [
+    "mcp>=2.3.0,<3",
+    "httpx>=0.28.1",
+    "starlette>=1.10.0",
+    "uvicorn[standard]>=0.54.0",
+    "cryptography>=50.0.2",
+    "PyJWT>=2.15.1,<3",
+    "py_ecc>=8.0.0",
+]
+
+[project.urls]
+Homepage = "https://a-11-oy.com"
+Source = "https://github.com/szl-holdings/hatun-mcp"
 
 [tool.setuptools]
 packages = ["hatun_mcp", "hatun_mcp.adapters", "hatun_mcp.tools"]
 
 [tool.setuptools.dynamic]
 version = {attr = "hatun_mcp.__version__"}
+
+[tool.szl.release]
+import_names = ["hatun_mcp"] # wheel top-level import names; the release gate fails if the built wheel differs
