@@ -2,7 +2,7 @@
 # HF Space sdk=docker. Port 7860 is the HF Spaces convention.
 # Doctrine v11 LOCKED — 749 / 14 / 163 — per-file COPY (no directory copies).
 # SPDX-License-Identifier: Apache-2.0
-FROM mirror.gcr.io/library/python:3.15-slim@sha256:e97b88e416c3c01eb427b21fd8cd3ebf006e6ee38afcfcc3cae1c54ee2ab0a75
+FROM mirror.gcr.io/library/python:3.15-slim@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
