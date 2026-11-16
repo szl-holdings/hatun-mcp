@@ -94,7 +94,7 @@ _DISCOVERY_HEADERS = {
 _FP_SALT = os.environ.get("HATUN_MCP_FP_SALT", "hatun-mcp/api-key-fingerprint/v1").encode()
 _FP_ITERATIONS = int(os.environ.get("HATUN_MCP_FP_ITERATIONS", "210000"))
 _KEY_PATTERN = re.compile(r"szl_[A-Za-z0-9_-]{1,252}\Z")
-_SCOPE_BINDING_PATTERN = re.compile(r"HATUN_MCP_SCOPE_[0-9a-f]{16}\Z")
+_SCOPE_BINDING_PATTERN = re.compile(r"HATUN_MCP_SCOPE_[0-9A-Fa-f]{16}\Z")
 _VALID_SCOPES = frozenset({"read", "write", "admin"})
 _MAX_RPC_BYTES = 256 * 1024
 _BODY_TIMEOUT_SECONDS = 10.0
@@ -960,16 +960,53 @@ async def index(request: Request):
 # at "/mcp" maps cleanly (no trailing-slash redirect), and we pass its lifespan up.
 import contextlib
 
-http_app = mcp.streamable_http_app(**STREAMABLE_HTTP_SETTINGS)
+class _ReusableStreamableHTTPApp:
+    """Delegate /mcp traffic to a fresh MCP transport for each app lifespan.
+
+    The MCP SDK's session manager is intentionally single-use: once its lifespan
+    exits, it cannot be started again. Starlette's TestClient (and process
+    reloaders) may enter the parent lifespan repeatedly, so retaining one child
+    app globally makes the second startup fail. The delegate keeps the public
+    parent app stable while giving every lifespan a new child/session manager.
+    """
+
+    def __init__(self) -> None:
+        self._app = None
+
+    async def __call__(self, scope, receive, send):
+        child = self._app
+        if child is None:
+            await PlainTextResponse(
+                "Streamable HTTP transport is not started.",
+                status_code=503,
+            )(scope, receive, send)
+            return
+        await child(scope, receive, send)
+
+
+_streamable_http_delegate = _ReusableStreamableHTTPApp()
+# Retained as an inspection hook for operators and existing imports. It points
+# at the child app that is live inside the current parent lifespan.
+http_app = None
 
 
 @contextlib.asynccontextmanager
 async def lifespan(app):
-    # Run the child app's session manager and task group.
-    async with contextlib.AsyncExitStack() as stack:
-        if http_app.router.lifespan_context is not None:
-            await stack.enter_async_context(http_app.router.lifespan_context(http_app))
-        yield
+    global http_app
+    # Create and run a new child app/session manager for every parent lifespan.
+    child_app = mcp.streamable_http_app(**STREAMABLE_HTTP_SETTINGS)
+    http_app = child_app
+    _streamable_http_delegate._app = child_app
+    try:
+        async with contextlib.AsyncExitStack() as stack:
+            if child_app.router.lifespan_context is not None:
+                await stack.enter_async_context(
+                    child_app.router.lifespan_context(child_app)
+                )
+            yield
+    finally:
+        _streamable_http_delegate._app = None
+        http_app = None
 
 
 app = Starlette(
@@ -988,7 +1025,7 @@ app = Starlette(
         Route(MCP_MANIFEST_ATTESTATION_PATH, manifest_attestation),
         Route("/server-card", server_card_alias),
         Route("/card", server_card_alias),
-        Mount("/mcp", app=http_app),
+        Mount("/mcp", app=_streamable_http_delegate),
     ],
     lifespan=lifespan,
 )

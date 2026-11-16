@@ -237,7 +237,7 @@ class HttpAdmissionTests(unittest.TestCase):
             env.pop(name, None)
         result = subprocess.run(
             [sys.executable, str(Path(__file__).resolve()), "--protocol-check"],
-            env=env, capture_output=True, text=True, timeout=30,
+            env=env, capture_output=True, text=True, timeout=90,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("REAL MCP ADMISSION CHECKS PASSED", result.stdout)

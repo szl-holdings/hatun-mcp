@@ -25,6 +25,12 @@ NETWORK_GUARD_ACTIVE = True
 
 
 def _deny_network(event, args):
+    # Windows asyncio ProactorEventLoop creates a local loopback socketpair.
+    # Permit that internal bind while rejecting external/network activity.
+    if event in {"socket.bind", "socket.connect"} and len(args) > 1:
+        address = args[1]
+        if isinstance(address, tuple) and address and address[0] in {"127.0.0.1", "::1"}:
+            return
     if NETWORK_GUARD_ACTIVE and event in {
         "socket.connect", "socket.bind", "socket.getaddrinfo",
         "socket.gethostbyname", "socket.gethostbyaddr", "socket.sendto"
