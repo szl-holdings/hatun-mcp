@@ -82,12 +82,36 @@ footer{padding:34px 0 calc(34px + env(safe-area-inset-bottom));color:var(--faint
 @media (prefers-contrast: more){:root{--line:rgb(241 243 246 / .38);--line-violet:rgb(158 155 255 / .7)}.weave{opacity:.2}.family-rail{background:var(--deep);backdrop-filter:none}}
 @media (forced-colors: active){.weave{display:none}.family-rail,.instrument,.card,.button,.pathway,pre{border:1px solid CanvasText;color:CanvasText;background:Canvas;box-shadow:none}.mark{border-color:CanvasText;background:Canvas}}
 @media print{.family-rail,.weave{display:none!important}body{color:#000!important;background:#fff!important}.instrument,.card,.pathway,pre{color:#000!important;background:#fff!important;box-shadow:none!important}}
+
+/* Operator proposal form: existing family tokens, no external assets. */
+#proposal{scroll-margin-top:136px}
+.proposal-form label{display:block;margin:16px 0 7px;color:var(--ink);font:650 12px/1.5 var(--head)}
+.proposal-form fieldset{min-width:0;margin:0;padding:0;border:0}
+.proposal-form textarea,.proposal-form input{display:block;width:100%;min-height:48px;padding:12px;border:1px solid var(--line-violet);border-radius:10px;color:var(--ink);background:var(--deep);font:500 14px/1.6 var(--mono)}
+.proposal-form textarea{min-height:150px;resize:vertical}
+.proposal-form textarea,.proposal-form input{scroll-margin-top:150px}
+.proposal-form .hint{margin:7px 0;color:var(--muted);font-size:12px}
+.proposal-form .controls{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px}
+.proposal-form button{cursor:pointer}
+.proposal-form button:disabled{cursor:default;opacity:.55;transform:none}
+.proposal-form fieldset:disabled{opacity:.7}
+.proposal-status{min-height:3em;margin:0 0 16px;color:var(--muted);font:600 12px/1.65 var(--mono);overflow-wrap:anywhere}
+.proposal-output{min-height:140px;max-height:420px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
+.proposal-evidence{display:grid;grid-template-columns:minmax(95px,.36fr) minmax(0,1fr);gap:10px 14px;margin:20px 0 0;font:500 11px/1.6 var(--mono)}
+.proposal-evidence[hidden],.proposal-details[hidden]{display:none}
+.proposal-evidence dt{color:var(--muted)}
+.proposal-evidence dd{min-width:0;margin:0;overflow-wrap:anywhere}
+.proposal-details{margin-top:20px}
+.proposal-details summary{min-height:44px;display:flex;align-items:center;cursor:pointer;color:var(--ice);font:650 12px/1.5 var(--mono)}
+.proposal-details pre{max-height:360px;white-space:pre-wrap;overflow-wrap:anywhere}
+@media print{.proposal-form{display:none!important}}
+
 </style>
 </head>
 <body>
 <header class="family-rail">
   <a class="identity" href="/" aria-label="Open Hatun Gateway"><span class="mark" aria-hidden="true"></span><span class="identity-copy"><small>SZL / Obsidian Signal</small><strong>Hatun Gateway</strong></span></a>
-  <nav class="family-links" aria-label="Hatun pathways"><a href="#understand" aria-current="page">Understand</a><a href="#connect">Build</a><a href="/.well-known/mcp-manifest-attestation">Verify</a><a href="/.well-known/mcp/server-card.json">Server card</a><a href="https://github.com/szl-holdings/hatun-mcp" rel="noopener">Source</a></nav>
+  <nav class="family-links" aria-label="Hatun pathways"><a href="#understand" aria-current="page">Understand</a><a href="#connect">Build</a><a href="#proposal">Ask Cortex</a><a href="/.well-known/mcp-manifest-attestation">Verify</a><a href="/.well-known/mcp/server-card.json">Server card</a><a href="https://github.com/szl-holdings/hatun-mcp" rel="noopener">Source</a></nav>
 </header>
 
 <main>
@@ -126,6 +150,34 @@ footer{padding:34px 0 calc(34px + env(safe-area-inset-bottom));color:var(--faint
   <div class="grid g3" id="runtime-cards"><article class="card"><div class="loading">Reading /api/console-state…</div></article></div>
 </div></section>
 
+
+<section class="content" id="proposal"><div class="shell">
+  <div class="section-head"><div><p class="eyebrow">Operator / governed proposal</p><h2>Ask owned Cortex.</h2></div><p class="sub">Send a bounded question through this gateway, then inspect the source, model, and receipt returned with the answer. A proposal carries no authority to execute an action.</p></div>
+  <div class="grid g2">
+    <form class="card proposal-form" id="proposal-form" method="post" action="/mcp/" autocomplete="off">
+      <p class="eyebrow">One question / one explicit request</p>
+      <fieldset id="proposal-fields" disabled>
+        <label for="proposal-prompt">Question</label>
+        <textarea id="proposal-prompt" rows="6" maxlength="4000" required spellcheck="false" aria-describedby="proposal-prompt-hint"></textarea>
+        <p class="hint" id="proposal-prompt-hint">Up to 4,000 characters; surrounding whitespace is removed. This request uses at most 64 generated tokens and three evidence handles. Review your text before sending.</p>
+        <label for="proposal-key">Admitted operator API key</label>
+        <input id="proposal-key" type="password" maxlength="256" required autocomplete="off" autocapitalize="none" spellcheck="false" aria-describedby="proposal-key-hint">
+        <p class="hint" id="proposal-key-hint">Used only for this request to this gateway. The field clears before sending; the client uses no browser storage. Payment credentials do not admit this capability.</p>
+      </fieldset>
+      <div class="controls"><button class="button primary" id="proposal-submit" type="submit" disabled>Request a proposal</button><button class="button" id="proposal-cancel" type="button" disabled>Stop waiting</button><button class="button" id="proposal-clear" type="button">Clear</button></div>
+      <noscript><p class="hint">JavaScript is required to make an authenticated proposal request.</p></noscript>
+      <p class="hint">The fixed owned Cortex receives your question through Hatun. Your operator key stays at this gateway. This form does not issue credentials or authorize consequential actions.</p>
+    </form>
+    <article class="card" aria-label="Proposal and evidence">
+      <p class="proposal-status" id="proposal-status" role="status" aria-live="polite">No proposal requested.</p>
+      <pre class="proposal-output" id="proposal-output" aria-label="Model proposal">No proposal to display.</pre>
+      <dl class="proposal-evidence" id="proposal-evidence" hidden></dl>
+      <details class="proposal-details" id="proposal-details" hidden><summary>Inspect the returned evidence</summary><pre id="proposal-raw"></pre></details>
+      <p class="hint description">Results describe a single request. They do not establish current readiness, a verified signature, durable storage, or mathematical proof replay. Model text is displayed as text.</p>
+    </article>
+  </div>
+</div></section>
+
 <section class="content" id="tools"><div class="shell">
   <div class="section-head"><div><p class="eyebrow">Capabilities / live registry</p><h2>Tools Hatun exposes <span class="mono" id="tools-count"></span></h2></div><p class="sub">Enumerated in-request from the FastMCP tool manager. The page carries no hand-written capability count.</p></div>
   <div class="grid g3" id="tool-cards"><article class="card"><div class="loading">Enumerating the live tool registry…</div></article></div>
@@ -152,7 +204,7 @@ footer{padding:34px 0 calc(34px + env(safe-area-inset-bottom));color:var(--faint
 }</pre></article>
     <article class="card"><p class="eyebrow">Source-bound interfaces</p><pre><span class="comment"># transport</span>
 POST /mcp/          <span class="comment">streamable HTTP</span>
-GET  /sse/          <span class="comment">legacy SSE</span>
+GET  /sse/          <span class="comment">disabled · HTTP 410</span>
 
 <span class="comment"># understand</span>
 GET  /api/console-state
@@ -225,5 +277,189 @@ GET  /healthz  /readyz  /pubkey</pre></article>
   setTimeout(function(){getText("/pubkey",5000).then(function(pem){if(pem.indexOf("PUBLIC KEY")===-1){setFingerprint("no key in process · UNSIGNED");return}if(window.crypto&&crypto.subtle)return crypto.subtle.digest("SHA-256",pemToDer(pem)).then(function(digest){setFingerprint("SHA256(SPKI) "+hex(digest).slice(0,24)+"…")});setFingerprint("key served · fingerprint UNAVAILABLE in this browser")}).catch(function(){setFingerprint("fingerprint UNAVAILABLE")})},250);
 })();
 </script>
+
+<script>
+/* owned-cortex-proposal-client */
+(function(){
+  "use strict";
+  var TOOL="szl_owned_cortex_infer",SCHEMA="szl.hatun.owned-cortex-proposal/v1";
+  var PROTOCOL="2025-06-18",MAX_BYTES=1048576,WAIT_MS=60000;
+  var generation=0,active=null;
+  function $(id){return document.getElementById(id)}
+  var form=$("proposal-form"),fields=$("proposal-fields"),prompt=$("proposal-prompt"),key=$("proposal-key");
+  var submit=$("proposal-submit"),cancel=$("proposal-cancel"),clear=$("proposal-clear");
+  var status=$("proposal-status"),output=$("proposal-output"),evidence=$("proposal-evidence"),details=$("proposal-details"),raw=$("proposal-raw");
+  function fault(code){var error=new Error(code);error.code=code;return error}
+  function object(value){return value!==null&&typeof value==="object"&&!Array.isArray(value)}
+  function normalizePrompt(value){return value.replace(/^[\u0009-\u000D\u001C-\u0020\u0085\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000]+|[\u0009-\u000D\u001C-\u0020\u0085\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000]+$/g,"")}
+  function digest(value){return typeof value==="string"&&/^[0-9a-f]{64}$/.test(value)}
+  function revision(value){return typeof value==="string"&&/^[0-9a-f]{40}$/.test(value)}
+  function short(value){return typeof value==="string"&&value.length<=180?value:"UNAVAILABLE"}
+  function wipe(){
+    output.textContent="No proposal to display.";evidence.textContent="";evidence.hidden=true;
+    raw.textContent="";details.hidden=true;details.open=false;
+  }
+  function busy(on){
+    fields.disabled=on||!usable;submit.disabled=on||!usable;cancel.disabled=!on;
+    form.setAttribute("aria-busy",on?"true":"false");
+  }
+  function row(label,value){
+    var term=document.createElement("dt"),description=document.createElement("dd");
+    term.textContent=label;description.textContent=String(value);evidence.appendChild(term);evidence.appendChild(description);
+  }
+  async function hash(text){
+    if(!window.crypto||!window.crypto.subtle)throw fault("CLIENT_VERIFICATION_UNAVAILABLE");
+    var bytes=await window.crypto.subtle.digest("SHA-256",new TextEncoder().encode(text));
+    return Array.from(new Uint8Array(bytes),function(n){return n.toString(16).padStart(2,"0")}).join("");
+  }
+  async function boundedJSON(response){
+    var length=response.headers.get("content-length");
+    if(length!==null&&(!/^[0-9]+$/.test(length)||Number(length)>MAX_BYTES))throw fault("RESPONSE_TOO_LARGE");
+    if(!/^application\/json(?:\s*;|$)/i.test(response.headers.get("content-type")||""))throw fault("INVALID_RESPONSE");
+    if(!response.body||typeof response.body.getReader!=="function")throw fault("INVALID_RESPONSE");
+    var reader=response.body.getReader(),decoder=new TextDecoder("utf-8",{fatal:true}),parts=[],size=0;
+    try{
+      for(;;){
+        var chunk=await reader.read();if(chunk.done)break;
+        size+=chunk.value.byteLength;if(size>MAX_BYTES)throw fault("RESPONSE_TOO_LARGE");
+        parts.push(decoder.decode(chunk.value,{stream:true}));
+      }
+      parts.push(decoder.decode());
+      var body=JSON.parse(parts.join(""));if(!object(body))throw fault("INVALID_RESPONSE");return body;
+    }catch(error){try{await reader.cancel()}catch(ignore){}throw error.code==="RESPONSE_TOO_LARGE"?error:fault("INVALID_RESPONSE")}
+    finally{reader.releaseLock()}
+  }
+  async function rpc(message,credential,signal,protocol){
+    var headers={"Accept":"application/json, text/event-stream","Content-Type":"application/json","Authorization":"Bearer "+credential};
+    if(protocol)headers["MCP-Protocol-Version"]=protocol;
+    var response;
+    try{response=await fetch("/mcp/",{method:"POST",headers:headers,body:JSON.stringify(message),cache:"no-store",credentials:"omit",redirect:"error",signal:signal})}
+    catch(error){throw signal.aborted?fault("WAIT_ENDED"):fault("TRANSPORT_UNAVAILABLE")}
+    if(!response.ok){
+      if(response.body)try{await response.body.cancel()}catch(ignore){}
+      throw fault(response.status===401?"OPERATOR_NOT_ADMITTED":response.status===403?"CAPABILITY_NOT_ADMITTED":response.status===429?"RATE_LIMITED":"TRANSPORT_UNAVAILABLE");
+    }
+    if(message.id===undefined){
+      if(response.body)try{await response.body.cancel()}catch(ignore){}
+      if(response.status!==202&&response.status!==204)throw fault("INVALID_RESPONSE");return null;
+    }
+    var body=await boundedJSON(response);
+    if(body.jsonrpc!=="2.0"||body.id!==message.id||Object.prototype.hasOwnProperty.call(body,"error")||!object(body.result))throw fault("INVALID_RESPONSE");
+    return body.result;
+  }
+  function envelope(result){
+    if(result.isError===true)throw fault("TOOL_CALL_FAILED");
+    var data=result.structuredContent;
+    if(!object(data)){
+      if(!Array.isArray(result.content)||result.content.length!==1||result.content[0].type!=="text"||typeof result.content[0].text!=="string")throw fault("INVALID_RESPONSE");
+      try{data=JSON.parse(result.content[0].text)}catch(ignore){throw fault("INVALID_RESPONSE")}
+    }
+    if(!object(data)||data.tool!==TOOL||typeof data.status!=="string")throw fault("INVALID_RESPONSE");
+    return data;
+  }
+  async function inspect(reply,question){
+    var data=reply.data;
+    if(!object(data)||data.schema!==SCHEMA||!["PROPOSAL","UNAVAILABLE","REJECTED"].includes(data.state))throw fault("PROPOSAL_UNAVAILABLE");
+    if(data.state!=="PROPOSAL"||reply.status!=="success"){
+      var codes=Array.isArray(data.reason_codes)?data.reason_codes.filter(function(c){return typeof c==="string"&&/^[A-Z][A-Z0-9_]{0,79}$/.test(c)}).slice(0,8):[];
+      return {ready:false,state:data.state,reasons:codes};
+    }
+    var upstream=data.upstream,verification=data.verification;
+    if(!object(upstream)||!object(verification)||verification.scope!=="STRUCTURAL_CONSISTENCY_ONLY"||verification.signature_verification!=="NOT_PERFORMED"||verification.freshness!=="REQUEST_PREFLIGHT_BOUND")throw fault("INVALID_RESPONSE");
+    var receipt=upstream.receipt,payload=receipt&&receipt.payload;
+    if(!object(receipt)||!object(payload)||!object(receipt.signature)||receipt.signature.status!=="UNSIGNED_RUNTIME"||receipt.signature.durable!==false)throw fault("INVALID_RESPONSE");
+    if(upstream.state!=="PROPOSAL"||upstream.authority_state!=="NO_ACTION_AUTHORITY"||upstream.executed!==false||upstream.tool_execution!==false||payload.authority_state!=="NO_ACTION_AUTHORITY"||payload.executed!==false||payload.tool_execution!==false)throw fault("AUTHORITY_MISMATCH");
+    if(!revision(data.source_revision)||data.source_revision!==upstream.source_revision||data.source_revision!==payload.source_revision||typeof upstream.request_id!=="string"||!/^[0-9a-f]{32}$/.test(upstream.request_id)||upstream.request_id!==payload.request_id)throw fault("BINDING_MISMATCH");
+    if(typeof upstream.output!=="string"||!upstream.output.trim()||upstream.output.length>32768||!digest(upstream.output_sha256)||!digest(receipt.receipt_sha256)||!digest(payload.prompt_sha256)||upstream.output_sha256!==payload.output_sha256)throw fault("BINDING_MISMATCH");
+    var hashes=await Promise.all([hash(question),hash(upstream.output)]);
+    if(hashes[0]!==payload.prompt_sha256||hashes[1]!==upstream.output_sha256)throw fault("BINDING_MISMATCH");
+    if(!object(upstream.model)||!Array.isArray(upstream.evidence_handles)||upstream.evidence_handles.length>4||!object(upstream.formula_authority)||upstream.formula_authority.locked_proven_count!==8)throw fault("INVALID_RESPONSE");
+    var observed=Date.parse(data.observed_at);
+    if(!Number.isFinite(observed))throw fault("INVALID_RESPONSE");
+    return {ready:true,data:data,upstream:upstream,receipt:receipt,observed:observed};
+  }
+  function show(reply,view){
+    wipe();
+    if(!view.ready){status.textContent=view.state+" — no proposal delivered."+(view.reasons.length?" "+view.reasons.join(", "):"");return}
+    var data=view.data,upstream=view.upstream,receipt=view.receipt;
+    output.textContent=upstream.output;
+    row("Observed",new Date(view.observed).toISOString()+" · this request only");
+    row("Source",data.source_revision);row("Request",upstream.request_id);
+    row("Model",short(upstream.model.repository));row("Model revision",short(upstream.model.revision));
+    row("Evidence",upstream.evidence_handles.length+" returned handles");
+    row("Doctrine","8 locked source formulas · proof replay not performed here");
+    row("Authority","NO_ACTION_AUTHORITY · executed false");
+    row("Output SHA-256",upstream.output_sha256);row("Cortex receipt",receipt.receipt_sha256);
+    row("Cortex signature","UNSIGNED_RUNTIME · ephemeral process memory");
+    var khipu=reply.khipu_receipt;row("Hatun receipt",object(khipu)&&digest(khipu.continuum_hash)?khipu.continuum_hash:"UNAVAILABLE");
+    var signatures=reply.dsse&&reply.dsse.signatures;
+    var present=Array.isArray(signatures)&&signatures.some(function(s){return object(s)&&typeof s.sig==="string"&&s.sig.length>0});
+    row("Hatun signature",present?"SIGNATURE PRESENT · not verified here":"UNSIGNED / PLACEHOLDER");
+    var trace=upstream.trace_observation;
+    row("Trace observation",object(trace)?short(trace.state||trace.status||trace.delivery)+" · reported, not independently witnessed":"NOT RETURNED");
+    var anatomy=upstream.anatomy_observation;
+    row("Anatomy observation",object(anatomy)?short(anatomy.delivery)+" · "+short(anatomy.persistence):"NOT RETURNED");
+    row("Validation","Prompt and output digests checked in this browser. Upstream structural checks reported by Hatun; signatures not verified.");
+    evidence.hidden=false;raw.textContent=JSON.stringify(reply,null,2);details.hidden=false;
+    status.textContent="PROPOSAL — inspect the answer and its evidence. No action executed.";
+  }
+  function endWaiting(message){
+    generation+=1;if(active)active.abort();active=null;key.value="";wipe();busy(false);status.textContent=message;
+  }
+  var usable=window.isSecureContext&&window.top===window.self;
+  busy(false);if(!usable)status.textContent="Open this gateway directly in a secure window to request a proposal.";
+  form.addEventListener("submit",async function(event){
+    event.preventDefault();if(active||!usable)return;
+    wipe();
+    var originalLength=Array.from(prompt.value).length,question=normalizePrompt(prompt.value),credential=key.value;
+    prompt.value=question;
+    if(!question||originalLength>4000||!/^szl_[A-Za-z0-9_-]{1,252}$/.test(credential)){key.value="";status.textContent="Enter a question and a valid admitted operator key.";return}
+    key.value="";busy(true);status.textContent="Requesting a governed proposal…";
+    var mine=++generation,controller=new AbortController();active=controller;
+    var timer=setTimeout(function(){controller.abort()},WAIT_MS);
+    try{
+      var initialized=await rpc({jsonrpc:"2.0",id:"init-"+mine,method:"initialize",params:{protocolVersion:PROTOCOL,capabilities:{},clientInfo:{name:"hatun-proposal-console",version:"1.0.0"}}},credential,controller.signal,null);
+      if(initialized.protocolVersion!==PROTOCOL||!object(initialized.serverInfo)||initialized.serverInfo.name!=="hatun-mcp")throw fault("PROTOCOL_MISMATCH");
+      await rpc({jsonrpc:"2.0",method:"notifications/initialized"},credential,controller.signal,PROTOCOL);
+      var result=await rpc({jsonrpc:"2.0",id:"proposal-"+mine,method:"tools/call",params:{name:TOOL,arguments:{prompt:question,max_new_tokens:64,k:3}}},credential,controller.signal,PROTOCOL);
+      credential="";
+      var reply=envelope(result),view=await inspect(reply,question);
+      if(mine!==generation)return;
+      if(controller.signal.aborted)throw fault("WAIT_ENDED");
+      show(reply,view);
+    }catch(error){
+      if(mine!==generation)return;
+      wipe();
+      var messages={
+        OPERATOR_NOT_ADMITTED:"Operator key not admitted. No proposal displayed.",
+        CAPABILITY_NOT_ADMITTED:"This operator is not admitted to the proposal capability.",
+        RATE_LIMITED:"The gateway rate-limited this request. Nothing was retried.",
+        PROTOCOL_MISMATCH:"The gateway protocol does not match this client.",
+        BINDING_MISMATCH:"The response did not match this question, source, or output digest.",
+        AUTHORITY_MISMATCH:"The response violated the proposal-only authority contract.",
+        RESPONSE_TOO_LARGE:"The gateway response exceeded the client byte limit.",
+        CLIENT_VERIFICATION_UNAVAILABLE:"This browser could not verify the prompt and output digests.",
+        PROPOSAL_UNAVAILABLE:"No validated governed proposal was returned.",
+        TOOL_CALL_FAILED:"The governed tool could not complete the request.",
+        WAIT_ENDED:"Stopped waiting. The upstream request may still finish; no retry was sent.",
+        INVALID_RESPONSE:"The gateway returned an invalid response.",
+        TRANSPORT_UNAVAILABLE:"The gateway request could not be completed. Nothing was retried."
+      };
+      var code=controller.signal.aborted?"WAIT_ENDED":error.code;
+      status.textContent=messages[code]||"The proposal could not be validated.";
+    }finally{
+      credential="";clearTimeout(timer);
+      if(mine===generation){active=null;busy(false)}
+    }
+  });
+  cancel.addEventListener("click",function(){endWaiting("Stopped waiting. The upstream request may still finish; no retry was sent.")});
+  clear.addEventListener("click",function(){var running=active!==null;endWaiting(running?"Cleared. The upstream request may still finish; no retry was sent.":"No proposal requested.");prompt.value=""});
+  prompt.addEventListener("input",function(){if(!active){wipe();status.textContent="Question changed. Request a new proposal to bind evidence to this text."}});
+  key.addEventListener("input",function(){if(!active){wipe();status.textContent="Credential changed. No proposal requested with this credential."}});
+  window.addEventListener("pagehide",function(){endWaiting("No proposal requested.");prompt.value=""});
+  window.addEventListener("pageshow",function(event){if(event.persisted){endWaiting("No proposal requested.");prompt.value=""}});
+})();
+</script>
+
 </body>
 </html>""".replace("__HATUN_PUBLIC_BASE__", escape(PUBLIC_BASE, quote=True))

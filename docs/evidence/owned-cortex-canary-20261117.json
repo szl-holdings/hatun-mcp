@@ -1,0 +1,83 @@
+{
+  "started_at": "2026-11-17T00:14:21.768854Z",
+  "scope": "one real owned_cortex.infer invocation; no signer or credential access; no retries",
+  "adapter_sha256": "d01b0fcf844cb2c2ba974988d2083162c8b4f4b11628fe4cfb74643f8efc70e8",
+  "request": {
+    "prompt": "Briefly explain the public governance boundary. Cite one evidence handle.",
+    "max_new_tokens": 64,
+    "k": 1
+  },
+  "backend_result_class": "unchanged source class loaded without backend module initialization",
+  "state": "PROPOSAL",
+  "phase": "INFERENCE",
+  "reason_codes": [],
+  "source_revision": "e782b24e50c26447a77b8d45ed16f99fc35a6a67",
+  "http_status": 200,
+  "last_http_endpoint": "https://szlholdings-a11oy.hf.space/api/v2/governed-infer",
+  "backend_endpoint": "https://szlholdings-a11oy.hf.space/api/v2/governed-infer",
+  "upstream_error": null,
+  "request_id": "682f9b23c52221b84fbaca816e2d5ecb",
+  "output_sha256": "4025f34f0d4d455da23d88be89b3962aa18dc1a0b25505ed96c5bcdcde9b6d47",
+  "output_chars": 138,
+  "receipt_sha256": "b4f19125f3c81169ad0912214be3f06564d49ed729c4a83fd14c4a6c8b6a535a",
+  "evidence_set_sha256": "f40fde2b853525428a47cc16be96c50b424936cc9142173a8e134d869446cccd",
+  "model": {
+    "id": "SZLHOLDINGS/SZL-Khipu-1.5B-GGUF/SZL-Khipu-1.5B-Q4_K_M.gguf",
+    "repository": "SZLHOLDINGS/SZL-Khipu-1.5B-GGUF",
+    "revision": "67d60ec577730747055491640cfb91fc4a4b5d25",
+    "filename": "SZL-Khipu-1.5B-Q4_K_M.gguf",
+    "sha256": "13c1a1993063e1dff92f7413ccf48eaca6d48efc8801ae9af35961ae3396623a",
+    "size": 986047904,
+    "adapter_revision": "none",
+    "template_revision": "e782b24e50c26447a77b8d45ed16f99fc35a6a67",
+    "ownership": "SZL_HOLDINGS_OWNED_ARTIFACT"
+  },
+  "authority": {
+    "authority_state": "NO_ACTION_AUTHORITY",
+    "executed": false,
+    "tool_execution": false
+  },
+  "receipt_signature": {
+    "status": "UNSIGNED_RUNTIME",
+    "durable": false,
+    "must_be_signed_before_consequential_action": true
+  },
+  "receipt_persistence": "EPHEMERAL_PROCESS_MEMORY_ONLY",
+  "trace": {
+    "state": "OBSERVED",
+    "authority": "NONE",
+    "signature_status": "UNSIGNED_DERIVED_OBSERVATION",
+    "persistence": "RESPONSE_ONLY",
+    "delivery": "RESPONSE_SIDECAR_ONLY",
+    "collector_delivery": "UNVERIFIED",
+    "source_revision": "e782b24e50c26447a77b8d45ed16f99fc35a6a67",
+    "observation_sha256": "19856089bbc842555aa7c11198839ddd9ccf920d66d7873349a9d73d3e81a7cf"
+  },
+  "anatomy": {
+    "delivery": "DELIVERED",
+    "persistence": "EPHEMERAL_PROCESS_MEMORY_ONLY",
+    "observer_authority": "NONE",
+    "observation_count": 1
+  },
+  "verification": {
+    "scope": "STRUCTURAL_CONSISTENCY_ONLY",
+    "signature_verification": "NOT_PERFORMED",
+    "freshness": "REQUEST_PREFLIGHT_BOUND",
+    "latest_deployment_verified": false,
+    "trace_state": "OBSERVED",
+    "anatomy_delivery_scope": "OWNED_CORTEX_PROCESS_MEMORY"
+  },
+  "nemo_denial": null,
+  "adapter_evidence_sha256": "8b06aeff6a88390088b5e450cd7367eeb23927008a14bd9783d4a9f39fc594e8",
+  "adapter_digest_matches": true,
+  "elapsed_seconds": 31.85,
+  "finished_at": "2026-11-17T00:14:53.616989Z",
+  "record_kind": "HISTORICAL_UNSIGNED_OPERATOR_OBSERVATION",
+  "evidence_scope": "Local adapter to live fixed owned Cortex; separate from browser fixtures and deployed Hatun authentication.",
+  "limitations": [
+    "This report is unsigned and records a past observation, not current readiness.",
+    "No authenticated production Hatun browser/MCP deployment was established by this call.",
+    "The generated output and full upstream envelope are not stored in this report; their digests are recorded.",
+    "No signature verification, durable delivery, model-quality evaluation or Lean proof replay is established."
+  ]
+}

@@ -160,3 +160,21 @@ trusted signer identity, rejected forged/absent credentials and a successful
 permitted read call using the existing admitted key. Do not use a signing or
 state-changing tool as an availability probe. Keep the retired standalone
 publisher retired and do not substitute another service's MCP identity.
+
+
+## Explicit operator-only owned proposal
+
+`szl_owned_cortex_infer` is a separate authenticated operator capability on
+`/mcp/`. It accepts the existing explicitly bound read/write/admin operator
+identity, after the same credential and request admission checks, and then
+runs the existing Yuyay/receipt gates. It can request a bounded proposal only;
+it cannot grant action or signing authority.
+
+It is not in `_HTTP_READ_TOOLS`, so adding this tool does not expand the
+existing x402 defaults or allowlist. A valid payment-only context is refused
+before SDK dispatch, even if it requests this known tool by name.
+`http_transport_policy.operator_only_tools` discloses the separate capability.
+All unrelated dynamic tools, signing and privileged operations remain denied.
+
+See [Owned Cortex proposals](OWNED_CORTEX_PROPOSALS.md) for fixed-origin bounds,
+source and receipt checks, error disclosure, and unsigned evidence semantics.

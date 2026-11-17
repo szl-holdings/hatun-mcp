@@ -106,9 +106,9 @@ formula:
 
 ### Tools exposed
 
-- **37 static tools** registered at import (verifiable: `tools/list` returns 37 with
+- **38 static tools** registered at import (verifiable: `tools/list` returns 38 with
   `HATUN_MCP_DISABLE_DYNAMIC=true`):
-  - **31 `szl_*` tools** — `szl_a11oy_code_chat`, `szl_a11oy_operator_reason`, `szl_a11oy_sentinel_scan`,
+  - **32 `szl_*` tools** — `szl_owned_cortex_infer`, `szl_a11oy_code_chat`, `szl_a11oy_operator_reason`, `szl_a11oy_sentinel_scan`,
     `szl_anatomy_3d_render`, `szl_doctrine_lookup`, `szl_drone_lookup`,
     `szl_battery_score`, `szl_formula_evaluate`, `szl_frontier_chain_read`, `szl_github_estate_snapshot`, `szl_holo_cells`, `szl_khipu_verify`, `szl_killinchu_cue`,
     `szl_killinchu_detect`, `szl_lean_verify`, `szl_puriq_evaluate`,
@@ -128,7 +128,7 @@ formula:
     `dsse_sign`, `mesh_quorum_status`, `puriq_master_tool`, `governance_pacbayes_bound`.
 - **Service-derived tools** registered *dynamically* at startup from each backend
   service's live catalog at `/api/<service>/v1/mcp/tools`, named `<service>_<tool>`. The
-  dynamic count is **probe-dependent**: it equals 37 + (whatever the reachable services
+  dynamic count is **probe-dependent**: it equals 38 + (whatever the reachable services
   publish), and is 0 extra when dynamic registration is disabled or all services are
   unreachable.
 
@@ -453,3 +453,13 @@ Co-Authored-By: Perplexity Computer Agent &lt;agent@perplexity.ai&gt;
 </sub>
 
 Estate on Hugging Face: models, datasets and Spaces are published under the [SZLHOLDINGS](https://huggingface.co/SZLHOLDINGS) org.
+
+## Owned Cortex proposals
+
+The independent Python gateway now exposes `szl_owned_cortex_infer` to explicitly
+bound operator keys. It validates one proposal from the fixed owned Khipu Cortex,
+including request, source, model, output, evidence and receipt bindings. It keeps
+unsigned, process-local receipt and trace status visible. It is not admitted by
+payment-only credentials. See [the operator contract](docs/OWNED_CORTEX_PROPOSALS.md)
+and [the console guide](docs/OWNED_CORTEX_CONSOLE.md).
+This source integration does not establish deployment on the public product route.
