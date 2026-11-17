@@ -7,7 +7,7 @@ Asserts the SZL tweaks over a plain AXLE mirror:
   * secondary-oracle framing on every result (authorizing: false, local
     kernel stays primary);
   * key hygiene: the bearer key is never echoed into any response;
-  * the runtime tool catalog stays in parity with the server card (37).
+  * the runtime tool catalog stays in parity with the server card (38).
 
 SPDX-License-Identifier: Apache-2.0
 """
@@ -154,7 +154,7 @@ def test_tools_list_parity_with_server_card():
         return runtime, card
     runtime, card = asyncio.run(_lists())
     assert runtime == card, "runtime tools/list and the server card must match exactly"
-    assert len(runtime) == 37
+    assert len(runtime) == 38
     for name in AXLE_TOOL_NAMES:
         assert name in runtime, f"missing {name}"
 

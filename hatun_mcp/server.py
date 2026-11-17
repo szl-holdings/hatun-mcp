@@ -36,6 +36,9 @@ from mcp.server.transport_security import TransportSecuritySettings
 
 from . import __version__
 from . import backends as B
+from . import owned_cortex as OWNED_CORTEX
+from typing import Annotated
+from pydantic import Field
 from .deployment import PUBLIC_BASE
 from .formula_receipts import bind_formula_call, canonical_bytes, formula_request
 from .governance import (
@@ -400,6 +403,33 @@ def _narrative_wrap(tool, status, data):
 # ════════════════════════════════════════════════════════════════════════════════
 #  THE 15 TOOLS
 # ════════════════════════════════════════════════════════════════════════════════
+
+@mcp.tool()
+async def szl_owned_cortex_infer(
+    prompt: Annotated[str, Field(strict=True, min_length=1, max_length=4000)],
+    max_new_tokens: Annotated[int, Field(strict=True, ge=16, le=128)] = 64,
+    k: Annotated[int, Field(strict=True, ge=1, le=4)] = 3,
+) -> dict:
+    """Request one unsigned, proposal-only inference from the fixed owned Cortex.
+
+    Public projection handles only. No tools, arbitrary endpoint/model selection,
+    durable receipt, independent proof execution or action authority.
+    """
+    return await governed(
+        tool="szl_owned_cortex_infer", operation_id="owned_cortex.propose",
+        gate_text=prompt if isinstance(prompt, str) else "",
+        needs_scope="read", latency_budget=OWNED_CORTEX.TOTAL_TIMEOUT_SECONDS,
+        backend_coro=OWNED_CORTEX.infer(prompt, max_new_tokens, k),
+    )
+
+
+# MCP argument parsing must not silently discard URL/model/authority overrides.
+_cortex_tool = mcp._tool_manager.get_tool("szl_owned_cortex_infer")
+_cortex_args = _cortex_tool.fn_metadata.arg_model
+_cortex_args.model_config = {**_cortex_args.model_config, "extra": "forbid"}
+_cortex_args.model_rebuild(force=True)
+_cortex_tool.parameters = _cortex_args.model_json_schema(by_alias=True)
+
 
 @mcp.tool()
 async def szl_a11oy_code_chat(messages: list, model: Optional[str] = None,

@@ -329,7 +329,7 @@ class TestGithubEstateEnvelope:
         async def exercise():
             async with connect(S.mcp) as client:
                 listed = await client.list_tools()
-                assert len(listed.tools) == 37
+                assert len(listed.tools) == 38
                 tool = next(t for t in listed.tools if t.name == "szl_github_estate_snapshot")
                 assert tool.input_schema["properties"] == {}
                 assert tool.input_schema["additionalProperties"] is False

@@ -29,6 +29,7 @@ COPY hatun_mcp/console.py         /app/hatun_mcp/console.py
 COPY hatun_mcp/console_v2.py      /app/hatun_mcp/console_v2.py
 COPY hatun_mcp/state.py           /app/hatun_mcp/state.py
 COPY hatun_mcp/backends.py        /app/hatun_mcp/backends.py
+COPY hatun_mcp/owned_cortex.py    /app/hatun_mcp/owned_cortex.py
 COPY hatun_mcp/governance.py      /app/hatun_mcp/governance.py
 COPY hatun_mcp/formula_receipts.py /app/hatun_mcp/formula_receipts.py
 COPY hatun_mcp/puriq.py           /app/hatun_mcp/puriq.py

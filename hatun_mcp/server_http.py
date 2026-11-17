@@ -11,7 +11,7 @@ Wraps the FastMCP app in a Starlette application that:
   * admits only explicit operator-bound credentials and reviewed read-only RPCs.
   * ignores caller-supplied sovereign-mode and second-approver claims.
   * serves the draft server-card discovery extension so registries can enumerate
-    the 37 static tools even behind the auth wall.
+    the 38 static tools even behind the auth wall.
   * binds the exact card bytes to a cached in-toto Statement v1 / DSSE artifact.
   * serves /healthz, /readyz, and /pubkey (DSSE verification key).
 
@@ -107,6 +107,7 @@ _HTTP_READ_TOOLS = frozenset({
     "szl_yuyay_score",
     "szl_formula_evaluate",
 })
+_HTTP_OPERATOR_TOOLS = frozenset({"szl_owned_cortex_infer"})
 _HTTP_LOCAL_FORMULAS = frozenset({
     "puriq", "sigmoid", "liu_hui_pi",
 }) | __import__("hatun_mcp.formulas", fromlist=["EXECUTABLE_FORMULAS"]).EXECUTABLE_FORMULAS
@@ -211,12 +212,23 @@ def _payment_admission_policy() -> dict:
     }
 
 
-def http_auth_configured() -> bool:
-    """Observe explicit operator bindings without exposing their fingerprints."""
-    return any(
-        _SCOPE_BINDING_PATTERN.fullmatch(name) and scope in _VALID_SCOPES
-        for name, scope in os.environ.items()
-    )
+def http_auth_configured(environ: Mapping[str, str] | None = None) -> bool:
+    """Observe only bindings that the canonical key resolver can actually use.
+
+    Windows uppercases environment names but resolves them case-insensitively.
+    Linux uppercase-only fingerprints must not appear configured when the
+    canonical lowercase fingerprint lookup would still reject the caller.
+    """
+    bindings = os.environ if environ is None else environ
+    prefix = "HATUN_MCP_SCOPE_"
+    for name in bindings:
+        if not isinstance(name, str) or name[:len(prefix)].upper() != prefix:
+            continue
+        canonical = prefix + name[len(prefix):].lower()
+        if (_SCOPE_BINDING_PATTERN.fullmatch(canonical)
+                and bindings.get(canonical) in _VALID_SCOPES):
+            return True
+    return False
 
 
 def _http_transport_policy() -> dict:
@@ -225,6 +237,8 @@ def _http_transport_policy() -> dict:
         "credential_authority": "explicit-operator-scope-binding",
         "portal_validation": "NOT_IMPLEMENTED",
         "tools": sorted(_HTTP_READ_TOOLS),
+        "operator_only_tools": sorted(_HTTP_OPERATOR_TOOLS),
+        "operator_proposals": "UNSIGNED_NO_ACTION_AUTHORITY",
         "local_formulas": sorted(_HTTP_LOCAL_FORMULAS),
         "resources": sorted(_HTTP_READ_RESOURCES),
         "write_authorization": "UNAVAILABLE",
@@ -316,7 +330,7 @@ def _payment_send(send, admission: PaymentAdmission, config: X402Config,
     return wrapped
 
 
-def _admit_http_rpc(message) -> JSONResponse | None:
+def _admit_http_rpc(message, *, operator_key: bool = False) -> JSONResponse | None:
     """Admit a single read-only MCP message before any server dispatch."""
     if not isinstance(message, dict) or message.get("jsonrpc") != "2.0":
         return _transport_error(400, "invalid_mcp_message")
@@ -330,7 +344,9 @@ def _admit_http_rpc(message) -> JSONResponse | None:
         return _transport_error(400, "invalid_mcp_parameters")
     if method == "tools/call":
         name = params.get("name")
-        if not isinstance(name, str) or name not in _HTTP_READ_TOOLS:
+        if not isinstance(name, str) or not (
+            name in _HTTP_READ_TOOLS or (operator_key and name in _HTTP_OPERATOR_TOOLS)
+        ):
             return _transport_error(403, "tool_not_admitted_for_http")
         arguments = params.get("arguments", {})
         if not isinstance(arguments, dict):
@@ -354,9 +370,10 @@ def _admit_http_rpc(message) -> JSONResponse | None:
 # The browser-facing surface is the HTML console at "/"; it ships inline <script>,
 # inline <style>, and inline style="" attributes, so script-src/style-src keep
 # 'unsafe-inline' (a strict nonce CSP would blank the console). The console fetches
-# this server's own routes ONLY (/api/console-state and /pubkey), so connect-src is
-# tightened to 'self' — verified against the console source: it makes no off-origin
-# fetch, and every number it renders comes from this process's own Python endpoint.
+# this server's own routes only: /api/console-state and /pubkey for observation,
+# plus /mcp/ after an explicit operator proposal submit. connect-src stays 'self';
+# the browser never sends an operator key or prompt directly to the Cortex origin.
+# Remote evidence is labeled as upstream observation rather than local telemetry.
 # JSON/MCP responses ignore CSP, so one policy is safe
 # for every route. frame-ancestors allows the legitimate HF embed but nothing else;
 # we never send X-Frame-Options: DENY (it would break that embed). HSTS is honest
@@ -493,7 +510,7 @@ class GovernanceAuthMiddleware:
             except (ValueError, UnicodeDecodeError, RecursionError):
                 await _transport_error(400, "invalid_mcp_message")(scope, receive, send)
                 return
-            error = _admit_http_rpc(message)
+            error = _admit_http_rpc(message, operator_key=admission is None)
             if error is not None:
                 await error(scope, receive, send)
                 return
@@ -534,6 +551,7 @@ def _server_card() -> dict:
     # Static, hand-maintained mirror (authoritative for registries behind auth wall):
     card_tools = [
         ("szl_a11oy_code_chat", "Chat with a11oy.code unified open-LLM router"),
+        ("szl_owned_cortex_infer", "Operator-key-only owned Cortex proposal; unsigned evidence, no action authority"),
         ("szl_killinchu_detect", "Detect/identify a drone from RF/Remote-ID/ADS-B"),
         ("szl_killinchu_cue", "Signed BoE target cue (state-changing, 2-person gate)"),
         ("szl_immune_scan", "a11oy Immune (Hukulla) screen of code/SBOM/image (signed verdict)"),
@@ -581,6 +599,15 @@ def _server_card() -> dict:
             "properties": {},
             "additionalProperties": True,
         }
+        if name == "szl_owned_cortex_infer":
+            input_schema = {
+                "type": "object", "additionalProperties": False, "required": ["prompt"],
+                "properties": {
+                    "prompt": {"type": "string", "minLength": 1, "maxLength": 4000},
+                    "max_new_tokens": {"type": "integer", "minimum": 16, "maximum": 128, "default": 64},
+                    "k": {"type": "integer", "minimum": 1, "maximum": 4, "default": 3},
+                },
+            }
         tools.append({
             "name": name, "description": desc,
             "inputSchema": input_schema,

@@ -226,7 +226,7 @@ class X402AdmissionTests(unittest.TestCase):
     def test_valid_context_cannot_reach_privileged_or_dynamic_tools(self):
         token = self.gateway.token()
         for name in ("dsse_sign", "khipu_append_and_verify", "szl_killinchu_cue",
-                     "puriq_master_tool", "unreviewed_dynamic_tool"):
+                     "puriq_master_tool", "unreviewed_dynamic_tool", "szl_owned_cortex_infer"):
             with self.subTest(tool=name):
                 response = self.post(rpc("tools/call", {"name": name, "arguments": {}}), token)
                 self.assert_refused(response, 403, "tool_not_admitted_for_http")
