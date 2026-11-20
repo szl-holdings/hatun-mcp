@@ -1,55 +1,71 @@
-"""Memory Court gateway: the fail-closed admission pipeline.
+"""Memory Court gateway: the fail-closed admission pipeline (day-4).
 
-Implements the day-2 decision table (docs/memory-court/MEMORY_COURT_DAY2.md)
-as hardened after the two-brain adversarial review (mistral-large-4:cloud
-+ qwen2.5-coder:7b, 2026-11-20, both verdicts FIX-FIRST):
+Day-4 closes the TOCTOU trust gap flagged in the two-brain adversarial
+review of day-3 (mistral-large-4:cloud + qwen2.5-coder:7b) and hardened
+after the day-4 design review (GPT-6 via the ChatGPT app +
+mistral-large-4:cloud, 2026-11-20, both verdicts FIX-FIRST):
 
     operator-auth -> tenant bind -> routing-header check -> memory-id check
-    -> idempotency-key required -> build attestation -> trust root
-    -> idempotency replay -> adjudication whitelist -> sign (validated)
-    -> khipu append
+    -> idempotency-key required -> build attestation
+    -> trust-root SNAPSHOT (one per invoke; provider failure => refuse)
+    -> idempotency replay (trust-bound; legacy/rotated refuse)
+    -> adjudication whitelist -> sign (validated; key id in snapshot)
+    -> signature verification (when a verifier is injected)
+    -> preconditioned khipu append (digest re-assert inside the commit)
+    -> dependent writes only after commit
 
-Hardening invariants added after review (each has a contract test):
-- No commit path exists without an idempotency key: key=None is refused
-  (503 idempotency_key_required). A claim without a commit anchor is a LEAK.
-- Adjudication whitelist: only "admit"/"abstain" proceed; "block" and every
-  other/unknown decision value refuse (unknown stays UNKNOWN).
-- Replay binds request identity (operation, memory_id, tenant, digest):
-  same key + different request => 409 idempotency_conflict, never a silent
-  old-receipt pass-through. The digest itself binds tool/args/tenant/
-  memory_id/idempotency_key, so event ids are domain-separated per tenant
-  and per key.
-- Replay of an admission re-releases its dependent write (idempotent by
-  event_id): a crash between commit and release no longer strands the write.
-- Signer output is validated (non-empty signature required); generic signer
-  failures refuse with 503 signer_error. Nothing commits unsigned/unverified.
+Day-4 invariants (each with a contract test):
+- ONE snapshot per invoke; version, build digest, signer key ids and a
+  monotonic epoch are bound into snapshot_digest (ABA-proof).
+- v1 receipts carry mandatory trust bindings; nothing half-signed or
+  half-bound ever commits (empty v1 fields are refused at build).
+- The signer returns (signature, key_id); key_id must be in the
+  snapshot's signer_key_ids or nothing signs or commits.
+- The signature covers the FULL v1 envelope (signed_payload); when a
+  signature_verifier is injected, verification must pass before the
+  commit (DSSE against owner keys remains ROADMAP).
+- The append precondition re-asserts the CURRENT snapshot digest inside
+  the commit lock; rotation between sign and commit => 503
+  trust_root_rotated, nothing committed.
+- Replay: v0 receipts are read-only legacy and refuse to replay (their
+  trust binding is UNKNOWN); a receipt committed under a different
+  snapshot digest or a rotated-out signer key refuses with 503
+  trust_root_rotated. Replays return committed evidence only and are
+  NEVER re-adjudicated or re-signed. Re-adjudication under a rotated
+  root requires a fresh request through the full pipeline.
 
-Receipt semantics (locked):
-- `None` kind: no receipt object is emitted on refusals.
-- `abstention`: committed only AFTER signing and khipu append; it is never
-  an allow and releases no dependent writes.
-- `signed-uncommitted`: internal evidence of a failed khipu commit; it is
-  never a success receipt and never populates committed_receipt.
-- Recovery rule: an existing khipu entry is the SOLE success proof for an
-  interrupted request; absence of an entry means abort, not inferred success.
+Day-3 hardening retained (receipts semantics locked):
+- No commit path without an idempotency key; adjudication whitelist
+  (admit/abstain only); replay binds request identity (409 on mismatch);
+  admission replay re-releases its dependent write (idempotent by
+  event_id); nothing commits unsigned; append failure is 503
+  signed-uncommitted, never success; an existing khipu entry is the
+  SOLE success proof for an interrupted request.
 
-TOCTOU (review finding, wrapper contract): auth/tenant/build/trust are
-sampled before commit, and commit happens later. The production wrapper
-must re-assert them atomically with the khipu append and bind the build
-digest, trust-root version and signer key id into the receipt envelope;
-that is the trust-root work in the ROADMAP, not this slice.
+Replay-of-old-root policy note: GPT-6 suggested a conditional historical
+allow under an explicit historical-trust policy; mistral-large-4 refused.
+Fail-closed resolves the conflict toward refusal until the owner adopts
+an explicit historical trust policy (ROADMAP, owner-gated).
 
-All infrastructure (auth, tenant resolution, trust root, build attestation,
-signer, khipu writer) is injected so the contract is testable without
-production key material (which is owner-gated, ROADMAP).
+All infrastructure (auth, tenant resolution, build attestation, trust
+root, signer, verifier, khipu writer) is injected so the contract is
+testable without production key material (owner-gated, ROADMAP).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from .receipts import AdmissibilityReceipt, build_receipt, canonical_sha256
+from .khipu_writer import KhipuPreconditionError
+from .receipts import (
+    AdmissibilityReceiptV1,
+    RECEIPT_SCHEMA,
+    build_receipt_v1,
+    canonical_sha256,
+    signed_payload,
+)
+from .trust_root import TrustRootError
 
 __all__ = [
     "MemoryCourtGateway",
@@ -84,7 +100,7 @@ class Outcome:
     status: int
     reason: str
     receipt_kind: Optional[str] = None  # "admission" | "abstention" | "signed-uncommitted" | None
-    committed_receipt: Optional[AdmissibilityReceipt] = None
+    committed_receipt: Optional[AdmissibilityReceiptV1] = None
     dependent_writes: List[str] = field(default_factory=list)
 
 
@@ -101,18 +117,20 @@ class MemoryCourtGateway:
         auth: Callable[[Optional[str]], bool],
         tenant_resolver: Callable[[Optional[str]], bool],
         build_admissible: Callable[[], bool],
-        trust_root_ok: Callable[[], bool],
+        trust_root,  # object with .snapshot() -> TrustSnapshot
         adjudicator: Callable[[Request], str],  # "admit" | "abstain" | "block"
-        signer: Callable[[AdmissibilityReceipt], str],  # returns signature
-        khipu,  # object with .get(key) / .append(key, receipt)
+        signer: Callable[[AdmissibilityReceiptV1], Tuple[str, str]],  # (signature, key_id)
+        khipu,  # object with .get / .append_with_precondition
+        signature_verifier: Optional[Callable[[str, str, str], bool]] = None,
     ) -> None:
         self._auth = auth
         self._tenants = tenant_resolver
         self._build_ok = build_admissible
-        self._trust_root_ok = trust_root_ok
+        self._trust_root = trust_root
         self._adjudicator = adjudicator
         self._signer = signer
         self._khipu = khipu
+        self._verifier = signature_verifier
 
     # -- pipeline ---------------------------------------------------------
 
@@ -138,8 +156,15 @@ class MemoryCourtGateway:
         if not self._build_ok():
             return Outcome(503, "build_not_admissible")
 
-        if not self._trust_root_ok():
+        # ONE snapshot per invoke; sampled once, bound everywhere.
+        try:
+            snap = self._trust_root.snapshot()
+        except TrustRootError:
+            # Unknown/invalid root (incl. no signers): nothing is signed.
             return Outcome(503, "trust_root_version_unknown")
+        except Exception:
+            # Provider crash: unknown state is a refusal, never a fallback.
+            return Outcome(503, "trust_root_unavailable")
 
         # Identity-bound digest: domain-separates event ids per tenant/key
         # and gives the replay check something real to compare.
@@ -165,6 +190,17 @@ class MemoryCourtGateway:
             if not same_request:
                 # Same key, different request: poisoning vector, refuse.
                 return Outcome(409, "idempotency_conflict")
+            if existing.schema == RECEIPT_SCHEMA:
+                # Legacy v0: trust binding is UNKNOWN; read-only, never
+                # replayed as success (fail-closed).
+                return Outcome(503, "receipt_legacy_refused")
+            if (
+                getattr(existing, "snapshot_digest", "") != snap.digest
+                or getattr(existing, "signer_key_id", "") not in snap.signer_key_ids
+            ):
+                # Committed under a different root: refuse. Conditional
+                # historical replay needs an owner-adopted policy (ROADMAP).
+                return Outcome(503, "trust_root_rotated")
             if existing.decision == "abstain":
                 return Outcome(
                     200,
@@ -192,19 +228,24 @@ class MemoryCourtGateway:
             # Unknown stays UNKNOWN: never fall through to admission.
             return Outcome(503, "adjudication_unknown")
 
-        receipt = build_receipt(
-            operation=request.tool,
-            memory_id=request.memory_id,
-            operator_subject=request.operator_subject or "",
-            tenant=request.tenant or "",
-            request_digest=request_digest,
-            decision=decision,
-            signature="",
-            status_current="admissible",
-        )
+        # v1 envelope: mandatory trust bindings, refusals at build time.
+        try:
+            receipt = build_receipt_v1(
+                operation=request.tool,
+                memory_id=request.memory_id,
+                operator_subject=request.operator_subject or "",
+                tenant=request.tenant or "",
+                request_digest=request_digest,
+                decision=decision,
+                trust_root_version=snap.version,
+                build_digest=snap.build_digest,
+                snapshot_digest=snap.digest,
+            )
+        except ValueError:
+            return Outcome(503, "receipt_envelope_invalid")
 
         try:
-            signature = self._signer(receipt)
+            signature, key_id = self._signer(receipt)
         except SignerKeyUnknown:
             return Outcome(503, "signer_key_unknown")
         except SignerUnavailable:
@@ -216,20 +257,61 @@ class MemoryCourtGateway:
         if not isinstance(signature, str) or not signature.strip():
             # An empty signature would fabricate evidence: refuse.
             return Outcome(503, "signer_invalid_signature")
+        if not isinstance(key_id, str) or not key_id.strip():
+            # A signature without a bound key id is unverifiable: refuse.
+            return Outcome(503, "signer_key_unknown")
+        if key_id not in snap.signer_key_ids:
+            # Forged/rotated-out key id: nothing signs on our watch.
+            return Outcome(503, "signer_key_unknown")
 
-        signed = build_receipt(
-            operation=receipt.operation,
-            memory_id=receipt.memory_id,
-            operator_subject=receipt.operator_subject,
-            tenant=receipt.tenant,
-            request_digest=receipt.request_digest,
-            decision=receipt.decision,
-            signature=signature,
-            status_current="admissible",
-        )
+        payload = signed_payload(receipt)
+        if self._verifier is not None:
+            try:
+                verified = self._verifier(payload, signature, key_id)
+            except Exception:
+                return Outcome(503, "signature_verification_failed")
+            if not verified:
+                # Signature does not cover the envelope as claimed.
+                return Outcome(503, "signature_verification_failed")
 
         try:
-            self._khipu.append(request.idempotency_key, signed)
+            signed = AdmissibilityReceiptV1(
+                schema=receipt.schema,
+                operation=receipt.operation,
+                event_id=receipt.event_id,
+                memory_id=receipt.memory_id,
+                ts=receipt.ts,
+                operator_subject=receipt.operator_subject,
+                tenant=receipt.tenant,
+                request_digest=receipt.request_digest,
+                canonicalization=receipt.canonicalization,
+                gate=receipt.gate,
+                decision=receipt.decision,
+                astype_signature=signature,
+                status_current=receipt.status_current,
+                trust_root_version=receipt.trust_root_version,
+                build_digest=receipt.build_digest,
+                signer_key_id=key_id,
+                snapshot_digest=receipt.snapshot_digest,
+            )
+        except Exception:
+            return Outcome(503, "signer_invalid_signature")
+
+        try:
+            self._khipu.append_with_precondition(
+                request.idempotency_key,
+                signed,
+                expect_snapshot_digest=snap.digest,
+                current_snapshot_digest=lambda: self._trust_root.snapshot().digest,
+            )
+        except KhipuPreconditionError:
+            # The root rotated (or became unreadable) between sign and
+            # commit: nothing was written, nothing releases.
+            return Outcome(
+                503,
+                "trust_root_rotated",
+                receipt_kind="signed-uncommitted",
+            )
         except Exception:
             # Signed but uncommitted: internal evidence only, never success.
             # Broad catch is deliberate (any append failure must refuse);
