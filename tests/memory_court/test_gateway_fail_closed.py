@@ -4,19 +4,27 @@ Real tests, no skips. Every vector asserts the full triple:
 (status, receipt_kind, dependent_writes) plus the invariant that
 infrastructure was never touched on a failed gate.
 
-DAY2 table (docs/memory-court/MEMORY_COURT_DAY2.md):
-  unauthenticated  -> 401, no receipt
-  wrong tenant     -> 403, no receipt
-  malformed routing-> 400
+Hardened table after adversarial review (mistral-large-4 + qwen, both
+verdicts FIX-FIRST; fixes in the follow-up commit on this branch):
+  unauthenticated    -> 401, no receipt
+  wrong tenant       -> 403, no receipt
+  malformed routing  -> 400
+  empty memory_id    -> 400 memory_id_required
+  missing/blank idem key -> 503 idempotency_key_required (no commit-less claim)
   dirty/unknown build -> 503
-  unknown trust root-> 503
-  signer key unknown-> 503
-  adjudication block-> 503
-  signer unavailable-> 503, nothing committed
-  khipu write failure -> 503 signed-uncommitted, never success
-  abstain           -> 200 abstention, committed, no dependent writes
-  admit             -> 200 admission, dependent write released
-  replay            -> original receipt, no re-sign, no re-adjudicate
+  unknown trust root  -> 503
+  signer key unknown  -> 503
+  signer unavailable  -> 503
+  generic signer error -> 503 signer_error
+  empty signature     -> 503 signer_invalid_signature, nothing committed
+  adjudication block   -> 503
+  adjudication unknown -> 503 (unknown stays UNKNOWN)
+  khipu write failure  -> 503 signed-uncommitted, never success
+  abstain             -> 200 abstention, committed, no dependent writes
+  admit               -> 200 admission, dependent write released
+  replay (same request) -> original receipt, no re-sign, no re-adjudicate,
+                          admission re-releases its write
+  replay (different request, same key) -> 409 idempotency_conflict
 """
 
 from __future__ import annotations
@@ -71,6 +79,8 @@ def req(**over):
     return Request(**base)
 
 
+# -- refusals ---------------------------------------------------------------
+
 def test_unauthenticated_caller(tmp_path):
     s = Stubs(tmp_path)
     s.gw._auth = lambda subj: False
@@ -103,6 +113,36 @@ def test_malformed_routing_headers_blank_profile(tmp_path):
     assert out.status == 400
 
 
+def test_memory_id_required(tmp_path):
+    s = Stubs(tmp_path)
+    out = s.gw.invoke(req(memory_id=""))
+    assert (out.status, out.reason) == (400, "memory_id_required")
+    assert out.receipt_kind is None
+    assert s.append_calls == []
+
+
+def test_missing_idempotency_key_refused(tmp_path):
+    # Review finding CRITICAL: admit with no commit anchor was a LEAK.
+    # Now: no idempotency key -> no commit path at all.
+    s = Stubs(tmp_path)
+    out = s.gw.invoke(req(idempotency_key=None))
+    assert (out.status, out.reason) == (503, "idempotency_key_required")
+    assert out.receipt_kind is None
+    assert out.committed_receipt is None
+    assert out.dependent_writes == []
+    assert s.append_calls == []
+    # Recovery rule preserved: a fresh writer sees no fabricated entries.
+    w2 = FileKhipuWriter(str(tmp_path / "khipu.jsonl"))
+    assert w2.get("idem-1") is None
+
+
+def test_blank_idempotency_key_refused(tmp_path):
+    s = Stubs(tmp_path)
+    out = s.gw.invoke(req(idempotency_key="   "))
+    assert (out.status, out.reason) == (503, "idempotency_key_required")
+    assert s.append_calls == []
+
+
 def test_dirty_or_unknown_build(tmp_path):
     s = Stubs(tmp_path)
     s.gw._build_ok = lambda: False
@@ -129,6 +169,18 @@ def test_adjudication_block(tmp_path):
     assert s.append_calls == []
 
 
+def test_adjudication_unknown_refused_never_falls_through(tmp_path):
+    # Review finding CRITICAL: unknown decisions used to fall through to
+    # admission. Now anything outside {admit, abstain, block} refuses.
+    for rogue in ("unknown", "error", "", None, "Admit"):
+        s = Stubs(tmp_path, adjudicator=lambda r, _x=rogue: _x)
+        out = s.gw.invoke(req(idempotency_key="k-" + str(rogue)))
+        assert (out.status, out.reason) == (503, "adjudication_unknown"), rogue
+        assert out.receipt_kind is None
+        assert out.dependent_writes == []
+        assert s.append_calls == []
+
+
 def test_unknown_signer_key(tmp_path):
     s = Stubs(tmp_path)
     def boom(r):
@@ -152,6 +204,27 @@ def test_signer_unavailable_nothing_committed(tmp_path):
     assert s.append_calls == []
 
 
+def test_generic_signer_error_refused(tmp_path):
+    s = Stubs(tmp_path)
+    def boom(r):
+        raise ValueError("signer bug")
+    s.gw._signer = boom
+    out = s.gw.invoke(req())
+    assert (out.status, out.reason) == (503, "signer_error")
+    assert out.receipt_kind is None
+    assert s.append_calls == []
+
+
+def test_empty_signature_refused(tmp_path):
+    # Review finding: an empty signature would fabricate evidence.
+    s = Stubs(tmp_path)
+    s.gw._signer = lambda r: ""
+    out = s.gw.invoke(req())
+    assert (out.status, out.reason) == (503, "signer_invalid_signature")
+    assert out.receipt_kind is None
+    assert s.append_calls == []
+
+
 def test_khipu_write_failure_is_signed_uncommitted_never_success(tmp_path):
     class BrokenWriter(FileKhipuWriter):
         def append(self, key, receipt):
@@ -164,6 +237,8 @@ def test_khipu_write_failure_is_signed_uncommitted_never_success(tmp_path):
     assert out.committed_receipt is None
     assert out.dependent_writes == []
 
+
+# -- successes and their limits ----------------------------------------------
 
 def test_adjudication_abstain_commits_but_releases_nothing(tmp_path):
     s = Stubs(tmp_path, adjudicator=lambda r: "abstain")
@@ -188,6 +263,8 @@ def test_admit_happy_path_releases_dependent_write(tmp_path):
     assert s.khipu.get("idem-1").event_id == ev
 
 
+# -- replay -----------------------------------------------------------------
+
 def test_idempotent_replay_returns_original_without_resigning(tmp_path):
     s = Stubs(tmp_path)
     first = s.gw.invoke(req())
@@ -200,7 +277,19 @@ def test_idempotent_replay_returns_original_without_resigning(tmp_path):
     assert "adjudicate" not in s.calls  # replay must not re-adjudicate
 
 
-def test_replay_of_abstention_reports_abstention_kind(tmp_path):
+def test_replay_of_admission_re_releases_dependent_write(tmp_path):
+    # Review finding: a crash between commit and release used to strand the
+    # write forever; replay now re-releases (idempotent by event_id).
+    s = Stubs(tmp_path)
+    first = s.gw.invoke(req())
+    second = s.gw.invoke(req())
+    ev = first.committed_receipt.event_id
+    assert second.receipt_kind == "admission"
+    assert second.dependent_writes == ["released:" + ev]
+    assert s.append_calls == ["idem-1"]  # never appended twice
+
+
+def test_replay_of_abstention_reports_abstention_kind_and_releases_nothing(tmp_path):
     s = Stubs(tmp_path, adjudicator=lambda r: "abstain")
     s.gw.invoke(req(idempotency_key="idem-abs"))
     out = s.gw.invoke(req(idempotency_key="idem-abs"))
@@ -208,17 +297,37 @@ def test_replay_of_abstention_reports_abstention_kind(tmp_path):
     assert out.dependent_writes == []
 
 
-def test_missing_khipu_entry_is_not_inferred_success(tmp_path):
-    # Recovery rule: writer that lost the append -> get() is None -> the
-    # gateway proceeds as a NEW request and must commit before claiming.
+def test_replay_same_key_different_request_is_conflict_not_poison(tmp_path):
+    # Review finding HIGH: same key + different request used to return the
+    # OLD receipt as 200. Now: identity mismatch => 409, nothing returned.
     s = Stubs(tmp_path)
-    out = s.gw.invoke(req(idempotency_key=None))
-    assert out.status == 200
-    # and a fresh empty writer reading the same path sees exactly the
-    # receipts that were appended - no fabricated entries
-    w2 = FileKhipuWriter(str(tmp_path / "khipu.jsonl"))
-    assert w2.get("idem-1") is None
+    s.gw.invoke(req())
+    out = s.gw.invoke(req(args={"payload": "tampered"}))
+    assert (out.status, out.reason) == (409, "idempotency_conflict")
+    assert out.receipt_kind is None
+    assert out.committed_receipt is None
+    assert out.dependent_writes == []
+    assert s.append_calls == ["idem-1"]
 
+
+def test_replay_across_memory_id_is_conflict(tmp_path):
+    s = Stubs(tmp_path)
+    s.gw.invoke(req())
+    out = s.gw.invoke(req(memory_id="mem_999"))
+    assert (out.status, out.reason) == (409, "idempotency_conflict")
+
+
+def test_digest_binds_tenant_so_event_ids_domain_separate(tmp_path):
+    # Review finding HIGH: event_id lacked domain separation. The digest now
+    # binds tenant + key, so identical memories in two tenants cannot alias.
+    s = Stubs(tmp_path)
+    a = s.gw.invoke(req(tenant="t:acme", idempotency_key="k-a"))
+    s.gw._tenants = lambda t: True
+    b = s.gw.invoke(req(tenant="t:other", idempotency_key="k-b"))
+    assert a.committed_receipt.event_id != b.committed_receipt.event_id
+
+
+# -- writer -----------------------------------------------------------------
 
 def test_writer_persistence_roundtrip(tmp_path):
     path = str(tmp_path / "khipu.jsonl")
