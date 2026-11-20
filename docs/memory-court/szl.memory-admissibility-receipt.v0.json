@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/szl-holdings/hatun-mcp/blob/main/docs/memory-court/szl.memory-admissibility-receipt.v0.json",
+  "title": "SZL Memory Admissibility Receipt v0",
+  "description": "Signed envelope produced by every admitted Memory Court operation. JCS (RFC 8785) canonicalization for all digests. Design artifact; no implementation claim.",
+  "type": "object",
+  "required": ["schema", "operation", "memory_id", "event_id", "ts", "operator", "request_digest", "mcp", "hatun", "adjudication", "lineage", "khipu", "dsse", "status_current"],
+  "properties": {
+    "schema": { "const": "szl.memory-admissibility-receipt/v0" },
+    "operation": { "enum": ["commit", "query", "revoke", "abstain", "blocked"] },
+    "memory_id": { "type": "string", "pattern": "^mem_[A-Za-z0-9_-]+$" },
+    "event_id": { "type": "string", "pattern": "^evt_[A-Za-z0-9_-]+$" },
+    "ts": { "type": "string", "format": "date-time" },
+    "idempotency_key": { "type": "string" },
+    "operator": {
+      "type": "object",
+      "required": ["subject", "tenant", "claims_source"],
+      "properties": {
+        "subject": { "type": "string", "description": "verified operator subject id; never a bearer token" },
+        "tenant": { "type": "string" },
+        "claims_source": { "const": "hatun-live-auth:v1" }
+      }
+    },
+    "request_digest": {
+      "type": "object",
+      "required": ["canonical_jcs_sha256", "args_redacted"],
+      "properties": {
+        "canonical_jcs_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "args_redacted": { "type": "boolean", "const": true }
+      }
+    },
+    "mcp": {
+      "type": "object",
+      "required": ["spec_profile", "transport"],
+      "properties": {
+        "spec_profile": { "const": "2026-07-28" },
+        "transport": { "enum": ["streamable-http", "sse"] }
+      }
+    },
+    "hatun": {
+      "type": "object",
+      "required": ["source_revision", "build_digest", "doctrine_digest", "policy_digest", "tool_schema_digest"],
+      "properties": {
+        "source_revision": { "type": "string" },
+        "build_digest": { "type": "string" },
+        "doctrine_digest": { "type": "string" },
+        "policy_digest": { "type": "string" },
+        "tool_schema_digest": { "type": "string" }
+      }
+    },
+    "adjudication": {
+      "type": "object",
+      "required": ["gate", "decision", "reason_code"],
+      "properties": {
+        "gate": { "const": "yuyay-13" },
+        "decision": { "enum": ["admit", "abstain", "block"] },
+        "reason_code": { "type": "string" }
+      }
+    },
+    "lineage": {
+      "type": "object",
+      "required": ["sources", "parents", "lineage_complete"],
+      "properties": {
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["uri", "revision", "content_sha256"],
+            "properties": {
+              "uri": { "type": "string" },
+              "revision": { "type": "string" },
+              "content_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+            }
+          }
+        },
+        "parents": { "type": "array", "items": { "type": "string", "pattern": "^mem_[A-Za-z0-9_-]+$" } },
+        "lineage_complete": { "type": "boolean" }
+      }
+    },
+    "khipu": {
+      "type": "object",
+      "required": ["entry_id", "outcome"],
+      "properties": {
+        "entry_id": { "type": "string" },
+        "outcome": { "const": "appended" }
+      }
+    },
+    "dsse": {
+      "type": "object",
+      "required": ["envelope", "signer_key_id", "trust_root_version", "trust_root_digest"],
+      "properties": {
+        "envelope": { "type": "string", "description": "DSSE envelope; cosign-verifiable" },
+        "signer_key_id": { "type": "string" },
+        "trust_root_version": { "type": "string" },
+        "trust_root_digest": { "type": "string" }
+      }
+    },
+    "status_current": { "enum": ["admissible", "revoked", "superseded", "unknown"] },
+    "impact": {
+      "type": "object",
+      "description": "revoke operations only",
+      "required": ["impacted_memory_ids", "coverage_limits_stated"],
+      "properties": {
+        "impacted_memory_ids": { "type": "array", "items": { "type": "string" } },
+        "coverage_limits_stated": { "type": "boolean", "const": true }
+      }
+    }
+  },
+  "additionalProperties": false
+}
