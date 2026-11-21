@@ -53,7 +53,10 @@ def _read_files(root: Path, filenames: list[str]) -> list[dict[str, Any]]:
             any(not isinstance(name, str) or not FILE_NAME.fullmatch(name) for name in filenames) or
             len(set(filenames)) != len(filenames)):
         raise IntentError("INVALID_ARTIFACT_SELECTION")
-    root = root.resolve(strict=True)
+    try:
+        root = root.resolve(strict=True)
+    except (OSError, RuntimeError):
+        raise IntentError("INVALID_WORKSPACE_ROOT") from None
     if not root.is_dir():
         raise IntentError("INVALID_WORKSPACE_ROOT")
     result: list[dict[str, Any]] = []
