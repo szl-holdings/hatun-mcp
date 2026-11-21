@@ -69,6 +69,13 @@ class DeferredIntentWitnessTests(unittest.TestCase):
         with self.assertRaisesRegex(IntentError, "ARTIFACT_SYMLINK_NOT_ALLOWED"):
             snapshot_proposal("example", self.args, self.root, ["link.txt"])
 
+    def test_workspace_disappearance_is_a_controlled_denial(self):
+        w = self.snapshot()
+        gone = self.root / "no_such_workspace"
+        self.assertEqual("INVALID_WORKSPACE_ROOT", recheck_proposal(w, "example", self.args, gone)["reason"])
+        with self.assertRaisesRegex(IntentError, "INVALID_WORKSPACE_ROOT"):
+            snapshot_proposal("example", self.args, gone, [])
+
     def test_oversized_artifact_denied(self):
         (self.root / "sample.txt").write_bytes(b"x" * 131073)
         with self.assertRaisesRegex(IntentError, "ARTIFACT_TOO_LARGE"):
