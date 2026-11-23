@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
+import stat
 from pathlib import Path
 from typing import Any
 
@@ -27,8 +29,13 @@ class IntentError(ValueError):
 
 def _canonical(value: Any) -> bytes:
     try:
-        raw = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True,
-                         allow_nan=False).encode("ascii")
+        raw = json.dumps(
+            value,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=True,
+            allow_nan=False,
+        ).encode("ascii")
     except (TypeError, ValueError, OverflowError, RecursionError):
         raise IntentError("NON_CANONICAL_JSON_ARGUMENTS") from None
     if len(raw) > MAX_ARGS_BYTES:
@@ -49,9 +56,15 @@ def _validate_action(action: str, args: dict[str, Any]) -> None:
 
 
 def _read_files(root: Path, filenames: list[str]) -> list[dict[str, Any]]:
-    if (not isinstance(filenames, list) or not 0 <= len(filenames) <= MAX_FILES or
-            any(not isinstance(name, str) or not FILE_NAME.fullmatch(name) for name in filenames) or
-            len(set(filenames)) != len(filenames)):
+    if (
+        not isinstance(filenames, list)
+        or not 0 <= len(filenames) <= MAX_FILES
+        or any(
+            not isinstance(name, str) or not FILE_NAME.fullmatch(name)
+            for name in filenames
+        )
+        or len(set(filenames)) != len(filenames)
+    ):
         raise IntentError("INVALID_ARTIFACT_SELECTION")
     try:
         root = root.resolve(strict=True)
@@ -63,14 +76,35 @@ def _read_files(root: Path, filenames: list[str]) -> list[dict[str, Any]]:
     total = 0
     for name in sorted(filenames):
         path = root / name
-        if path.is_symlink():
-            raise IntentError("ARTIFACT_SYMLINK_NOT_ALLOWED")
         try:
-            target = path.resolve(strict=True)
-            if not target.is_relative_to(root) or not target.is_file():
-                raise IntentError("ARTIFACT_OUTSIDE_WORKSPACE")
-            with target.open("rb") as fd:
+            initial = path.lstat()
+            if not stat.S_ISREG(initial.st_mode) or path.is_symlink():
+                raise IntentError("ARTIFACT_SYMLINK_NOT_ALLOWED")
+            with path.open("rb") as fd:
+                opened = os.fstat(fd.fileno())
                 raw = fd.read(MAX_FILE_BYTES + 1)
+                final_target = path.resolve(strict=True)
+                if (
+                    not final_target.is_relative_to(root)
+                    or not final_target.is_file()
+                    or path.is_symlink()
+                ):
+                    raise IntentError("ARTIFACT_OUTSIDE_WORKSPACE")
+                final = final_target.stat()
+                if (
+                    (opened.st_dev, opened.st_ino, opened.st_size, opened.st_mtime_ns)
+                    != (
+                        initial.st_dev,
+                        initial.st_ino,
+                        initial.st_size,
+                        initial.st_mtime_ns,
+                    )
+                    or (opened.st_dev, opened.st_ino)
+                    != (final.st_dev, final.st_ino)
+                ):
+                    raise IntentError("ARTIFACT_CHANGED_DURING_READ")
+        except IntentError:
+            raise
         except (OSError, RuntimeError):
             raise IntentError("ARTIFACT_MISSING_OR_UNREADABLE") from None
         if len(raw) > MAX_FILE_BYTES:
@@ -78,12 +112,15 @@ def _read_files(root: Path, filenames: list[str]) -> list[dict[str, Any]]:
         total += len(raw)
         if total > MAX_TOTAL_FILE_BYTES:
             raise IntentError("ARTIFACT_AGGREGATE_TOO_LARGE")
-        result.append({"path": name, "bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest()})
+        result.append(
+            {"path": name, "bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest()}
+        )
     return result
 
 
-def snapshot_proposal(action: str, args: dict[str, Any], root: Path,
-                      filenames: list[str]) -> dict[str, Any]:
+def snapshot_proposal(
+    action: str, args: dict[str, Any], root: Path, filenames: list[str]
+) -> dict[str, Any]:
     """Capture exactly what was proposed, not who approved it or the right to run."""
     _validate_action(action, args)
     artifacts = _read_files(root, filenames)
@@ -99,8 +136,9 @@ def snapshot_proposal(action: str, args: dict[str, Any], root: Path,
     return envelope
 
 
-def recheck_proposal(witness: dict[str, Any], action: str, args: dict[str, Any],
-                     root: Path) -> dict[str, Any]:
+def recheck_proposal(
+    witness: dict[str, Any], action: str, args: dict[str, Any], root: Path
+) -> dict[str, Any]:
     """Return deterministic DENY or UNCHANGED_UNAUTHORIZED; never execute.
 
     The witness can be modified/resealed by any party. Its unkeyed digest proves
@@ -108,13 +146,20 @@ def recheck_proposal(witness: dict[str, Any], action: str, args: dict[str, Any],
     approval binding AND race-free file execution after this check.
     """
     if not isinstance(witness, dict) or set(witness) != {
-        "schema", "action", "validated_args_sha256", "artifacts",
-        "approval_verified", "tool_execution_authority", "witness_sha256",
+        "schema",
+        "action",
+        "validated_args_sha256",
+        "artifacts",
+        "approval_verified",
+        "tool_execution_authority",
+        "witness_sha256",
     }:
         return {"status": "DENY", "reason": "INVALID_WITNESS_SHAPE"}
-    if (witness["schema"] != "szl.hatun.deferred-intent-witness/v1" or
-            witness["approval_verified"] is not False or
-            witness["tool_execution_authority"] != "NONE"):
+    if (
+        witness["schema"] != "szl.hatun.deferred-intent-witness/v1"
+        or witness["approval_verified"] is not False
+        or witness["tool_execution_authority"] != "NONE"
+    ):
         return {"status": "DENY", "reason": "INVALID_AUTHORITY_CLAIM"}
     try:
         claimed = witness["witness_sha256"]
@@ -126,16 +171,28 @@ def recheck_proposal(witness: dict[str, Any], action: str, args: dict[str, Any],
         if action != witness["action"] or _hash(args) != witness["validated_args_sha256"]:
             raise IntentError("ACTION_OR_ARGUMENTS_CHANGED")
         old = witness["artifacts"]
-        if (not isinstance(old, list) or len(old) > MAX_FILES or
-                any(not isinstance(x, dict) or set(x) != {"path", "bytes", "sha256"}
-                    or type(x["bytes"]) is not int or not 0 <= x["bytes"] <= MAX_FILE_BYTES
-                    or not isinstance(x["sha256"], str) or not SHA.fullmatch(x["sha256"])
-                    for x in old)):
+        if (
+            not isinstance(old, list)
+            or len(old) > MAX_FILES
+            or any(
+                not isinstance(x, dict)
+                or set(x) != {"path", "bytes", "sha256"}
+                or type(x["bytes"]) is not int
+                or not 0 <= x["bytes"] <= MAX_FILE_BYTES
+                or not isinstance(x["sha256"], str)
+                or not SHA.fullmatch(x["sha256"])
+                for x in old
+            )
+        ):
             raise IntentError("INVALID_WITNESS_ARTIFACTS")
         fresh = _read_files(root, [x["path"] for x in old])
         if fresh != old:
             raise IntentError("STALE_ARTIFACT")
     except IntentError as exc:
         return {"status": "DENY", "reason": str(exc)}
-    return {"status": "UNCHANGED_UNAUTHORIZED", "reason": "APPROVAL_NOT_VERIFIED",
-            "witness_sha256": claimed, "tool_execution_authority": "NONE"}
+    return {
+        "status": "UNCHANGED_UNAUTHORIZED",
+        "reason": "APPROVAL_NOT_VERIFIED",
+        "witness_sha256": claimed,
+        "tool_execution_authority": "NONE",
+    }
