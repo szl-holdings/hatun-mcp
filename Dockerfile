@@ -49,6 +49,13 @@ COPY hatun_mcp/adapters/killinchu.py   /app/hatun_mcp/adapters/killinchu.py
 COPY hatun_mcp/adapters/llm.py         /app/hatun_mcp/adapters/llm.py
 COPY hatun_mcp/adapters/anatomy.py     /app/hatun_mcp/adapters/anatomy.py
 COPY hatun_mcp/adapters/second_brain.py /app/hatun_mcp/adapters/second_brain.py
+# repair 2026-11-25: restore deploy-set contract for modules below (per-file COPY doctrine)
+COPY hatun_mcp/deferred_intent_witness.py    /app/hatun_mcp/deferred_intent_witness.py
+COPY hatun_mcp/memory_court/__init__.py      /app/hatun_mcp/memory_court/__init__.py
+COPY hatun_mcp/memory_court/gateway.py       /app/hatun_mcp/memory_court/gateway.py
+COPY hatun_mcp/memory_court/khipu_writer.py  /app/hatun_mcp/memory_court/khipu_writer.py
+COPY hatun_mcp/memory_court/receipts.py      /app/hatun_mcp/memory_court/receipts.py
+COPY hatun_mcp/memory_court/trust_root.py    /app/hatun_mcp/memory_court/trust_root.py
 COPY README.md                    /app/README.md
 
 # The DSSE signing key is injected at runtime as a Space secret
