@@ -83,6 +83,8 @@ jobs:
           push: true
           tags: |
             ${{ env.IMAGE }}:${{ steps.bind.outputs.version }}
+          build-args: |
+            SZL_GIT_SHA=${{ github.sha }}
           labels: |
             io.modelcontextprotocol.server.name=${{ env.SERVER_NAME }}
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
