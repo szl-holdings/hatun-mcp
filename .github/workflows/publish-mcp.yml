@@ -29,6 +29,7 @@ env:
 jobs:
   publish:
     name: build release image · attest · publish server.json
+    environment: release
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
