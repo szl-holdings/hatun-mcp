@@ -79,6 +79,7 @@ jobs:
     name: build container + push to GHCR (main only) + SLSA L2 attest
     needs: [test, container-contract]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: release
     runs-on: ubuntu-latest
     permissions:
       contents: read
